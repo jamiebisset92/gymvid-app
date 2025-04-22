@@ -24,7 +24,7 @@ async def process_set(
         shutil.copyfileobj(video.file, buffer)
 
     # ✅ Build command to run process_set.py with video path
-    cmd = ["python", "backend/ai/process_set.py", save_path]
+    cmd = ["python3.10", "ai/process_set.py", save_path]
     if coaching:
         cmd.append("--coach")
 
