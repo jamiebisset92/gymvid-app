@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import json
+from backend.utils.aws_utils import download_file_from_s3
 
 # ✅ Load environment variables from .env file
 load_dotenv()
@@ -14,14 +15,25 @@ app = FastAPI()
 
 @app.post("/process_set")
 async def process_set(
-    video: UploadFile = File(...),
+    video: UploadFile = File(None),
+    s3_key: str = Form(None),
     coaching: bool = Form(False)
 ):
-    save_path = f"temp_uploads/{video.filename}"
     os.makedirs("temp_uploads", exist_ok=True)
 
-    with open(save_path, "wb") as buffer:
-        shutil.copyfileobj(video.file, buffer)
+    if s3_key:
+        # ✅ Download from S3
+        save_path = f"temp_uploads/{os.path.basename(s3_key)}"
+        success = download_file_from_s3(s3_key, save_path)
+        if not success:
+            return JSONResponse(status_code=500, content={"success": False, "error": "Failed to download video from S3"})
+    elif video:
+        # ✅ Save uploaded file
+        save_path = f"temp_uploads/{video.filename}"
+        with open(save_path, "wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+    else:
+        return JSONResponse(status_code=400, content={"success": False, "error": "No video file or s3_key provided"})
 
     # ✅ Add environment variable to signal subprocess mode
     env = os.environ.copy()
@@ -36,7 +48,7 @@ async def process_set(
             env=env
         )
 
-        # ✅ Expect pure JSON on stdout now
+        # ✅ Expect pure JSON on stdout
         try:
             output = json.loads(result.stdout.strip())
             return JSONResponse({
