@@ -41,7 +41,7 @@ async def process_set(
 
     try:
         result = subprocess.run(
-            ["python", "backend/ai/analyze_video.py", save_path],
+            ["python", "backend/ai/analyze_video_s3.py", save_path],
             capture_output=True,
             text=True,
             check=True,
