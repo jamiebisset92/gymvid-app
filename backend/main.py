@@ -5,7 +5,7 @@ import os
 import shutil
 import subprocess
 import json
-from backend.utils.aws_utils import download_file_from_s3
+from utils.aws_utils import download_file_from_s3
 
 # ✅ Load environment variables from .env file
 load_dotenv()
