@@ -37,7 +37,8 @@ try:
 
     os.makedirs("ai/outputs", exist_ok=True)
     with open("ai/outputs/rep_data.json", "w") as f:
-        json.dump({"reps": rep_data}, f, indent=2)
+        json.dump(rep_data, f, indent=2)
+
     print("🧠 Saved rep data to ai/outputs/rep_data.json")
 
 except Exception as e:
@@ -48,7 +49,7 @@ except Exception as e:
 
 # ✅ Step 2: Extract keyframes from rep01
 print("\n🖼️ Extracting keyframes...")
-subprocess.run(["python3.10", "ai/extract_keyframes.py"])
+subprocess.run(["python", "backend/ai/extract_keyframes.py"])
 
 # ✅ Step 3: Select keyframes and send to GPT for classification
 keyframes_dir = "outputs/keyframes"
@@ -131,20 +132,28 @@ if valid_images:
 
     try:
         content = response.choices[0].message.content.strip()
-
-        # ✅ Extract clean JSON even if markdown-wrapped
         match = re.search(r'\{.*\}', content, re.DOTALL)
-        if match:
-            content = match.group(0).strip()
-
+        content = match.group(0).strip() if match else content
         parsed = json.loads(content)
         exercise = parsed.get("exercise", "Unknown")
         confidence = parsed.get("confidence", 0)
         estimated_weight = parsed.get("weight_kg", "N/A")
         visibility = parsed.get("weight_visibility", "N/A")
+
     except Exception as e:
         print("❌ Failed to parse exercise classification response.")
-        print(str(e))
+        print("Raw content:", content)
+        print("Error:", str(e))
+        parsed = {
+            "exercise": "Unknown",
+            "confidence": 0,
+            "weight_kg": "N/A",
+            "weight_visibility": "N/A"
+        }
+        exercise = parsed["exercise"]
+        confidence = parsed["confidence"]
+        estimated_weight = parsed["weight_kg"]
+        visibility = parsed["weight_visibility"]
 
 # ✅ Step 5: Show result
 print("\n📊 Exercise Prediction Result:")

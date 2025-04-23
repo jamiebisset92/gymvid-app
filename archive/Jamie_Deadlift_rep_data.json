@@ -1,0 +1,18 @@
+[
+    {
+        "rep": 1,
+        "time_sec": 3.3214285714285716,
+        "duration_sec": 2.43,
+        "total_TUT": 5.34,
+        "estimated_RPE": 8.5,
+        "estimated_RIR": "(Possibly 2-3 Reps in the Tank)"
+    },
+    {
+        "rep": 2,
+        "time_sec": 6.928571428571429,
+        "duration_sec": 2.86,
+        "total_TUT": 6.29,
+        "estimated_RPE": 9.0,
+        "estimated_RIR": "(Possibly 1-2 Reps in the Tank)"
+    }
+]

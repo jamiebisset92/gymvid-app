@@ -17,7 +17,7 @@ async def process_set(
     with open(save_path, "wb") as buffer:
         shutil.copyfileobj(video.file, buffer)
 
-    cmd = ["python3.10", "ai/process_set.py", save_path]
+    cmd = ["python", "ai/process_set.py", save_path]
     if coaching:
         cmd.append("--coach")
 

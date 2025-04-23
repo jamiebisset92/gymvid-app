@@ -3,7 +3,7 @@ import json
 import cv2
 
 # ✅ Paths (adjust if needed)
-rep_data_path = "ai/outputs/rep_data.json"
+rep_data_path = "backend/ai/outputs/rep_data.json"
 video_path = "temp_uploads/Jamie_Deadlift.mov"
 output_dir = "outputs/keyframes"
 

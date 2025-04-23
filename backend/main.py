@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import shutil
 import subprocess
+import json
 
 # ✅ Load environment variables from .env file
 load_dotenv()
@@ -16,32 +17,50 @@ async def process_set(
     video: UploadFile = File(...),
     coaching: bool = Form(False)
 ):
-    # ✅ Save uploaded file to a temporary folder
     save_path = f"temp_uploads/{video.filename}"
     os.makedirs("temp_uploads", exist_ok=True)
 
     with open(save_path, "wb") as buffer:
         shutil.copyfileobj(video.file, buffer)
 
-    # ✅ Build command to run process_set.py with video path
-    cmd = ["python3.10", "ai/process_set.py", save_path]
-    if coaching:
-        cmd.append("--coach")
+    # ✅ Add environment variable to signal subprocess mode
+    env = os.environ.copy()
+    env["GYMVID_MODE"] = "subprocess"
 
     try:
-        # ✅ Run script and capture stdout/stderr
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(
+            ["python", "backend/ai/analyze_video.py", save_path],
+            capture_output=True,
+            text=True,
+            check=True,
+            env=env
+        )
 
-        return JSONResponse({
-            "success": result.returncode == 0,
-            "stdout": result.stdout,
-            "stderr": result.stderr
-        })
+        # ✅ Expect pure JSON on stdout now
+        try:
+            output = json.loads(result.stdout.strip())
+            return JSONResponse({
+                "success": True,
+                "data": output,
+                "stderr": result.stderr
+            })
+        except json.JSONDecodeError as e:
+            return JSONResponse({
+                "success": False,
+                "error": f"Failed to parse JSON: {str(e)}",
+                "stdout": result.stdout,
+                "stderr": result.stderr
+            })
 
-    except Exception as e:
+    except subprocess.CalledProcessError as e:
         return JSONResponse(
             status_code=500,
-            content={"success": False, "error": str(e)}
+            content={
+                "success": False,
+                "error": f"Subprocess failed with exit code {e.returncode}",
+                "stdout": e.stdout,
+                "stderr": e.stderr
+            }
         )
 
 # ✅ Optional: test if env variables are loading correctly

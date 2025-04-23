@@ -1,0 +1,8 @@
+{
+    "editor.fontSize": 14,
+    "terminal.integrated.env.osx": {
+      "PYENV_ROOT": "$HOME/.pyenv",
+      "PATH": "$HOME/.pyenv/shims:$HOME/.pyenv/bin:${env:PATH}"
+    }
+  }
+  
