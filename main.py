@@ -42,7 +42,7 @@ async def process_set(
 
     try:
         result = subprocess.run(
-            ["python", "backend/ai/analyze_video_s3.py", save_path],
+            ["python", "backend/ai/analyze/analyze_set.py", save_path],
             capture_output=True,
             text=True,
             check=True,
@@ -75,6 +75,7 @@ async def process_set(
             }
         )
 
+# ✅ Debug endpoint for environment
 @app.get("/debug/env")
 def debug_env():
     return {
