@@ -1,3 +1,8 @@
+from pathlib import Path
+
+script_path = Path("analyze_video_s3.py")
+
+analyze_video_script = '''\
 import sys
 import cv2
 import numpy as np
@@ -6,6 +11,13 @@ import json
 import mediapipe as mp
 import boto3
 from urllib.parse import urlparse
+import openai
+import base64
+from dotenv import load_dotenv
+
+# ✅ Load environment variables
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # ✅ Detect if running in subprocess mode
 is_subprocess = os.getenv("GYMVID_MODE") == "subprocess"
@@ -98,6 +110,10 @@ for i in range(1, len(smooth_y)):
 
 # ✅ Build rep data
 rep_data = []
+keyframe_dir = "keyframes"
+os.makedirs(keyframe_dir, exist_ok=True)
+cap = cv2.VideoCapture(video_path)
+
 for idx, rep in enumerate(rep_frames):
     if "start" in rep and "peak" in rep and "stop" in rep:
         start, peak, stop = rep["start"], rep["peak"], rep["stop"]
@@ -140,23 +156,63 @@ for idx, rep in enumerate(rep_frames):
             "estimated_RIR": rir_lookup[rpe]
         })
 
-# ✅ Output structure
+        # ✅ Export keyframes
+        for phase, frame_num in zip(["start", "peak", "stop"], [start, peak, stop]):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+            ret, frame = cap.read()
+            if ret:
+                out_path = os.path.join(keyframe_dir, f"rep{idx+1:02d}_{phase}.jpg")
+                cv2.imwrite(out_path, frame)
+
+cap.release()
+
+# ✅ GPT-based exercise prediction
+images = []
+for fname in sorted(os.listdir(keyframe_dir)):
+    if fname.endswith(".jpg"):
+        with open(os.path.join(keyframe_dir, fname), "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+            images.append({"name": fname, "data": b64})
+
+prompt = "Based on these three keyframes (start, peak, stop), identify the exercise, estimated barbell weight, and confidence level."
+messages = [
+    {"role": "system", "content": "You are a fitness AI that analyzes gym keyframes to detect the exercise performed."},
+    {"role": "user", "content": prompt}
+]
+
+for img in images:
+    messages.append({
+        "role": "user",
+        "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img['data']}"}}]
+    })
+
+response = openai.ChatCompletion.create(
+    model="gpt-4-vision-preview",
+    messages=messages,
+    max_tokens=300
+)
+
+prediction_text = response.choices[0].message.content.strip()
+
 exercise_prediction = {
-    "exercise": "Barbell Conventional Deadlift",
-    "confidence": 95,
-    "weight_kg": 260,
-    "weight_visibility": 90
+    "description": prediction_text
 }
+
 final_output = {
     "rep_data": rep_data,
     "exercise_prediction": exercise_prediction
 }
+
+# ✅ Convert NumPy types
 final_output = json.loads(json.dumps(final_output, default=lambda o: o.item() if isinstance(o, np.generic) else o))
 
-# ✅ Output mode
+# ✅ Output
 if is_subprocess:
     sys.stdout = open(1, 'w')
     print(json.dumps(final_output))
-    sys.exit(0)
 else:
     print(json.dumps(final_output, indent=2))
+'''
+
+script_path.write_text(analyze_video_script)
+script_path
