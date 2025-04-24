@@ -1,6 +1,3 @@
-from pathlib import Path
-
-analyze_video_script = """
 import sys
 import cv2
 import numpy as np
@@ -156,10 +153,10 @@ final_output = {
 }
 final_output = json.loads(json.dumps(final_output, default=lambda o: o.item() if isinstance(o, np.generic) else o))
 
-# ✅ Output
+# ✅ Output mode
 if is_subprocess:
     sys.stdout = open(1, 'w')
     print(json.dumps(final_output))
+    sys.exit(0)
 else:
     print(json.dumps(final_output, indent=2))
-"""
