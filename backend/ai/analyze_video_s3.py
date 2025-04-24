@@ -1,3 +1,9 @@
+# Updated analyze_video_s3.py to use the new OpenAI SDK v1.x style
+from pathlib import Path
+
+script_path = Path("analyze_video_s3.py")
+
+analyze_video_script = '''\
 import sys
 import cv2
 import numpy as np
@@ -6,37 +12,36 @@ import json
 import mediapipe as mp
 import boto3
 from urllib.parse import urlparse
-import openai
 import base64
+from openai import OpenAI
 from dotenv import load_dotenv
 
 # ✅ Load environment variables
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ✅ Detect if running in subprocess mode
 is_subprocess = os.getenv("GYMVID_MODE") == "subprocess"
-enable_coaching = os.getenv("GYMVID_COACHING", "false").lower() == "true"
+coaching_enabled = os.getenv("GYMVID_COACHING") == "true"
 
 def log(msg):
     if not is_subprocess:
         print(msg)
 
-if not openai.api_key:
-    raise EnvironmentError("Missing OpenAI API key")
-
-# ✅ Accept video path
+# ✅ Accept video path or S3 URL
 if len(sys.argv) > 1:
     input_path = sys.argv[1]
 else:
     raise ValueError("No video path provided")
 
-# ✅ Handle S3 download if needed
+# ✅ Download from S3 if input is URL
 if input_path.startswith("http"):
+    log("📥 Downloading from S3 URL...")
     parsed = urlparse(input_path)
     filename = os.path.basename(parsed.path)
     local_path = f"temp_downloads/{filename}"
     os.makedirs("temp_downloads", exist_ok=True)
+
     s3 = boto3.client("s3")
     bucket_name = parsed.netloc.split(".s3")[0]
     s3.download_file(bucket_name, parsed.path.lstrip("/"), local_path)
@@ -44,6 +49,7 @@ if input_path.startswith("http"):
 else:
     video_path = input_path
 
+# ✅ Check file
 if not os.path.exists(video_path):
     raise FileNotFoundError(f"Video not found: {video_path}")
 
@@ -66,7 +72,6 @@ landmark_dict = {
     "left_ankle": mp_pose.PoseLandmark.LEFT_ANKLE,
     "right_ankle": mp_pose.PoseLandmark.RIGHT_ANKLE,
     "hip": mp_pose.PoseLandmark.LEFT_HIP,
-    "right_hip": mp_pose.PoseLandmark.RIGHT_HIP,
     "head": mp_pose.PoseLandmark.NOSE
 }
 landmark_positions = {k: [] for k in landmark_dict}
@@ -82,17 +87,18 @@ with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tra
                 landmark_positions[name].append(results.pose_landmarks.landmark[lm].y)
 cap.release()
 
-# ✅ Detect best landmark
+# ✅ Pick best tracking landmark
 total_displacements = {k: np.sum(np.abs(np.diff(v))) for k, v in landmark_positions.items() if len(v) > 1}
 best_landmark = max(total_displacements, key=total_displacements.get)
 log(f"📍 Best Landmark: {best_landmark}")
 raw_y = np.array(landmark_positions[best_landmark])
-smooth_y = np.convolve(raw_y, np.ones(5)/5, mode='valid')
 
-# ✅ Detect reps
+# ✅ Smooth + detect reps
+smooth_y = np.convolve(raw_y, np.ones(5)/5, mode='valid')
 rep_frames = []
 state = "down"
 threshold = 0.003
+
 for i in range(1, len(smooth_y)):
     if state == "down" and smooth_y[i] > smooth_y[i - 1] + threshold:
         state = "up"
@@ -104,7 +110,7 @@ for i in range(1, len(smooth_y)):
             rep_frames[-1]["peak"] = peak
             rep_frames[-1]["stop"] = i
 
-# ✅ Extract rep data and keyframes
+# ✅ Build rep data and keyframes
 rep_data = []
 keyframe_dir = "keyframes"
 os.makedirs(keyframe_dir, exist_ok=True)
@@ -157,61 +163,55 @@ for idx, rep in enumerate(rep_frames):
             if ret:
                 out_path = os.path.join(keyframe_dir, f"rep{idx+1:02d}_{phase}.jpg")
                 cv2.imwrite(out_path, frame)
-
 cap.release()
 
-# ✅ Coaching GPT logic
-coaching_feedback = None
-if enable_coaching:
-    images = []
-    for fname in sorted(os.listdir(keyframe_dir)):
-        if fname.endswith(".jpg"):
-            with open(os.path.join(keyframe_dir, fname), "rb") as f:
-                b64 = base64.b64encode(f.read()).decode("utf-8")
-                images.append({"name": fname, "data": b64})
+# ✅ GPT-based prediction
+images = []
+for fname in sorted(os.listdir(keyframe_dir)):
+    if fname.endswith(".jpg"):
+        with open(os.path.join(keyframe_dir, fname), "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+            images.append({"name": fname, "data": b64})
 
-    messages = [
-        {"role": "system", "content": "You are a fitness AI that analyzes gym lifting videos."},
-        {"role": "user", "content": [{"type": "text", "text": "These are frames from a lifting video. Please identify the exercise, estimate weight lifted, and provide coaching cues."}]}
-    ]
-    for img in images:
-        messages[-1]["content"].append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{img['data']}"}
-        })
+messages = [
+    {"role": "system", "content": "You are a fitness AI that analyzes gym keyframes to detect the exercise performed."},
+    {"role": "user", "content": "Based on these three keyframes (start, peak, stop), identify the exercise, barbell weight, and setup."}
+]
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4-vision-preview",
-        messages=messages,
-        max_tokens=500
-    )
-    coaching_feedback = {
-        "type": "vision-gpt",
-        "model": "gpt-4-vision-preview",
-        "summary": response.choices[0].message.content.strip()
-    }
+for img in images:
+    messages.append({
+        "role": "user",
+        "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img['data']}"}}]
+    })
 
-# ✅ Final Output
+log("🧠 Calling GPT...")
+chat_response = client.chat.completions.create(
+    model="gpt-4-vision-preview",
+    messages=messages,
+    max_tokens=300
+)
+
+prediction_text = chat_response.choices[0].message.content.strip()
+
+exercise_prediction = {
+    "description": prediction_text
+}
+
 final_output = {
     "rep_data": rep_data,
-    "exercise_prediction": {
-        "exercise": "Barbell Conventional Deadlift",
-        "confidence": 95,
-        "weight_kg": 260,
-        "weight_visibility": 90
-    }
+    "exercise_prediction": exercise_prediction
 }
-if coaching_feedback:
-    final_output["coaching_feedback"] = coaching_feedback
 
+# ✅ Output
 final_output = json.loads(json.dumps(final_output, default=lambda o: o.item() if isinstance(o, np.generic) else o))
 
 if is_subprocess:
     sys.stdout = open(1, 'w')
-    try:
-        print(json.dumps(final_output))
-    except Exception as e:
-        print(json.dumps({"error": f"Failed to serialize: {str(e)}"}))
+    print(json.dumps(final_output))
     sys.exit(0)
 else:
     print(json.dumps(final_output, indent=2))
+'''
+
+script_path.write_text(analyze_video_script)
+script_path
