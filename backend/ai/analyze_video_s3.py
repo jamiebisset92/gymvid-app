@@ -163,9 +163,3 @@ if is_subprocess:
 else:
     print(json.dumps(final_output, indent=2))
 """
-
-# Save the script
-with open("/mnt/data/analyze_video_s3.py", "w") as f:
-    f.write(analyze_video_script)
-
-"/mnt/data/analyze_video_s3.py"
