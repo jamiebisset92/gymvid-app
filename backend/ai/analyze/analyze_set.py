@@ -4,13 +4,13 @@ import json
 import cv2
 import numpy as np
 from dotenv import load_dotenv
-from backend.ai.analyze.video_analysis import analyze_video
-from backend.ai.analyze.rep_detection import detect_reps
-from backend.ai.analyze.keyframe_exporter import export_keyframes
-from backend.ai.analyze.exercise_prediction import predict_exercise
-from backend.ai.analyze.weight_estimation import estimate_weight
-from backend.ai.analyze.coaching_feedback import generate_feedback
-from backend.ai.analyze.result_packager import package_result
+from .video_analysis import analyze_video
+from .rep_detection import detect_reps
+from .keyframe_exporter import save_keyframes
+from .exercise_prediction import predict_exercise
+from .weight_estimation import estimate_weight
+from .coaching_feedback import generate_coaching_feedback
+from .result_packager import build_final_result
 
 # ✅ Load environment
 load_dotenv()
