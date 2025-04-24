@@ -1,70 +1,84 @@
-from pathlib import Path
-
-# Define the new main script that glues everything together
-analyze_set_script = '''\
-import os
 import sys
+import os
+import json
+import cv2
+import numpy as np
 from dotenv import load_dotenv
-
 from backend.ai.analyze.video_analysis import analyze_video
 from backend.ai.analyze.rep_detection import detect_reps
+from backend.ai.analyze.keyframe_exporter import export_keyframes
 from backend.ai.analyze.exercise_prediction import predict_exercise
-from backend.ai.analyze.weight_estimator import estimate_weight
+from backend.ai.analyze.weight_estimation import estimate_weight
 from backend.ai.analyze.coaching_feedback import generate_feedback
-from backend.ai.analyze.result_packager import package_results
+from backend.ai.analyze.result_packager import package_result
 
-# ✅ Load environment variables
+# ✅ Load environment
 load_dotenv()
-IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
-COACHING_ENABLED = os.getenv("GYMVID_COACHING") == "true"
 
+# ✅ Parse args
+if len(sys.argv) < 2:
+    raise ValueError("Video path argument is required")
+
+video_path = sys.argv[1]
+IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
+INCLUDE_COACHING = os.getenv("GYMVID_COACHING") == "true"
+
+# ✅ Logging helper
 def log(msg):
     if not IS_SUBPROCESS:
         print(msg)
 
-# ✅ Get video path
-if len(sys.argv) < 2:
-    raise ValueError("Missing required video path argument.")
-video_path = sys.argv[1]
-
 # ✅ Step 1: Analyze video
-log("🔍 Analyzing video...")
-video_meta = analyze_video(video_path)
+log("🎥 Analyzing video...")
+fps, landmark_data = analyze_video(video_path)
 
-# ✅ Step 2: Detect reps
+# ✅ Step 2: Rep detection
 log("🔁 Detecting reps...")
-rep_data = detect_reps(video_path, video_meta)
+rep_data = detect_reps(landmark_data, fps)
 
-# ✅ Step 3: Predict exercise
-log("🏋️ Predicting exercise...")
-exercise_prediction = predict_exercise()
+# ✅ Step 3: Export keyframes
+log("🖼️ Exporting keyframes...")
+keyframe_dir = "keyframes"
+keyframes = export_keyframes(video_path, rep_data, keyframe_dir)
 
-# ✅ Step 4: Estimate weight
-log("⚖️ Estimating weight...")
-weight_estimation = estimate_weight()
+# ✅ Step 4: Exercise prediction
+log("🤖 Predicting exercise...")
+exercise_prediction = predict_exercise(keyframes)
 
-# ✅ Step 5: Optional coaching feedback
+# ✅ Step 5: Estimate weight
+log("🏋️ Estimating weight...")
+weight_prediction = estimate_weight(keyframes)
+
+# ✅ Step 6 (Optional): Coaching feedback
 coaching_feedback = None
-if COACHING_ENABLED:
-    log("🎤 Generating coaching feedback...")
-    coaching_feedback = generate_feedback(rep_data, exercise_prediction)
+if INCLUDE_COACHING:
+    log("🗣️ Generating coaching feedback...")
+    coaching_feedback = generate_feedback(rep_data, exercise_prediction["exercise"])
 
-# ✅ Step 6: Package results
+# ✅ Step 7: Package result
 log("📦 Packaging results...")
-final_result = package_results(rep_data, exercise_prediction, weight_estimation, coaching_feedback)
+final_result = package_result(rep_data, exercise_prediction, weight_prediction, coaching_feedback)
 
 # ✅ Output results
-import json
-if IS_SUBPROCESS:
-    sys.stdout = open(1, 'w')
-    print(json.dumps(final_result))
-else:
-    print(json.dumps(final_result, indent=2))
-'''
+try:
+    log("✅ Final output ready, about to print JSON")
 
-# Write to a new file
-script_path = Path("gymvid-app/backend/ai/analyze/analyze_set.py")
-script_path.parent.mkdir(parents=True, exist_ok=True)
-script_path.write_text(analyze_set_script)
+    if IS_SUBPROCESS:
+        sys.stdout = open(1, 'w')  # subprocess-safe
+        print(json.dumps(final_result))
+        sys.exit(0)
+    else:
+        print(json.dumps(final_result, indent=2))
 
-script_path
+except Exception as e:
+    error_output = {
+        "success": False,
+        "error": f"Failed to serialize final_output: {str(e)}"
+    }
+
+    if IS_SUBPROCESS:
+        sys.stdout = open(1, 'w')
+        print(json.dumps(error_output))
+        sys.exit(1)
+    else:
+        print(json.dumps(error_output, indent=2))
