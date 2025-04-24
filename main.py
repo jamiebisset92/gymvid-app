@@ -5,7 +5,7 @@ import os
 import shutil
 import subprocess
 import json
-from backend.utils.aws_utils import download_file_from_s3
+from utils.aws_utils import download_file_from_s3
 
 # ✅ Load environment variables from .env file
 load_dotenv()
@@ -35,9 +35,10 @@ async def process_set(
     else:
         return JSONResponse(status_code=400, content={"success": False, "error": "No video file or s3_key provided"})
 
-    # ✅ Add environment variable to signal subprocess mode
+    # ✅ Add environment variables to signal subprocess mode
     env = os.environ.copy()
     env["GYMVID_MODE"] = "subprocess"
+    env["GYMVID_COACHING"] = "true" if coaching else "false"
 
     try:
         result = subprocess.run(
@@ -48,7 +49,6 @@ async def process_set(
             env=env
         )
 
-        # ✅ Expect pure JSON on stdout
         try:
             output = json.loads(result.stdout.strip())
             return JSONResponse({
@@ -75,7 +75,6 @@ async def process_set(
             }
         )
 
-# ✅ Optional: test if env variables are loading correctly
 @app.get("/debug/env")
 def debug_env():
     return {
