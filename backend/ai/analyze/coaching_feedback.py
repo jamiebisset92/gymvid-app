@@ -1,5 +1,6 @@
 import os
 import json
+import numpy as np
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -7,15 +8,24 @@ from dotenv import load_dotenv
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# ✅ Helper to safely convert numpy types
+def convert_numpy(obj):
+    if isinstance(obj, np.generic):
+        return obj.item()
+    return obj
+
 def generate_feedback(video_data, rep_data):
     exercise_name = video_data.get("predicted_exercise", "an exercise")
+
+    # ✅ Safely serialize rep_data
+    rep_data_serialized = json.dumps(rep_data, indent=2, default=convert_numpy)
 
     prompt = f"""
 You are a highly experienced lifting coach. A user has uploaded a video of themselves performing: {exercise_name}.
 
 Here is the data extracted from their reps:
 
-{json.dumps(rep_data, indent=2)}
+{rep_data_serialized}
 
 Please provide:
 1. Overall summary and encouragement
@@ -40,7 +50,7 @@ Return the result in **JSON only** using this format:
 """
 
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a professional lifting coach."},
             {"role": "user", "content": prompt}
