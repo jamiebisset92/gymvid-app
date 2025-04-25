@@ -24,7 +24,7 @@ sys.path.append(os.path.abspath("."))
 from backend.ai.analyze.video_analysis import analyze_video
 from backend.ai.analyze.rep_detection import detect_reps
 from backend.ai.analyze.exercise_prediction import predict_exercise
-from backend.ai.analyze.weight_estimation import estimate_weight
+from backend.ai.analyze.weight_estimation import estimate_weight_from_keyframes as estimate_weight
 from backend.ai.analyze.coaching_feedback import generate_feedback
 from backend.ai.analyze.result_packager import package_result
 from backend.ai.analyze.keyframe_exporter import export_keyframes
