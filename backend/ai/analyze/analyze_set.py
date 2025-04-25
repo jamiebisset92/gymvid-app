@@ -48,7 +48,7 @@ log("🧠 Predicting exercise type...")
 exercise_prediction = predict_exercise("keyframes")
 
 log("⚖️ Estimating weight...")
-weight_prediction = estimate_weight(keyframe_paths)
+weight_prediction = estimate_weight("keyframes")
 
 log("📦 Packaging result...")
 final_result = package_result(rep_data, exercise_prediction, weight_prediction)
