@@ -1,24 +1,30 @@
 import os
 import json
+import re
 import numpy as np
 from openai import OpenAI
 from dotenv import load_dotenv
-import re
 
 # ✅ Load environment variables
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ✅ Helper to safely convert numpy types
+# ✅ Convert NumPy types for safe JSON serialization
 def convert_numpy(obj):
     if isinstance(obj, np.generic):
         return obj.item()
     return obj
 
+# ✅ Extract clean JSON from GPT response (even inside ```json ... ```)
+def extract_json_block(text):
+    match = re.search(r"```json\n(.*?)```", text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return text.strip()
+
+# ✅ Main feedback generation function
 def generate_feedback(video_data, rep_data):
     exercise_name = video_data.get("predicted_exercise", "an exercise")
-
-    # ✅ Safely serialize rep_data
     rep_data_serialized = json.dumps(rep_data, indent=2, default=convert_numpy)
 
     prompt = f"""
@@ -60,15 +66,10 @@ Return the result in **JSON only** using this format:
     )
 
     try:
-        content = response.choices[0].message.content.strip()
-        print("🧠 Raw GPT Coaching Response:\n" + content)
-
-        # ✅ Remove code block markers if present
-        if content.startswith("```json"):
-            content = re.sub(r"^```json\\s*", "", content)
-            content = re.sub(r"```$", "", content.strip())
-
-        parsed = json.loads(content)
+        raw_text = response.choices[0].message.content
+        print("🧠 Raw GPT Coaching Response:\n", raw_text)
+        json_text = extract_json_block(raw_text)
+        parsed = json.loads(json_text)
         return parsed["coaching_feedback"]
     except Exception as e:
         return {

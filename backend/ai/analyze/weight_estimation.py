@@ -1,20 +1,22 @@
 import os
 import base64
 import json
+import re
 from openai import OpenAI
+from dotenv import load_dotenv
 
+# ✅ Load environment variables and initialize OpenAI client
+load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def estimate_weight_from_keyframes(keyframe_dir: str) -> dict:
-    """
-    Estimates the weight being lifted based on visual analysis of keyframes.
+# ✅ Extract structured JSON block from GPT response
+def extract_json_block(text):
+    match = re.search(r"```json\n(.*?)```", text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return text.strip()
 
-    Args:
-        keyframe_dir (str): Path to directory containing keyframe images.
-
-    Returns:
-        dict: Contains the raw GPT-generated string with weight estimation.
-    """
+def estimate_weight_from_keyframes(keyframe_dir):
     images = []
     for fname in sorted(os.listdir(keyframe_dir)):
         if fname.endswith(".jpg"):
@@ -22,34 +24,34 @@ def estimate_weight_from_keyframes(keyframe_dir: str) -> dict:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
                 images.append({"name": fname, "data": b64})
 
+    # ✅ GPT Prompt
     messages = [
         {
             "role": "system",
-            "content": "You are a fitness AI that analyzes gym lifting images to estimate the weight being lifted."
+            "content": "You are a fitness AI that analyzes lifting images to estimate equipment type and total weight lifted."
         },
         {
             "role": "user",
-            "content": (
-                "Look at these gym lifting images and estimate the total weight or resistance being used.\n\n"
-                "You must support all equipment types: Barbell, Dumbbells, Cable, Machines, and Kettlebells.\n\n"
-                "Use these guidelines:\n"
-                "- Barbells: Assume 20kg bar unless clearly marked otherwise.\n"
-                "- Dumbbells: If only one is visible, assume it's one-handed. If two, assume both used.\n"
-                "- Cables: Count visible stack markers or pins. Estimate total resistance (in kg).\n"
-                "- Machines with Plates: Only count visible plates. Do NOT include the machine's own weight.\n"
-                "- Kettlebells: Use color to estimate weight:\n"
-                "    • Pink = 4kg\n"
-                "    • Yellow = 8kg\n"
-                "    • Blue = 12kg\n"
-                "    • Red = 16kg\n"
-                "    • Grey = 20kg\n"
-                "    • Green = 24kg\n"
-                "    • Orange = 28kg\n\n"
-                "Respond strictly in this format:\n"
-                "- Equipment: [Barbell, Dumbbells, Cable, Machine, Kettlebell, etc]\n"
-                "- Estimated Total Weight: XX kg\n"
-                "- Confidence: XX%"
-            )
+            "content": """
+Look at these gym lifting keyframes and estimate the total weight or resistance used.
+
+You must support all equipment types: Barbell, Dumbbells, Cable, Machines, Kettlebells.
+
+Guidelines:
+- Barbells: Assume 20kg bar unless clearly marked otherwise.
+- Dumbbells: If only one is visible, assume it's one-handed. If two, assume both used.
+- Cables: Count visible pins or stack markers.
+- Machines: Count visible plates only — ignore machine’s base weight.
+- Kettlebells: Estimate based on color if visible (e.g. Red = 16kg, Blue = 12kg).
+
+Respond using strict JSON format:
+{
+  "equipment": "Barbell",
+  "estimated_weight_kg": 260,
+  "confidence": 90
+}
+Do not include any explanation or extra text — only the JSON block.
+"""
         }
     ]
 
@@ -67,6 +69,14 @@ def estimate_weight_from_keyframes(keyframe_dir: str) -> dict:
     )
 
     raw_text = response.choices[0].message.content.strip()
-    return {
-        "raw_response": raw_text
-    }
+    print("📦 Raw GPT Response:\n", raw_text)
+
+    try:
+        json_text = extract_json_block(raw_text)
+        return json.loads(json_text)
+    except Exception as e:
+        return {
+            "error": "Failed to parse weight estimation",
+            "raw_response": raw_text,
+            "exception": str(e)
+        }
