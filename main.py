@@ -1,11 +1,15 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 import shutil
 import subprocess
 import json
+
+# ✅ Import your utils and AI modules
 from backend.utils.aws_utils import download_file_from_s3
+from backend.ai.analyze import analyze_set
 
 # ✅ Load environment variables from .env file
 load_dotenv()
@@ -13,6 +17,16 @@ load_dotenv()
 # ✅ Initialize FastAPI app
 app = FastAPI()
 
+# ✅ Optional: Enable CORS (for mobile app or frontend dev)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Change this to your frontend domains later for security
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ✅ Process Set (legacy route, subprocess)
 @app.post("/process_set")
 async def process_set(
     video: UploadFile = File(None),
@@ -35,7 +49,7 @@ async def process_set(
     else:
         return JSONResponse(status_code=400, content={"success": False, "error": "No video file or s3_key provided"})
 
-    # ✅ Add environment variables to signal subprocess mode
+    # ✅ Set environment variables for subprocess
     env = os.environ.copy()
     env["GYMVID_MODE"] = "subprocess"
     env["GYMVID_COACHING"] = "true" if coaching else "false"
@@ -76,7 +90,42 @@ async def process_set(
             }
         )
 
-# ✅ Debug endpoint for environment
+# ✅ New - Log Set (direct function call, better pipeline)
+@app.post("/analyze/log_set")
+async def log_set(
+    video: UploadFile = File(...),
+    user_provided_exercise: str = Form(None),
+    known_exercise_info: str = Form(None)
+):
+    os.makedirs("temp_uploads", exist_ok=True)
+
+    # ✅ Save uploaded video temporarily
+    temp_video_path = f"temp_uploads/{video.filename}"
+    with open(temp_video_path, "wb") as buffer:
+        shutil.copyfileobj(video.file, buffer)
+
+    try:
+        # ✅ Prepare args list
+        args = [temp_video_path]
+        if user_provided_exercise:
+            args.append(user_provided_exercise)
+        if known_exercise_info:
+            args.append(known_exercise_info)
+
+        # ✅ Run clean GymVid analysis (not subprocess)
+        final_result = analyze_set.run_cli_args(args)
+
+        return JSONResponse({
+            "success": True,
+            "data": final_result
+        })
+
+    finally:
+        # ✅ Clean up the temp video no matter what
+        if os.path.exists(temp_video_path):
+            os.remove(temp_video_path)
+
+# ✅ Debug endpoint for environment (optional)
 @app.get("/debug/env")
 def debug_env():
     return {

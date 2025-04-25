@@ -15,7 +15,7 @@ def predict_exercise(keyframe_dir: str) -> dict:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
                 images.append({"name": fname, "data": b64})
 
-    # ✅ GPT prompt with enforced structure
+    # ✅ GPT prompt with enforced structure (No weight prediction anymore)
     system_prompt = """
 You are a fitness AI analyzing gym exercise keyframes.
 
@@ -25,9 +25,10 @@ Return your prediction in this exact JSON format:
   "equipment": one of ["Barbell", "Dumbbell", "Cable", "Machine", "Bodyweight", "Kettlebell", "Resistance Band", "Smith Machine"],
   "variation": only if clearly visible (e.g. "Conventional", "Sumo", "Close Stance", "Wide Grip", etc),
   "movement": one of ["Deadlift", "Squat", "Lunge", "Hip Thrust", "Row", "Bench Press", "Shoulder Press", "Pull-up", "Chin-up"],
-  "estimated_weight_kg": number or null,
   "confidence": integer percentage from 0 to 100
 }
+
+Do not predict or estimate weight. Only predict equipment, variation, movement, and confidence.
 
 Do not include anything outside of the JSON block. Be brief and structured.
 """

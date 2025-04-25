@@ -32,7 +32,20 @@ from backend.ai.analyze.keyframe_exporter import export_keyframes
 # ✅ Entry point
 if len(sys.argv) < 2:
     raise ValueError("No video path provided")
+
 video_path = sys.argv[1]
+
+# ✅ Optional: CLI overrides
+user_provided_exercise = None
+known_exercise_info = None
+
+if len(sys.argv) >= 3:
+    user_provided_exercise = sys.argv[2]  # Example: "Deadlift"
+if len(sys.argv) >= 4:
+    try:
+        known_exercise_info = json.loads(sys.argv[3])  # Should be a JSON string
+    except json.JSONDecodeError:
+        known_exercise_info = None
 
 # ✅ Run each stage
 log("📹 Analyzing video...")
@@ -44,11 +57,24 @@ rep_data = detect_reps(video_data)
 log("🖼️ Exporting keyframes...")
 keyframe_paths = export_keyframes(video_path, rep_data)
 
-log("🧠 Predicting exercise type...")
-exercise_prediction = predict_exercise("keyframes")
+# ✅ Decide exercise source
+if known_exercise_info:
+    log(f"🔒 Using known exercise info from parent exercise: {known_exercise_info}")
+    exercise_prediction = known_exercise_info
+elif user_provided_exercise:
+    log(f"🏋️ Using manually provided exercise: {user_provided_exercise}")
+    exercise_prediction = {
+        "equipment": "Barbell",  # Assumed default unless specified manually
+        "variation": None,        # No variation unless added manually later
+        "movement": user_provided_exercise,
+        "confidence": 100         # 100% confidence because user manually entered it
+    }
+else:
+    log("🧠 Predicting exercise type...")
+    exercise_prediction = predict_exercise("keyframes")
 
 log("⚖️ Estimating weight...")
-weight_prediction = estimate_weight("keyframes")
+weight_prediction = estimate_weight("keyframes", exercise_prediction["movement"])
 
 log("📦 Packaging result...")
 final_result = package_result(rep_data, exercise_prediction, weight_prediction)
