@@ -1,18 +1,15 @@
 import os
 import json
 import numpy as np
-import sys
 from openai import OpenAI
 from dotenv import load_dotenv
+import re
 
 # ✅ Load environment variables
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ✅ Detect subprocess
-IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
-
-# ✅ Helper to safely convert NumPy types
+# ✅ Helper to safely convert numpy types
 def convert_numpy(obj):
     if isinstance(obj, np.generic):
         return obj.item()
@@ -53,28 +50,26 @@ Return the result in **JSON only** using this format:
 }}
 """
 
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are a professional lifting coach."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=500,
+    )
+
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a professional lifting coach."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=500,
-        )
+        content = response.choices[0].message.content.strip()
+        print("🧠 Raw GPT Coaching Response:\n" + content)
 
-        content = response.choices[0].message.content
-
-        # ✅ Debug print to stdout or stderr
-        debug_log = f"🧠 Raw GPT Coaching Response:\n{content}"
-        if IS_SUBPROCESS:
-            print(debug_log, file=sys.stderr)
-        else:
-            print(debug_log)
+        # ✅ Remove code block markers if present
+        if content.startswith("```json"):
+            content = re.sub(r"^```json\\s*", "", content)
+            content = re.sub(r"```$", "", content.strip())
 
         parsed = json.loads(content)
         return parsed["coaching_feedback"]
-
     except Exception as e:
         return {
             "summary": "Feedback could not be generated.",
