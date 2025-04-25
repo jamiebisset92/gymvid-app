@@ -1,9 +1,5 @@
-from pathlib import Path
-
-coaching_feedback_script = '''
 import os
 import json
-import openai
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -11,9 +7,11 @@ from dotenv import load_dotenv
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def generate_coaching_feedback(rep_data, exercise_name):
+def generate_feedback(video_data, rep_data):
+    exercise_name = video_data.get("predicted_exercise", "an exercise")
+
     prompt = f"""
-You are a highly experienced lifting coach. A user has uploaded a video of themselves performing the following exercise: {exercise_name}.
+You are a highly experienced lifting coach. A user has uploaded a video of themselves performing: {exercise_name}.
 
 Here is the data extracted from their reps:
 
@@ -25,7 +23,7 @@ Please provide:
 3. If necessary, a note on tempo or time under tension
 4. A motivational closing line
 
-Output must be returned as JSON in the following format:
+Return the result in **JSON only** using this format:
 
 {{
   "coaching_feedback": {{
@@ -47,7 +45,7 @@ Output must be returned as JSON in the following format:
             {"role": "system", "content": "You are a professional lifting coach."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=500
+        max_tokens=500,
     )
 
     try:
@@ -55,10 +53,9 @@ Output must be returned as JSON in the following format:
         parsed = json.loads(content)
         return parsed["coaching_feedback"]
     except Exception as e:
-        return {"error": f"Failed to parse GPT response: {str(e)}"}
-'''
-
-# Save the script
-coaching_feedback_path = Path("gymvid-app/backend/ai/analyze/coaching_feedback.py")
-coaching_feedback_path.write_text(coaching_feedback_script.strip())
-coaching_feedback_path
+        return {
+            "summary": "Feedback could not be generated.",
+            "technical_tips": [],
+            "tempo_guidance": "",
+            "motivation": f"An error occurred: {str(e)}"
+        }
