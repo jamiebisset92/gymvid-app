@@ -45,7 +45,7 @@ Do not include anything outside of the JSON block. Be brief and structured.
 
     # ✅ GPT call
     response = client.chat.completions.create(
-        model="gpt-4-vision-preview",
+        model="gpt-4o",
         messages=messages,
         max_tokens=500
     )

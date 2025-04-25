@@ -61,7 +61,7 @@ def estimate_weight_from_keyframes(keyframe_dir: str) -> dict:
 
     print("🧠 Calling GPT for weight estimation...")
     response = client.chat.completions.create(
-        model="gpt-4-vision-preview",
+        model="gpt-4o",
         messages=messages,
         max_tokens=300
     )
