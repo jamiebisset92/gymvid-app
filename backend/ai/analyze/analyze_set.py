@@ -45,7 +45,7 @@ log("🖼️ Exporting keyframes...")
 keyframe_paths = export_keyframes(video_path, rep_data)
 
 log("🧠 Predicting exercise type...")
-exercise_prediction = predict_exercise(keyframe_paths)
+exercise_prediction = predict_exercise("keyframes")
 
 log("⚖️ Estimating weight...")
 weight_prediction = estimate_weight(keyframe_paths)
