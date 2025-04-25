@@ -39,6 +39,7 @@ async def process_set(
     env = os.environ.copy()
     env["GYMVID_MODE"] = "subprocess"
     env["GYMVID_COACHING"] = "true" if coaching else "false"
+    env["PYTHONPATH"] = os.path.abspath(".")
 
     try:
         result = subprocess.run(
