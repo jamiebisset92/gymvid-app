@@ -133,3 +133,7 @@ def debug_env():
         "aws": os.getenv("AWS_ACCESS_KEY_ID") is not None,
         "bucket": os.getenv("S3_BUCKET_NAME"),
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=10000)
