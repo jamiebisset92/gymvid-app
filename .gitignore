@@ -1,15 +1,13 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# Node dependencies
 node_modules/
 
-# Expo
+# Expo / React Native builds
 .expo/
 dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native mobile builds
 *.orig.*
 *.jks
 *.p8
@@ -17,21 +15,38 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
-# Metro
+# Metro temp files
 .metro-health-check*
 
-# debug
+# Debugging artifacts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# macOS
+# macOS junk
 .DS_Store
 *.pem
 
-# local env files
+# Local environment variables
 .env
 
-# typescript
+# TypeScript
 *.tsbuildinfo
+
+# Python virtual environments
 .pyenv/
+
+# Python compiled files
+__pycache__/
+*.pyc
+
+# GymVid AI temporary outputs
+backend/ai/analyze/outputs/
+temp_uploads/
+temp_videos/
+
+# VS Code config (optional but recommended)
+.vscode/
+
+# Logs
+*.log
