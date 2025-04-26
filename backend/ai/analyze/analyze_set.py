@@ -40,10 +40,10 @@ def run_cli_args(args):
 
     if len(args) >= 2:
         user_provided_exercise = args[1]
-    if len(args) >= 3:
+    if len(args) >= 3 and args[2]:
         try:
             known_exercise_info = json.loads(args[2])
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, TypeError):
             known_exercise_info = None
 
     # ✅ Run each stage
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     if len(sys.argv) >= 4:
         try:
             known_exercise_info = json.loads(sys.argv[3])
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, TypeError):
             known_exercise_info = None
 
     final_result = run_cli_args([video_path, user_provided_exercise, known_exercise_info])
