@@ -2,8 +2,10 @@ import os
 import base64
 import json
 from openai import OpenAI
+from dotenv import load_dotenv
 
-# ✅ Initialize OpenAI client
+# ✅ Load environment variables
+load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def predict_exercise(keyframe_dir: str) -> dict:
@@ -15,22 +17,25 @@ def predict_exercise(keyframe_dir: str) -> dict:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
                 images.append({"name": fname, "data": b64})
 
-    # ✅ GPT prompt with enforced structure (No weight prediction anymore)
+    # ✅ Stronger GPT prompt with enforced structure (and mandatory guessing if unsure)
     system_prompt = """
 You are a fitness AI analyzing gym exercise keyframes.
 
-Return your prediction in this exact JSON format:
+You must ALWAYS return a prediction in this strict JSON format:
 
 {
   "equipment": one of ["Barbell", "Dumbbell", "Cable", "Machine", "Bodyweight", "Kettlebell", "Resistance Band", "Smith Machine"],
-  "variation": only if clearly visible (e.g. "Conventional", "Sumo", "Close Stance", "Wide Grip", etc),
+  "variation": (only if clearly visible, e.g. "Conventional", "Sumo", "Close Stance", "Wide Grip"),
   "movement": one of ["Deadlift", "Squat", "Lunge", "Hip Thrust", "Row", "Bench Press", "Shoulder Press", "Pull-up", "Chin-up"],
   "confidence": integer percentage from 0 to 100
 }
 
-Do not predict or estimate weight. Only predict equipment, variation, movement, and confidence.
-
-Do not include anything outside of the JSON block. Be brief and structured.
+RULES:
+- NEVER leave "movement" blank or missing.
+- If unsure, GUESS the most likely movement based on the visible clues.
+- It is better to make a reasonable guess than to skip fields or return invalid JSON.
+- Only respond with the JSON block. No explanation, no extra text.
+- Respond precisely, structured, and predict with your best judgment even if uncertain.
 """
 
     messages = [
