@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# ✅ Add subprocess check
+IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
+
 # ✅ Convert NumPy types for safe JSON serialization
 def convert_numpy(obj):
     if isinstance(obj, np.generic):
@@ -67,7 +70,10 @@ Return the result in **JSON only** using this format:
 
     try:
         raw_text = response.choices[0].message.content
-        print("🧠 Raw GPT Coaching Response:\n", raw_text)
+        
+        if not IS_SUBPROCESS:
+            print("🧠 Raw GPT Coaching Response:\n", raw_text)
+        
         json_text = extract_json_block(raw_text)
         parsed = json.loads(json_text)
         return parsed["coaching_feedback"]

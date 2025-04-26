@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# ✅ Add subprocess check
+IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
+
 # ✅ Extract structured JSON block from GPT response
 def extract_json_block(text):
     match = re.search(r"```json\n(.*?)```", text, re.DOTALL)
@@ -62,7 +65,9 @@ Do not include any explanation or extra text — only the JSON block.
             "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img['data']}"}}]
         })
 
-    print("🧠 Calling GPT for weight estimation...")
+    if not IS_SUBPROCESS:
+        print("🧠 Calling GPT for weight estimation...")
+
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=messages,
@@ -70,7 +75,9 @@ Do not include any explanation or extra text — only the JSON block.
     )
 
     raw_text = response.choices[0].message.content.strip()
-    print("📦 Raw GPT Response:\n", raw_text)
+    
+    if not IS_SUBPROCESS:
+        print("📦 Raw GPT Response:\n", raw_text)
 
     try:
         json_text = extract_json_block(raw_text)
