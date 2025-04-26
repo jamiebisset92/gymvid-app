@@ -16,7 +16,8 @@ def extract_json_block(text):
         return match.group(1).strip()
     return text.strip()
 
-def estimate_weight_from_keyframes(keyframe_dir):
+# ✅ FIXED: Accept 2 arguments now
+def estimate_weight_from_keyframes(keyframe_dir, movement_name=None):
     images = []
     for fname in sorted(os.listdir(keyframe_dir)):
         if fname.endswith(".jpg"):
