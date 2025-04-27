@@ -4,8 +4,9 @@ from typing import Optional
 import os
 import shutil
 import json
-from backend.utils.supabase_client import supabase
-from backend.utils.aws_utils import upload_file_to_s3
+
+from backend.utils.save_set_to_supabase import supabase  # ✅ Correct import
+from backend.utils.aws_utils import upload_file_to_s3  # ✅ S3 uploader
 
 router = APIRouter()
 
