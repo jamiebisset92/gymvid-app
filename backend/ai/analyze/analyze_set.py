@@ -75,9 +75,12 @@ def run_cli_args(args):
     log("⚖️ Estimating weight...")
     movement_name = exercise_prediction.get("movement")
     if not movement_name:
-        raise ValueError("Missing 'movement' in exercise prediction — cannot proceed with weight estimation.")
-    weight_prediction = estimate_weight("keyframes", movement_name)
+        if "error" in exercise_prediction:
+            raise ValueError(f"Exercise prediction failed: {exercise_prediction['error']}")
+        else:
+            raise ValueError(f"Missing 'movement' in exercise prediction output: {exercise_prediction}")
 
+    weight_prediction = estimate_weight("keyframes", movement_name)
 
     log("📦 Packaging result...")
     final_result = package_result(rep_data, exercise_prediction, weight_prediction)
