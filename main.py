@@ -7,10 +7,11 @@ import shutil
 import subprocess
 import json
 
-# ✅ Import utils and AI modules
+# ✅ Import utils, AI modules, and routers
 from backend.utils.aws_utils import download_file_from_s3
 from backend.utils.save_set_to_supabase import save_set_to_supabase
 from backend.ai.analyze import analyze_set
+from backend.api.manual_log import router as manual_log_router
 
 # ✅ Load environment variables
 load_dotenv()
@@ -26,6 +27,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ✅ Mount additional routers
+app.include_router(manual_log_router)
 
 # ✅ Legacy subprocess route (mostly for old curl testing)
 @app.post("/process_set")
