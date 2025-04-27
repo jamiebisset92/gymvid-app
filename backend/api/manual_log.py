@@ -3,7 +3,6 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 import os
 import shutil
-import json
 
 from backend.utils.save_set_to_supabase import supabase  # ✅ Correct import
 from backend.utils.aws_utils import upload_file_to_s3  # ✅ S3 uploader
@@ -12,7 +11,7 @@ router = APIRouter()
 
 @router.post("/manual_log")
 async def manual_log(
-    user_id: str = Form(...),  # ✅ NEW - user_id required
+    user_id: str = Form(...),  # ✅ user_id now required
     movement: str = Form(...),
     equipment: str = Form(...),
     weight: float = Form(...),
@@ -44,23 +43,24 @@ async def manual_log(
     if weight_unit.lower() == "lb":
         weight_kg = round(weight * 0.453592, 2)
 
-    # ✅ Insert into Supabase
-    insert_result = supabase.table("manual_logs").insert({
-        "user_id": user_id,  # ✅ Now passing user_id
-        "movement": movement,
-        "equipment": equipment,
-        "weight_kg": weight_kg,
-        "weight_unit": weight_unit.lower(),
-        "reps": reps,
-        "video_url": video_url,
-        "rpe": rpe,
-        "rir": rir
-    }).execute()
+    # ✅ Insert into Supabase inside try/except
+    try:
+        insert_result = supabase.table("manual_logs").insert({
+            "user_id": user_id,
+            "movement": movement,
+            "equipment": equipment,
+            "weight_kg": weight_kg,
+            "weight_unit": weight_unit.lower(),
+            "reps": reps,
+            "video_url": video_url,
+            "rpe": rpe,
+            "rir": rir
+        }).execute()
 
-    if insert_result.error:
-        return JSONResponse(status_code=500, content={"success": False, "error": str(insert_result.error)})
+        return JSONResponse({
+            "success": True,
+            "data": insert_result.data[0]
+        })
 
-    return JSONResponse({
-        "success": True,
-        "data": insert_result.data[0]
-    })
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
