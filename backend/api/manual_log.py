@@ -12,6 +12,7 @@ router = APIRouter()
 
 @router.post("/manual_log")
 async def manual_log(
+    user_id: str = Form(...),  # ✅ NEW - user_id required
     movement: str = Form(...),
     equipment: str = Form(...),
     weight: float = Form(...),
@@ -45,6 +46,7 @@ async def manual_log(
 
     # ✅ Insert into Supabase
     insert_result = supabase.table("manual_logs").insert({
+        "user_id": user_id,  # ✅ Now passing user_id
         "movement": movement,
         "equipment": equipment,
         "weight_kg": weight_kg,

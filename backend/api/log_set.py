@@ -11,11 +11,11 @@ router = APIRouter()
 
 @router.post("/analyze/log_set")
 async def log_set(
-    video: UploadFile,
+    user_id: str = Form(...),  # ✅ NEW - user_id required
+    video: UploadFile = UploadFile(...),
     user_provided_exercise: Optional[str] = Form(None),
     known_exercise_info: Optional[str] = Form(None)
 ):
-    # Save uploaded video temporarily
     temp_video_path = f"temp_uploads/{video.filename}"
     os.makedirs(os.path.dirname(temp_video_path), exist_ok=True)
 
@@ -33,6 +33,9 @@ async def log_set(
         # Run Analyze Set
         final_result = analyze_set.run_cli_args(args)
 
+        # ✅ Attach user_id to final_result
+        final_result["user_id"] = user_id
+
         # ✅ Save to Supabase
         save_set_to_supabase(final_result)
 
@@ -42,6 +45,5 @@ async def log_set(
         }
     
     finally:
-        # Always clean up
         if os.path.exists(temp_video_path):
             os.remove(temp_video_path)
