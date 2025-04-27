@@ -7,27 +7,27 @@ import shutil
 import subprocess
 import json
 
-# ✅ Import your utils and AI modules
+# ✅ Import utils and AI modules
 from backend.utils.aws_utils import download_file_from_s3
-from backend.utils.supabase_client import save_set_to_supabase
+from backend.utils.save_set_to_supabase import save_set_to_supabase
 from backend.ai.analyze import analyze_set
 
-# ✅ Load environment variables from .env file
+# ✅ Load environment variables
 load_dotenv()
 
 # ✅ Initialize FastAPI app
 app = FastAPI()
 
-# ✅ Optional: Enable CORS (for mobile app or frontend dev)
+# ✅ CORS (for frontend or mobile app)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change later for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ✅ Process Set (legacy route, subprocess)
+# ✅ Legacy subprocess route (mostly for old curl testing)
 @app.post("/process_set")
 async def process_set(
     video: UploadFile = File(None),
@@ -37,20 +37,17 @@ async def process_set(
     os.makedirs("temp_uploads", exist_ok=True)
 
     if s3_key:
-        # ✅ Download from S3
         save_path = f"temp_uploads/{os.path.basename(s3_key)}"
         success = download_file_from_s3(s3_key, save_path)
         if not success:
             return JSONResponse(status_code=500, content={"success": False, "error": "Failed to download video from S3"})
     elif video:
-        # ✅ Save uploaded file
         save_path = f"temp_uploads/{video.filename}"
         with open(save_path, "wb") as buffer:
             shutil.copyfileobj(video.file, buffer)
     else:
-        return JSONResponse(status_code=400, content={"success": False, "error": "No video file or s3_key provided"})
+        return JSONResponse(status_code=400, content={"success": False, "error": "No video or S3 key provided"})
 
-    # ✅ Set environment variables for subprocess
     env = os.environ.copy()
     env["GYMVID_MODE"] = "subprocess"
     env["GYMVID_COACHING"] = "true" if coaching else "false"
@@ -67,10 +64,6 @@ async def process_set(
 
         try:
             output = json.loads(result.stdout.strip())
-
-            # ✅ Save to Supabase
-            save_set_to_supabase(output)
-
             return JSONResponse({
                 "success": True,
                 "data": output,
@@ -95,7 +88,7 @@ async def process_set(
             }
         )
 
-# ✅ New - Log Set (direct function call, better pipeline)
+# ✅ New - analyze and directly save set into Supabase
 @app.post("/analyze/log_set")
 async def log_set(
     video: UploadFile = File(...),
@@ -104,23 +97,20 @@ async def log_set(
 ):
     os.makedirs("temp_uploads", exist_ok=True)
 
-    # ✅ Save uploaded video temporarily
     temp_video_path = f"temp_uploads/{video.filename}"
     with open(temp_video_path, "wb") as buffer:
         shutil.copyfileobj(video.file, buffer)
 
     try:
-        # ✅ Prepare args list
         args = [temp_video_path]
         if user_provided_exercise:
             args.append(user_provided_exercise)
         if known_exercise_info:
             args.append(known_exercise_info)
 
-        # ✅ Run clean GymVid analysis (no subprocess)
         final_result = analyze_set.run_cli_args(args)
 
-        # ✅ Save to Supabase
+        # ✅ Save this set to Supabase
         save_set_to_supabase(final_result)
 
         return JSONResponse({
@@ -129,11 +119,10 @@ async def log_set(
         })
 
     finally:
-        # ✅ Clean up the temp video no matter what
         if os.path.exists(temp_video_path):
             os.remove(temp_video_path)
 
-# ✅ Debug endpoint for environment (optional)
+# ✅ Debugging tool
 @app.get("/debug/env")
 def debug_env():
     return {
@@ -142,6 +131,7 @@ def debug_env():
         "bucket": os.getenv("S3_BUCKET_NAME"),
     }
 
+# ✅ Local dev mode
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=10000)

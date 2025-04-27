@@ -4,8 +4,8 @@ from typing import Optional
 import os
 import shutil
 import json
-from backend.utils.supabase_client import supabase  # ✅ Assuming you have this client ready
-from backend.utils.aws_utils import upload_file_to_s3  # ✅ Assuming you have a working uploader
+from backend.utils.supabase_client import supabase  # ✅ Assuming client ready
+from backend.utils.aws_utils import upload_file_to_s3  # ✅ Assuming uploader ready
 
 router = APIRouter()
 
@@ -15,8 +15,8 @@ async def manual_log(
     equipment: str = Form(...),
     weight: float = Form(...),
     weight_unit: str = Form(...),  # "kg" or "lb"
-    effort_metric_type: str = Form(...),  # "RPE" or "RIR"
-    effort_metric_value: float = Form(...),
+    rpe: Optional[float] = Form(None),
+    rir: Optional[float] = Form(None),
     reps: int = Form(...),
     video: Optional[UploadFile] = File(None)
 ):
@@ -35,10 +35,8 @@ async def manual_log(
         upload_success = upload_file_to_s3(temp_video_path, s3_key)
 
         if upload_success:
-            # ✅ Build the public S3 URL
             video_url = f"https://{os.getenv('S3_BUCKET_NAME')}.s3.amazonaws.com/{s3_key}"
         
-        # ✅ Clean temp file
         os.remove(temp_video_path)
 
     # ✅ Always convert weight to kg if needed
@@ -47,21 +45,23 @@ async def manual_log(
         weight_kg = round(weight * 0.453592, 2)  # lb to kg conversion
 
     # ✅ Insert into Supabase
-    insert_result = supabase.table("manual_logs").insert({
+    insert_payload = {
         "movement": movement,
         "equipment": equipment,
         "weight_kg": weight_kg,
         "weight_unit": weight_unit.lower(),
-        "effort_metric_type": effort_metric_type.upper(),  # Store RPE/RIR consistently uppercase
-        "effort_metric_value": effort_metric_value,
+        "rpe": rpe,
+        "rir": rir,
         "reps": reps,
         "video_url": video_url
-    }).execute()
+    }
+
+    insert_result = supabase.table("manual_logs").insert(insert_payload).execute()
 
     if insert_result.error:
         return JSONResponse(status_code=500, content={"success": False, "error": str(insert_result.error)})
 
     return JSONResponse({
         "success": True,
-        "data": insert_result.data[0]  # Return the inserted log data
+        "data": insert_result.data[0]
     })
