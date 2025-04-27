@@ -9,6 +9,7 @@ import json
 
 # ✅ Import your utils and AI modules
 from backend.utils.aws_utils import download_file_from_s3
+from backend.utils.supabase_client import save_set_to_supabase
 from backend.ai.analyze import analyze_set
 
 # ✅ Load environment variables from .env file
@@ -20,7 +21,7 @@ app = FastAPI()
 # ✅ Optional: Enable CORS (for mobile app or frontend dev)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change this to your frontend domains later for security
+    allow_origins=["*"],  # Change later for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -66,6 +67,10 @@ async def process_set(
 
         try:
             output = json.loads(result.stdout.strip())
+
+            # ✅ Save to Supabase
+            save_set_to_supabase(output)
+
             return JSONResponse({
                 "success": True,
                 "data": output,
@@ -112,8 +117,11 @@ async def log_set(
         if known_exercise_info:
             args.append(known_exercise_info)
 
-        # ✅ Run clean GymVid analysis (not subprocess)
+        # ✅ Run clean GymVid analysis (no subprocess)
         final_result = analyze_set.run_cli_args(args)
+
+        # ✅ Save to Supabase
+        save_set_to_supabase(final_result)
 
         return JSONResponse({
             "success": True,
