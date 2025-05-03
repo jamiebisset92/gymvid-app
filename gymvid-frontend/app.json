@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "GymVid",
+    "slug": "gymvid-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.gymvid.app",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.gymvid.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-document-picker",
+      "expo-image-picker",
+      "expo-av",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow GymVid to use Face ID."
+        }
+      ]
+    ],
+    "scheme": "gymvid",
+    "entryPoint": "index.js",
+    "jsEngine": "hermes",
+    "sdkVersion": "53.0.0",
+    "fonts": {
+      "DMSans-Regular": "./assets/fonts/DMSans-Regular.ttf",
+      "DMSans-Bold": "./assets/fonts/DMSans-Bold.ttf",
+      "DMSans-Medium": "./assets/fonts/DMSans-Medium.ttf",
+      "DMSans-Black": "./assets/fonts/DMSans_36pt-Black.ttf"
+    }
+  }
+}
