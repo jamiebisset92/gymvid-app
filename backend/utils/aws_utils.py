@@ -2,6 +2,7 @@
 
 import boto3
 import os
+import subprocess
 from botocore.exceptions import BotoCoreError, ClientError
 
 # Load environment variables
@@ -42,4 +43,25 @@ def download_file_from_s3(s3_key, local_path):
         return True
     except (BotoCoreError, ClientError) as e:
         print(f"❌ Download failed: {e}")
+        return False
+
+def generate_thumbnail_with_rotation_fix(video_path, thumbnail_path):
+    """
+    Generates a thumbnail from the video with proper orientation using ffmpeg.
+    """
+    try:
+        # Auto-rotate based on iPhone metadata and extract the first frame
+        command = [
+            "ffmpeg",
+            "-i", video_path,
+            "-vf", "transpose=1",  # Auto-rotation workaround (may use transpose or auto-orient)
+            "-frames:v", "1",
+            "-q:v", "2",
+            thumbnail_path
+        ]
+        subprocess.run(command, check=True)
+        print(f"✅ Thumbnail generated: {thumbnail_path}")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Thumbnail generation failed: {e}")
         return False

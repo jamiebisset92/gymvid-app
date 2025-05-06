@@ -431,8 +431,8 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
       if (set.rir !== undefined && set.rir !== '') formData.append('rir', String(set.rir));
       formData.append('video', {
         uri: videoUri,
-        name: 'video.mp4',
         type: 'video/mp4',
+        name: videoUri.split('/').pop()  // Use original filename from URI
       });
 
       // Upload to backend
