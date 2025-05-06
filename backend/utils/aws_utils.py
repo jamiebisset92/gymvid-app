@@ -1,3 +1,5 @@
+# backend/utils/aws_utils.py
+
 import boto3
 import os
 from botocore.exceptions import BotoCoreError, ClientError
@@ -16,14 +18,13 @@ s3 = boto3.client(
 
 def upload_file_to_s3(local_path, s3_key):
     """
-    Uploads a file to S3 with public read access.
+    Uploads a file to S3.
     """
     try:
         s3.upload_file(
             Filename=local_path,
             Bucket=S3_BUCKET,
-            Key=s3_key,
-            ExtraArgs={"ACL": "public-read"}  # ✅ Required for public URLs
+            Key=s3_key
         )
         print(f"✅ Uploaded to s3://{S3_BUCKET}/{s3_key}")
         return True
