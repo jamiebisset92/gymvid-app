@@ -29,7 +29,7 @@ export default function App() {
           'DMSans-Medium': require('./assets/fonts/DMSans-Medium.ttf'),
         });
 
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.session();
         setSession(session);
 
         const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {

@@ -31,7 +31,7 @@ export default function App() {
           'DMSans-Black': require('./assets/fonts/DMSans_36pt-Black.ttf')
         });
 
-        const { data: { session } } = await supabase.auth.getSession();
+        const session = supabase.auth.session();
         setSession(session);
 
         const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {

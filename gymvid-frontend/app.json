@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -45,14 +45,7 @@
       ]
     ],
     "scheme": "gymvid",
-    "entryPoint": "index.js",
     "jsEngine": "hermes",
-    "sdkVersion": "53.0.0",
-    "fonts": {
-      "DMSans-Regular": "./assets/fonts/DMSans-Regular.ttf",
-      "DMSans-Bold": "./assets/fonts/DMSans-Bold.ttf",
-      "DMSans-Medium": "./assets/fonts/DMSans-Medium.ttf",
-      "DMSans-Black": "./assets/fonts/DMSans_36pt-Black.ttf"
-    }
+    "sdkVersion": "53.0.0"
   }
 }

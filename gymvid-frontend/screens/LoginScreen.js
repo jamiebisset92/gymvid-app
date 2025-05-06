@@ -16,20 +16,25 @@ export default function LoginScreen({ navigation, setSession }) {
     biometricEnabled,
     rememberMe,
     setRememberMe,
+    signUp,
   } = useAuth();
 
   const handleLogin = async (useBiometric = false) => {
+    console.log('Login button pressed', { email, password, useBiometric });
     if (!useBiometric && (!email || !password)) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
-    const { data, error } = await signIn(email, password, useBiometric);
-    
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else if (data?.session) {
-      setSession(data.session);
+    const result = await signIn(email, password, useBiometric);
+    console.log('signIn result:', result);
+
+    if (result?.error) {
+      Alert.alert('Error', result.error.message);
+    } else if (result?.session) {
+      setSession(result.session);
+    } else {
+      Alert.alert('Error', 'Unknown error occurred');
     }
   };
 
@@ -37,6 +42,22 @@ export default function LoginScreen({ navigation, setSession }) {
     const { error } = await signInWithProvider(provider);
     if (error) {
       Alert.alert('Error', error.message);
+    }
+  };
+
+  const handleSignIn = async () => {
+    try {
+      const { error } = await signIn(email, password);
+      if (error) {
+        console.log('Sign in error:', error);
+        Alert.alert('Sign in error', error.message);
+      } else {
+        // Optionally navigate or show success
+        console.log('Sign in successful');
+      }
+    } catch (error) {
+      console.log('Sign in error:', error);
+      Alert.alert('Sign in error', error.message);
     }
   };
 

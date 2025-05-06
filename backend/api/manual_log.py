@@ -4,14 +4,15 @@ from typing import Optional
 import os
 import shutil
 
-from backend.utils.save_set_to_supabase import supabase  # ✅ Correct import
-from backend.utils.aws_utils import upload_file_to_s3  # ✅ S3 uploader
+from backend.utils.save_set_to_supabase import supabase
+from backend.utils.aws_utils import upload_file_to_s3
+from backend.utils.generate_thumbnail import generate_thumbnail
 
 router = APIRouter()
 
 @router.post("/manual_log")
 async def manual_log(
-    user_id: str = Form(...),  # ✅ user_id now required
+    user_id: str = Form(...),
     movement: str = Form(...),
     equipment: str = Form(...),
     weight: float = Form(...),
@@ -24,6 +25,7 @@ async def manual_log(
     os.makedirs("temp_uploads", exist_ok=True)
 
     video_url = None
+    thumbnail_url = None
 
     if video:
         temp_video_path = f"temp_uploads/{video.filename}"
@@ -31,19 +33,22 @@ async def manual_log(
             shutil.copyfileobj(video.file, buffer)
 
         s3_key = f"manual_logs/videos/{video.filename}"
-        upload_success = upload_file_to_s3(temp_video_path, s3_key)
-
-        if upload_success:
+        if upload_file_to_s3(temp_video_path, s3_key):
             video_url = f"https://{os.getenv('S3_BUCKET_NAME')}.s3.amazonaws.com/{s3_key}"
 
-        os.remove(temp_video_path)
+        thumb_path = f"temp_uploads/{video.filename}_thumb.jpg"
+        if generate_thumbnail(temp_video_path, thumb_path):
+            thumb_key = f"manual_logs/thumbnails/{video.filename}_thumb.jpg"
+            if upload_file_to_s3(thumb_path, thumb_key):
+                thumbnail_url = f"https://{os.getenv('S3_BUCKET_NAME')}.s3.amazonaws.com/{thumb_key}"
+            if os.path.exists(thumb_path):
+                os.remove(thumb_path)
 
-    # ✅ Always convert weight to kg if needed
-    weight_kg = weight
-    if weight_unit.lower() == "lb":
-        weight_kg = round(weight * 0.453592, 2)
+        if os.path.exists(temp_video_path):
+            os.remove(temp_video_path)
 
-    # ✅ Insert into Supabase inside try/except
+    weight_kg = weight if weight_unit.lower() == "kg" else round(weight * 0.453592, 2)
+
     try:
         insert_result = supabase.table("manual_logs").insert({
             "user_id": user_id,
@@ -53,14 +58,22 @@ async def manual_log(
             "weight_unit": weight_unit.lower(),
             "reps": reps,
             "video_url": video_url,
+            "thumbnail_url": thumbnail_url,
             "rpe": rpe,
             "rir": rir
         }).execute()
 
         return JSONResponse({
             "success": True,
+            "video_url": video_url,
+            "thumbnail_url": thumbnail_url,
             "data": insert_result.data[0]
         })
 
     except Exception as e:
-        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+        return JSONResponse(status_code=500, content={
+            "success": False,
+            "error": str(e),
+            "video_url": video_url,
+            "thumbnail_url": thumbnail_url
+        })

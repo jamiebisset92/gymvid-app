@@ -42,6 +42,20 @@ export default function SignUpScreen({ navigation }) {
     }
   };
 
+  const handleSignIn = async () => {
+    console.log('Sign In button pressed');
+    try {
+      const { user, session, error } = await supabase.auth.signIn({ email, password });
+      if (error) {
+        console.log('Sign in error:', error);
+        Alert.alert('Sign in error', error.message);
+      }
+    } catch (error) {
+      console.log('Sign in error:', error);
+      Alert.alert('Sign in error', error.message);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -116,7 +130,7 @@ export default function SignUpScreen({ navigation }) {
           <Text style={styles.footerText}>Already have an account? </Text>
           <AuthButton
             title="Sign In"
-            onPress={() => navigation.navigate('Login')}
+            onPress={handleSignIn}
             variant="text"
             style={styles.signInButton}
           />

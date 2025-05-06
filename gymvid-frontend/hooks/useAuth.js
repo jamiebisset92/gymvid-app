@@ -68,7 +68,7 @@ export const useAuth = () => {
         }
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { user, session, error } = await supabase.auth.signIn({
         email,
         password,
       });
@@ -79,9 +79,9 @@ export const useAuth = () => {
         await saveCredentials(email, password);
       }
 
-      return { data, error: null };
+      return { user, session, error: null };
     } catch (error) {
-      return { data: null, error };
+      return { user: null, session: null, error };
     } finally {
       setLoading(false);
     }
