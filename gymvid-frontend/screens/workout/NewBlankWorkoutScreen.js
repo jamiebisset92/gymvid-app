@@ -441,7 +441,15 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         headers: { 'Content-Type': 'multipart/form-data' },
         body: formData,
       });
-      const data = await response.json();
+      const rawText = await response.text();
+      console.log('Raw response from backend:', rawText);
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        console.error('❌ JSON parsing failed:', e);
+        throw new Error('Upload failed: invalid JSON returned');
+      }
       const { video_url, thumbnail_url } = data;
       if (!video_url || !thumbnail_url) {
         throw new Error('Upload failed: missing video_url or thumbnail_url');

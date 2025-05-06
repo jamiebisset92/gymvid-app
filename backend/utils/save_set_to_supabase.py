@@ -1,3 +1,5 @@
+# backend/utils/save_set_to_supabase.py
+
 import os
 from supabase import create_client
 from dotenv import load_dotenv
@@ -5,10 +7,16 @@ from dotenv import load_dotenv
 # ✅ Load environment variables
 load_dotenv()
 
-# ✅ Initialize Supabase client
+# ✅ Read Supabase credentials using SUPABASE_KEY (not SERVICE_ROLE)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")  # 👈 Consistent with your .env and Render
+
+# ✅ Validate env vars
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("Missing SUPABASE_URL or SUPABASE_KEY in environment variables.")
+
+# ✅ Initialize Supabase client
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ✅ Save analyzed set into Supabase
 def save_set_to_supabase(data):
@@ -24,11 +32,11 @@ def save_set_to_supabase(data):
             "movement": movement,
             "equipment": equipment,
             "weight_kg": weight_kg,
-            "weight_unit": "kg",  # Always kg after conversion
+            "weight_unit": "kg",
             "effort_metric_type": effort_metric_type,
             "effort_metric_value": effort_metric_value,
             "reps": reps,
-            "video_url": None  # No URL in auto logs (unless added later)
+            "video_url": None  # Can be updated later
         }
 
         insert_result = supabase.table("logged_sets").insert(record).execute()
@@ -40,7 +48,7 @@ def save_set_to_supabase(data):
     except Exception as e:
         return {"error": str(e)}
 
-# ✅ Save manual entry into Supabase
+# ✅ Save manual log into Supabase
 def save_manual_log_to_supabase(data):
     try:
         insert_result = supabase.table("manual_logs").insert(data).execute()

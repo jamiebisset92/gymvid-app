@@ -1,6 +1,8 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from dotenv import load_dotenv
 import os
 import shutil
@@ -19,6 +21,25 @@ load_dotenv()
 # ✅ Initialize FastAPI app
 app = FastAPI()
 
+# ✅ Add JSON Exception Handlers
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "success": False,
+            "error": "Validation failed",
+            "details": exc.errors(),
+        },
+    )
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"success": False, "error": exc.detail},
+    )
+
 # ✅ CORS (for frontend or mobile app)
 app.add_middleware(
     CORSMiddleware,
@@ -28,10 +49,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Mount additional routers
+# ✅ Mount routers
 app.include_router(manual_log_router)
 
-# ✅ Legacy subprocess route (mostly for old curl testing)
+# ✅ Legacy subprocess-based analysis route
 @app.post("/process_set")
 async def process_set(
     video: UploadFile = File(None),
@@ -92,7 +113,7 @@ async def process_set(
             }
         )
 
-# ✅ New - analyze and directly save set into Supabase
+# ✅ Analyze and log a set (AI-based)
 @app.post("/analyze/log_set")
 async def log_set(
     video: UploadFile = File(...),
@@ -126,7 +147,7 @@ async def log_set(
         if os.path.exists(temp_video_path):
             os.remove(temp_video_path)
 
-# ✅ Debugging tool
+# ✅ Debug environment
 @app.get("/debug/env")
 def debug_env():
     return {
