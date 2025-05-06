@@ -16,7 +16,12 @@ s3 = boto3.client(
 
 def upload_file_to_s3(local_path, s3_key):
     try:
-        s3.upload_file(local_path, S3_BUCKET, s3_key)
+        s3.upload_file(
+            Filename=local_path,
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            ExtraArgs={"ACL": "public-read"}  # 👈 Make file publicly viewable
+        )
         print(f"✅ Uploaded to s3://{S3_BUCKET}/{s3_key}")
         return True
     except (BotoCoreError, ClientError) as e:

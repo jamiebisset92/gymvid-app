@@ -56,9 +56,6 @@ const formatDate = () => {
 
 const REST_TIME_OPTIONS = [15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 210, 240, 270, 300];
 
-// Track which thumbnails have been generated to prevent duplicates
-const generatedThumbnailKeys = new Set();
-
 export default function NewBlankWorkoutScreen({ navigation = {} }) {
   const [exercises, setExercises] = useState([]);
   const [showPicker, setShowPicker] = useState(false);
@@ -90,7 +87,6 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   const [showExitModal, setShowExitModal] = useState(false);
   const [showDeleteExerciseModal, setShowDeleteExerciseModal] = useState(false);
   const [pendingDeleteExerciseIdx, setPendingDeleteExerciseIdx] = useState(null);
-  const [videoThumbnails, setVideoThumbnails] = useState({});
   const [uploadingSet, setUploadingSet] = useState(null); // setId of uploading set
 
   // Add a unique ID for the accessory view
@@ -404,56 +400,6 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
     }
   };
 
-  const generateThumbnail = async (videoUri, exerciseId, setId) => {
-    const key = `${exerciseId}-${setId}`;
-    if (generatedThumbnailKeys.has(key)) return; // Prevent duplicate generations
-    generatedThumbnailKeys.add(key);
-    try {
-      const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
-        time: 0,
-        quality: 0.5,
-      });
-      console.log('generateThumbnail called:', { videoUri, exerciseId, setId, uri });
-      setVideoThumbnails(prev => {
-        console.log('Setting videoThumbnails:', { key, uri });
-        return {
-          ...prev,
-          [key]: uri
-        };
-      });
-    } catch (error) {
-      console.error('Error generating thumbnail:', error);
-    }
-  };
-
-  const renderVideoButton = (exercise, set) => {
-    return (
-      <TouchableOpacity
-        style={styles.tableCellIcon}
-        onPress={() => handleVideoUpload(exercise.id, set.id)}
-        disabled={isUploading || uploadingSet === set.id}
-      >
-        <View style={styles.cameraCornerBox}>
-          <View style={styles.cornerTLH} />
-          <View style={styles.cornerTLV} />
-          <View style={styles.cornerTRH} />
-          <View style={styles.cornerTRV} />
-          <View style={styles.cornerBLH} />
-          <View style={styles.cornerBLV} />
-          <View style={styles.cornerBRH} />
-          <View style={styles.cornerBRV} />
-          {uploadingSet === set.id ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : set.thumbnail_url ? (
-            <Image source={{ uri: set.thumbnail_url }} style={styles.videoThumb} />
-          ) : (
-            <Ionicons name="camera-outline" size={20} color={colors.gray} />
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
   const handleVideoUpload = async (exerciseId, setId) => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -474,14 +420,11 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
 
       // Prepare FormData
       const formData = new FormData();
-      // Use a real UUID from Supabase users table for testing
-      // In production, get this from your auth context/state
       formData.append('user_id', '94f88c41-2dbe-47f3-b7c1-95ffbb374b61');
       formData.append('movement', exercises[exerciseIdx].name);
       formData.append('equipment', exercises[exerciseIdx].equipment || '');
       formData.append('weight_unit', 'kg');
       const set = exercises[exerciseIdx].sets[setIdx];
-      // Always send weight and reps as '0' if missing
       formData.append('weight', set.weight !== undefined && set.weight !== '' ? String(set.weight) : '0');
       formData.append('reps', set.reps !== undefined && set.reps !== '' ? String(set.reps) : '0');
       if (set.rpe !== undefined && set.rpe !== '') formData.append('rpe', String(set.rpe));
@@ -499,11 +442,12 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         body: formData,
       });
       const data = await response.json();
-      console.log('Backend response:', data);
-      // Check for video_url and thumbnail_url at the top level
-      if (!data?.video_url || !data?.thumbnail_url) {
+      const { video_url, thumbnail_url } = data;
+      if (!video_url || !thumbnail_url) {
         throw new Error('Upload failed: missing video_url or thumbnail_url');
       }
+      console.log('Uploaded video:', video_url);
+      console.log('Thumbnail image:', thumbnail_url);
 
       // Update set with video and thumbnail URLs
       setExercises(prev => {
@@ -514,8 +458,8 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         if (sIdx === -1) return prev;
         updated[exIdx].sets[sIdx] = {
           ...updated[exIdx].sets[sIdx],
-          video: data.video_url,
-          thumbnail_url: data.thumbnail_url,
+          video: video_url,
+          thumbnail_url: thumbnail_url,
         };
         return updated;
       });
@@ -819,29 +763,6 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
     setIsScrolled(offsetY > 0);
   };
 
-  // Add useEffect to generate thumbnails only when needed
-  useEffect(() => {
-    exercises.forEach(exercise => {
-      if (exercise.isSuperset && Array.isArray(exercise.exercises)) {
-        exercise.exercises.forEach(subEx => {
-          subEx.sets?.forEach(set => {
-            const key = `${subEx.id}-${set.id}`;
-            if (set.video && !videoThumbnails[key]) {
-              generateThumbnail(set.video, subEx.id, set.id);
-            }
-          });
-        });
-      } else {
-        exercise.sets?.forEach(set => {
-          const key = `${exercise.id}-${set.id}`;
-          if (set.video && !videoThumbnails[key]) {
-            generateThumbnail(set.video, exercise.id, set.id);
-          }
-        });
-      }
-    });
-  }, [exercises, videoThumbnails]);
-
   if (!isReady) {
     return null; // or a loading spinner if you prefer
   }
@@ -1041,7 +962,29 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                       returnKeyType="done"
                                       inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                                     />
-                                    {renderVideoButton(exercise, set)}
+                                    <TouchableOpacity
+                                      style={styles.tableCellIcon}
+                                      onPress={() => handleVideoUpload(exercise.id, set.id)}
+                                      disabled={isUploading || uploadingSet === set.id}
+                                    >
+                                      <View style={styles.cameraCornerBox}>
+                                        <View style={styles.cornerTLH} />
+                                        <View style={styles.cornerTLV} />
+                                        <View style={styles.cornerTRH} />
+                                        <View style={styles.cornerTRV} />
+                                        <View style={styles.cornerBLH} />
+                                        <View style={styles.cornerBLV} />
+                                        <View style={styles.cornerBRH} />
+                                        <View style={styles.cornerBRV} />
+                                        {uploadingSet === set.id ? (
+                                          <ActivityIndicator size="small" color={colors.primary} />
+                                        ) : set.thumbnail_url ? (
+                                          <Image source={{ uri: set.thumbnail_url }} style={styles.videoThumb} />
+                                        ) : (
+                                          <Ionicons name="camera-outline" size={20} color={colors.gray} />
+                                        )}
+                                      </View>
+                                    </TouchableOpacity>
                                     <TouchableOpacity
                                       style={styles.tableCellCheck}
                                       onPress={() => handleCompleteSet(exercise.id, set.id, ex.id)}
@@ -1128,7 +1071,29 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                   returnKeyType="done"
                                   inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                                 />
-                                {renderVideoButton(exercise, set)}
+                                <TouchableOpacity
+                                  style={styles.tableCellIcon}
+                                  onPress={() => handleVideoUpload(exercise.id, set.id)}
+                                  disabled={isUploading || uploadingSet === set.id}
+                                >
+                                  <View style={styles.cameraCornerBox}>
+                                    <View style={styles.cornerTLH} />
+                                    <View style={styles.cornerTLV} />
+                                    <View style={styles.cornerTRH} />
+                                    <View style={styles.cornerTRV} />
+                                    <View style={styles.cornerBLH} />
+                                    <View style={styles.cornerBLV} />
+                                    <View style={styles.cornerBRH} />
+                                    <View style={styles.cornerBRV} />
+                                    {uploadingSet === set.id ? (
+                                      <ActivityIndicator size="small" color={colors.primary} />
+                                    ) : set.thumbnail_url ? (
+                                      <Image source={{ uri: set.thumbnail_url }} style={styles.videoThumb} />
+                                    ) : (
+                                      <Ionicons name="camera-outline" size={20} color={colors.gray} />
+                                    )}
+                                  </View>
+                                </TouchableOpacity>
                                 <TouchableOpacity
                                   style={styles.tableCellCheck}
                                   onPress={() => handleCompleteSet(exercise.id, set.id)}
