@@ -474,16 +474,18 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
 
       // Prepare FormData
       const formData = new FormData();
-      // TODO: Replace with actual user_id from your auth context/state
-      const userId = 'demo-user';
-      formData.append('user_id', userId);
+      // Use a real UUID from Supabase users table for testing
+      // In production, get this from your auth context/state
+      formData.append('user_id', '94f88c41-2dbe-47f3-b7c1-95ffbb374b61');
       formData.append('movement', exercises[exerciseIdx].name);
       formData.append('equipment', exercises[exerciseIdx].equipment || '');
-      formData.append('weight', exercises[exerciseIdx].sets[setIdx].weight || '');
       formData.append('weight_unit', 'kg');
-      formData.append('reps', exercises[exerciseIdx].sets[setIdx].reps || '');
-      formData.append('rpe', exercises[exerciseIdx].sets[setIdx].rpe || '');
-      formData.append('rir', exercises[exerciseIdx].sets[setIdx].rir || '');
+      const set = exercises[exerciseIdx].sets[setIdx];
+      // Always send weight and reps as '0' if missing
+      formData.append('weight', set.weight !== undefined && set.weight !== '' ? String(set.weight) : '0');
+      formData.append('reps', set.reps !== undefined && set.reps !== '' ? String(set.reps) : '0');
+      if (set.rpe !== undefined && set.rpe !== '') formData.append('rpe', String(set.rpe));
+      if (set.rir !== undefined && set.rir !== '') formData.append('rir', String(set.rir));
       formData.append('video', {
         uri: videoUri,
         name: 'video.mp4',
@@ -497,8 +499,9 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         body: formData,
       });
       const data = await response.json();
-      console.log('Backend response:', data); // Add this line
-      if (!data.data?.video_url || !data.data?.thumbnail_url) {
+      console.log('Backend response:', data);
+      // Check for video_url and thumbnail_url at the top level
+      if (!data?.video_url || !data?.thumbnail_url) {
         throw new Error('Upload failed: missing video_url or thumbnail_url');
       }
 
@@ -511,8 +514,8 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         if (sIdx === -1) return prev;
         updated[exIdx].sets[sIdx] = {
           ...updated[exIdx].sets[sIdx],
-          video: data.data.video_url,
-          thumbnail_url: data.data.thumbnail_url,
+          video: data.video_url,
+          thumbnail_url: data.thumbnail_url,
         };
         return updated;
       });

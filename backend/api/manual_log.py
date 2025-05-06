@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.post("/manual_log")
 async def manual_log(
-    user_id: str = Form(...),
+    user_id: Optional[str] = Form(None),  # ✅ Now optional
     movement: str = Form(...),
     equipment: str = Form(...),
     weight: float = Form(...),
@@ -22,6 +22,13 @@ async def manual_log(
     rir: Optional[float] = Form(None),
     video: Optional[UploadFile] = File(None)
 ):
+    # ✅ Provide fallback for dev
+    if not user_id:
+        if os.getenv("GYMVID_ENV") == "dev":
+            user_id = "94f88c41-2dbe-47f3-b7c1-95ffbb374b61"  # Dev UUID
+        else:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Missing user_id"})
+
     os.makedirs("temp_uploads", exist_ok=True)
 
     video_url = None
