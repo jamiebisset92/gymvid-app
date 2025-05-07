@@ -1811,7 +1811,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                 {/* Header */}
                 <View style={{ alignItems: 'center', justifyContent: 'center', position: 'relative', paddingTop: 18, paddingBottom: 20 }}>
                   <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB', marginBottom: 12 }} />
-                  <Text style={{ fontSize: 16, fontFamily: 'DMSans-Black', color: colors.darkGray, textAlign: 'center', marginBottom: 0 }}>Workout Settings</Text>
+                  <Text style={{ fontSize: 20, fontFamily: 'DMSans-Black', color: colors.darkGray, textAlign: 'center', marginBottom: 0 }}>Workout Settings</Text>
                   <TouchableOpacity
                     style={{ position: 'absolute', right: 18, top: 18, padding: 4 }}
                     onPress={() => setShowSettingsModal(false)}
@@ -1821,41 +1821,35 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                 </View>
                 {/* Settings Rows */}
                 <View style={{ borderTopWidth: 1, borderColor: '#F0F0F0' }}>
-                  {/* Enable Video Uploads */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 10, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Enable Video Uploads</Text>
-                    <Switch value={enableVideoUploads} onValueChange={setEnableVideoUploads} />
-                  </View>
                   {/* Auto-Start Rest Timer */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 10, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Auto-Start Rest Timer</Text>
+                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Auto-Start Rest Timer</Text>
                     <Switch value={autoStartRestTimer} onValueChange={setAutoStartRestTimer} />
                   </View>
                   {/* Weight Units Dropdown */}
                   <TouchableOpacity onPress={handleWeightUnitsPress} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 10, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Weight Units</Text>
+                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Weight Units</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 10, fontFamily: 'DMSans-Regular', color: colors.gray, marginRight: 4 }}>{weightUnits}</Text>
+                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Regular', color: colors.gray, marginRight: 4 }}>{weightUnits}</Text>
                       <Ionicons name="chevron-forward" size={18} color="#B0B0B0" />
                     </View>
                   </TouchableOpacity>
                   {/* Auto-Predict Weights */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 10, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Auto-Predict Weights</Text>
+                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Auto-Predict Weights</Text>
                     <Switch value={autoPredictWeights} onValueChange={setAutoPredictWeights} />
                   </View>
                   {/* Exertion Metric Dropdown */}
                   <TouchableOpacity onPress={handleExertionMetricPress} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 10, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Exertion Metric</Text>
+                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Exertion Metric</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 10, fontFamily: 'DMSans-Regular', color: colors.gray, marginRight: 4 }}>{exertionMetric}</Text>
-                      <Text style={{ fontSize: 12, fontFamily: 'DMSans-Regular', color: colors.gray, marginRight: 4 }}>{exertionMetric}</Text>
+                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Regular', color: colors.gray, marginRight: 4 }}>{exertionMetric}</Text>
                       <Ionicons name="chevron-forward" size={18} color="#B0B0B0" />
                     </View>
                   </TouchableOpacity>
                   {/* Enable Exertion Tracking */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 12, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Enable Exertion Tracking</Text>
+                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Enable Exertion Tracking</Text>
                     <Switch value={enableExertionTracking} onValueChange={setEnableExertionTracking} />
                   </View>
                 </View>

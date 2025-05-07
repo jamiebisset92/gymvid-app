@@ -9,17 +9,16 @@ from dotenv import load_dotenv
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ✅ Add subprocess check
+# ✅ Check for subprocess mode
 IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
 
-# ✅ Extract structured JSON block from GPT response
+# ✅ Extract clean JSON from GPT response
 def extract_json_block(text):
     match = re.search(r"```json\n(.*?)```", text, re.DOTALL)
     if match:
         return match.group(1).strip()
     return text.strip()
 
-# ✅ FIXED: Accept 2 arguments now
 def estimate_weight_from_keyframes(keyframe_dir, movement_name=None):
     images = []
     for fname in sorted(os.listdir(keyframe_dir)):
@@ -28,7 +27,16 @@ def estimate_weight_from_keyframes(keyframe_dir, movement_name=None):
                 b64 = base64.b64encode(f.read()).decode("utf-8")
                 images.append({"name": fname, "data": b64})
 
-    # ✅ GPT Prompt
+    # ✅ Limit keyframes to 3 max to avoid token overflow
+    MAX_IMAGES = 3
+    if len(images) > MAX_IMAGES:
+        step = max(len(images) // MAX_IMAGES, 1)
+        images = [images[i] for i in range(0, len(images), step)][:MAX_IMAGES]
+
+    if not IS_SUBPROCESS:
+        print(f"⚖️ Estimating weight from {len(images)} keyframes...")
+
+    # ✅ GPT prompt
     messages = [
         {
             "role": "system",
@@ -65,26 +73,22 @@ Do not include any explanation or extra text — only the JSON block.
             "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img['data']}"}}]
         })
 
-    if not IS_SUBPROCESS:
-        print("🧠 Calling GPT for weight estimation...")
-
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=messages,
-        max_tokens=300
-    )
-
-    raw_text = response.choices[0].message.content.strip()
-    
-    if not IS_SUBPROCESS:
-        print("📦 Raw GPT Response:\n", raw_text)
-
     try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            max_tokens=300
+        )
+        raw_text = response.choices[0].message.content.strip()
+
+        if not IS_SUBPROCESS:
+            print("📦 Raw GPT Response:\n", raw_text)
+
         json_text = extract_json_block(raw_text)
         return json.loads(json_text)
+
     except Exception as e:
         return {
-            "error": "Failed to parse weight estimation",
-            "raw_response": raw_text,
+            "error": "Weight estimation failed due to GPT error or token limits.",
             "exception": str(e)
         }

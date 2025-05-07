@@ -6,35 +6,42 @@ import re
 import numpy as np
 from openai import OpenAI
 from dotenv import load_dotenv
-from fastapi.responses import JSONResponse
 
 # ✅ Load environment variables
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ✅ Check if running as subprocess
+# ✅ Subprocess flag
 IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
 
-# ✅ Convert NumPy safely
+# ✅ Safely convert NumPy types
 def convert_numpy(obj):
     if isinstance(obj, np.generic):
         return obj.item()
     return obj
 
-# ✅ Extract JSON from GPT response
+# ✅ Extract valid JSON from GPT block
 def extract_json_block(text):
-    json_pattern = re.compile(r"```json\s*(.*?)```", re.DOTALL)
-    match = json_pattern.search(text)
-    if match:
-        return match.group(1).strip()
+    match = re.search(r"```json\s*(.*?)```", text, re.DOTALL)
+    return match.group(1).strip() if match else text.strip()
 
-    # Fallback to just try and strip the content
-    return text.strip()
+# ✅ Simplify rep data to avoid token overload
+def compress_rep_data(rep_data):
+    simplified = []
+    for rep in rep_data:
+        simplified.append({
+            "rep": rep.get("rep"),
+            "duration_sec": rep.get("duration_sec"),
+            "estimated_RPE": rep.get("estimated_RPE"),
+            "estimated_RIR": rep.get("estimated_RIR")
+        })
+    return simplified
 
-# ✅ Coaching feedback function
+# ✅ Main feedback generator
 def generate_feedback(video_data, rep_data):
     exercise_name = video_data.get("predicted_exercise", "an exercise")
-    rep_data_serialized = json.dumps(rep_data, indent=2, default=convert_numpy)
+    compressed_reps = compress_rep_data(rep_data)
+    rep_data_serialized = json.dumps(compressed_reps, indent=2, default=convert_numpy)
 
     prompt = f"""
 You are a highly experienced lifting coach. A user has uploaded a video of themselves performing: {exercise_name}.
@@ -85,19 +92,16 @@ Rules:
         )
 
         raw_text = response.choices[0].message.content
-
         if not IS_SUBPROCESS:
             print("🧠 Raw GPT Coaching Response:\n", raw_text)
 
-        # ✅ Ensure clean JSON only
         json_text = extract_json_block(raw_text)
         parsed = json.loads(json_text)
-
         return parsed["coaching_feedback"]
 
     except Exception as e:
         if not IS_SUBPROCESS:
-            print("❌ GPT JSON parsing failed:", str(e))
+            print("❌ Coaching GPT parsing error:", str(e))
         return {
             "form_rating": 0,
             "observations": [{

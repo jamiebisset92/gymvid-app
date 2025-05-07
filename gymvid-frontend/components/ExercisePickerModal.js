@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   title: {
-    fontSize: 16,
+    fontSize: 20,
     fontFamily: 'DMSans-Black',
     color: colors.darkGray,
     textAlign: 'center',
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     color: colors.primary,
-    fontSize: 14,
+    fontSize: 16,
     fontFamily: 'DMSans-Medium',
     marginLeft: 4,
   },
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   exerciseName: {
-    fontSize: 12,
+    fontSize: 16,
     fontFamily: 'DMSans-Medium',
     color: colors.darkGray,
   },
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
   },
   fullWidthAddButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
     fontFamily: 'DMSans-Bold',
   },
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   },
   stickyAddExercisesText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     fontFamily: 'DMSans-Bold',
   },
   stickyAddExercisesRow: {
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
   },
   stickySupersetText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     fontFamily: 'DMSans-Bold',
   },
 }); 

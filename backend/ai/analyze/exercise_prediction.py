@@ -17,15 +17,15 @@ def predict_exercise(keyframe_dir: str) -> dict:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
                 images.append({"name": fname, "data": b64})
 
-    # ✅ Trim keyframes to reduce token usage
-    MAX_IMAGES = 6
+    # ✅ Trim to 3 evenly spaced keyframes
+    MAX_IMAGES = 3
     if len(images) > MAX_IMAGES:
-        step = len(images) // MAX_IMAGES
-        images = images[::step][:MAX_IMAGES]
+        step = max(len(images) // MAX_IMAGES, 1)
+        images = [images[i] for i in range(0, len(images), step)][:MAX_IMAGES]
 
     print(f"📸 Using {len(images)} keyframes for prediction.")
 
-    # ✅ Strong GPT prompt with enforced structure
+    # ✅ System prompt for GPT
     system_prompt = """
 You are a fitness AI analyzing gym exercise keyframes.
 
@@ -40,10 +40,9 @@ You must ALWAYS return a prediction in this strict JSON format:
 
 RULES:
 - NEVER leave "movement" blank or missing.
-- If unsure, GUESS the most likely movement based on the visible clues.
-- It is better to make a reasonable guess than to skip fields or return invalid JSON.
-- Only respond with the JSON block. No explanation, no extra text.
-- Respond precisely, structured, and predict with your best judgment even if uncertain.
+- If unsure, GUESS the most likely movement based on visible clues.
+- Only respond with the JSON block. No explanation or extra text.
+- Always return valid JSON.
 """
 
     messages = [
@@ -63,14 +62,14 @@ RULES:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
-            max_tokens=500
+            max_tokens=500,
         )
-        raw_content = response.choices[0].message.content.strip()
-        parsed_json = json.loads(raw_content)
-        return parsed_json
+        raw = response.choices[0].message.content.strip()
+        return json.loads(raw)
 
     except Exception as e:
+        print("❌ GPT Error:", str(e))
         return {
-            "error": f"Failed to parse GPT response: {str(e)}",
-            "raw": raw_content if 'raw_content' in locals() else "No content returned"
+            "error": "Prediction failed due to GPT error or rate limit.",
+            "details": str(e)
         }
