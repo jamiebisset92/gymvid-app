@@ -13,12 +13,13 @@ router = APIRouter()
 
 @router.post("/analyze/log_set")
 async def log_set(
-    user_id: str = Form(...),  # ✅ NEW - user_id required
+    user_id: str = Form(...),
     video: UploadFile = UploadFile(...),
     user_provided_exercise: Optional[str] = Form(None),
     known_exercise_info: Optional[str] = Form(None)
 ):
     temp_video_path = f"temp_uploads/{video.filename}"
+    thumbnail_path = ""  # ✅ Initialize in case it's not set
     os.makedirs(os.path.dirname(temp_video_path), exist_ok=True)
 
     with open(temp_video_path, "wb") as buffer:
@@ -59,5 +60,5 @@ async def log_set(
     finally:
         if os.path.exists(temp_video_path):
             os.remove(temp_video_path)
-        if os.path.exists(thumbnail_path):
+        if thumbnail_path and os.path.exists(thumbnail_path):
             os.remove(thumbnail_path)

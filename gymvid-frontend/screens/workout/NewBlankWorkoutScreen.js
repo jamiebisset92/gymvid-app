@@ -32,6 +32,8 @@ import DraggableFlatList from 'react-native-draggable-flatlist';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View as RNView } from 'react-native';
+import { supabase } from '../../config/supabase';
+import CoachingFeedbackModal from '../../components/CoachingFeedbackModal';
 
 const getOrdinalSuffix = (day) => {
   if (day > 3 && day < 21) return 'th';
@@ -56,6 +58,23 @@ const formatDate = () => {
 };
 
 const REST_TIME_OPTIONS = [15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 210, 240, 270, 300];
+
+// Add this helper function above the component
+function getAIMetrics(set) {
+  const repData = set.rep_data || [];
+  const weight = set.weight || set.weight_kg || set.weight_estimation?.estimated_weight_kg || '';
+  const reps = repData.length || set.reps || '';
+  let avgRPE = '';
+  let sumTUT = '';
+  if (repData.length > 0) {
+    avgRPE = (repData.reduce((sum, r) => sum + (parseFloat(r.estimated_RPE) || 0), 0) / repData.length).toFixed(1);
+    sumTUT = repData.reduce((sum, r) => sum + (parseFloat(r.total_TUT) || 0), 0).toFixed(1);
+  } else {
+    avgRPE = set.rpe || '';
+    sumTUT = set.tut || '';
+  }
+  return { weight, reps, avgRPE, sumTUT };
+}
 
 export default function NewBlankWorkoutScreen({ navigation = {} }) {
   const [exercises, setExercises] = useState([]);
@@ -101,6 +120,13 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   const [enableExertionTracking, setEnableExertionTracking] = useState(false);
   // Add at the top with other useState hooks
   const [pendingCards, setPendingCards] = useState([]);
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackData, setFeedbackData] = useState(null);
+  const [feedbackThumbnail, setFeedbackThumbnail] = useState(null);
+  const [feedbackVideoUrl, setFeedbackVideoUrl] = useState(null);
+  const [feedbackExerciseId, setFeedbackExerciseId] = useState(null);
+  const [feedbackSetId, setFeedbackSetId] = useState(null);
 
   // Add a unique ID for the accessory view
   const inputAccessoryViewID = 'doneAccessoryView';
@@ -641,6 +667,13 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   // Replace handleAddVideoAI with the new flow
   const handleAddVideoAI = async () => {
     try {
+      // Fix for Supabase v1.x
+      const user = supabase.auth.user();
+      const user_id = user?.id;
+      if (!user_id) {
+        Toast.show('User not authenticated.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+        return;
+      }
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Please grant access to your photo library.');
@@ -651,30 +684,29 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         allowsEditing: false,
         quality: 1,
       });
-      console.log('Picker Result:', result);
       if (result.canceled) return;
       const videoUri = result.assets?.[0]?.uri;
       if (!videoUri) {
         Alert.alert('Error', 'No video selected. Please try again.');
         return;
       }
-      // 2. Show placeholder card
+      // Show placeholder card
       const placeholderId = generateId();
       setPendingCards(prev => [
         ...prev,
         { id: placeholderId, videoUri }
       ]);
-      // 3. POST to /process_set with coaching=false
+      // POST to /analyze/log_set
       const formData = new FormData();
+      formData.append('user_id', user_id);
       formData.append('video', {
         uri: videoUri,
         type: 'video/mp4',
         name: videoUri.split('/').pop()
       });
-      formData.append('coaching', 'false');
       let response, json;
       try {
-        response = await fetch('https://gymvid-app.onrender.com/process_set', {
+        response = await fetch('https://gymvid-app.onrender.com/analyze/log_set', {
           method: 'POST',
           headers: { 'Content-Type': 'multipart/form-data' },
           body: formData,
@@ -693,13 +725,12 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         return;
       }
       const data = json.data;
-      // 4. Replace placeholder with real card
       setPendingCards(prev => prev.filter(card => card.id !== placeholderId));
       setExercises(prev => [
         ...prev,
         {
           id: generateId(),
-          name: data.exercise_prediction?.movement || data.predicted_exercise || 'AI Exercise',
+          name: (data.exercise_prediction?.movement || data.predicted_exercise || 'AI Exercise') + (data.exercise_prediction?.equipment ? ` (${data.exercise_prediction.equipment})` : ''),
           sets: [
             {
               id: generateId(),
@@ -919,6 +950,42 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         if (buttonIndex === 1) setExertionMetric('RIR');
       }
     );
+  };
+
+  const handleShowCoachingFeedback = (exerciseId, setId, videoUrl, thumbnailUrl) => {
+    setFeedbackModalVisible(true);
+    setFeedbackLoading(true);
+    setFeedbackData(null);
+    setFeedbackThumbnail(thumbnailUrl);
+    setFeedbackVideoUrl(videoUrl);
+    setFeedbackExerciseId(exerciseId);
+    setFeedbackSetId(setId);
+    // Start fetching feedback
+    fetchCoachingFeedback(videoUrl);
+  };
+
+  const fetchCoachingFeedback = async (videoUrl) => {
+    try {
+      // POST to /process_set with coaching=true, using the already-logged video URL
+      const formData = new FormData();
+      formData.append('video', videoUrl); // send the video URL, not a file
+      formData.append('coaching', 'true');
+      const response = await fetch('https://gymvid-app.onrender.com/process_set', {
+        method: 'POST',
+        body: formData,
+      });
+      const json = await response.json();
+      if (!json.success || !json.data) {
+        throw new Error('Coaching feedback failed');
+      }
+      setFeedbackData(json.data.coaching_feedback || null);
+      setFeedbackLoading(false);
+    } catch (error) {
+      console.error('Coaching feedback error:', error);
+      setFeedbackLoading(false);
+      setFeedbackData(null);
+      Toast.show('Coaching feedback failed. Please try again.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+    }
   };
 
   if (!isReady) {
@@ -1234,15 +1301,15 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                       {set.canAnalyzeForm && !set.coaching_feedback && (
                                         <TouchableOpacity 
                                           style={styles.aiAnalyzeButton}
-                                          onPress={() => handleAIAnalyzeForm(exercise.id, set.id)}
-                                          disabled={set.analyzingForm}
+                                          onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video, set.thumbnail_url)}
+                                          disabled={feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id}
                                         >
-                                          {set.analyzingForm ? (
+                                          {feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id ? (
                                             <ActivityIndicator size="small" color={colors.white} />
                                           ) : (
                                             <>
                                               <Ionicons name="analytics-outline" size={16} color={colors.white} style={styles.aiAnalyzeIcon} />
-                                              <Text style={styles.aiAnalyzeText}>AI Analyze Form</Text>
+                                              <Text style={styles.aiAnalyzeText}>Get Coaching Tips</Text>
                                             </>
                                           )}
                                         </TouchableOpacity>
@@ -1442,15 +1509,15 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                   {set.canAnalyzeForm && !set.coaching_feedback && (
                                     <TouchableOpacity 
                                       style={styles.aiAnalyzeButton}
-                                      onPress={() => handleAIAnalyzeForm(exercise.id, set.id)}
-                                      disabled={set.analyzingForm}
+                                      onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video, set.thumbnail_url)}
+                                      disabled={feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id}
                                     >
-                                      {set.analyzingForm ? (
+                                      {feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id ? (
                                         <ActivityIndicator size="small" color={colors.white} />
                                       ) : (
                                         <>
                                           <Ionicons name="analytics-outline" size={16} color={colors.white} style={styles.aiAnalyzeIcon} />
-                                          <Text style={styles.aiAnalyzeText}>AI Analyze Form</Text>
+                                          <Text style={styles.aiAnalyzeText}>Get Coaching Tips</Text>
                                         </>
                                       )}
                                     </TouchableOpacity>
@@ -1796,6 +1863,13 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
             </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
+        <CoachingFeedbackModal
+          visible={feedbackModalVisible}
+          onClose={() => setFeedbackModalVisible(false)}
+          loading={feedbackLoading}
+          feedback={feedbackData}
+          videoThumbnail={feedbackThumbnail}
+        />
       </View>
     </RootSiblingParent>
   );
@@ -2629,5 +2703,85 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginTop: 8,
     lineHeight: 18,
+  },
+  aiCardContainer: {
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    padding: 18,
+    marginBottom: 24,
+    flexDirection: 'column',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.07,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  aiCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  aiCardThumbCol: {
+    flex: 1.1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiCardThumb: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
+    backgroundColor: colors.lightGray,
+  },
+  aiCardMetricsCol: {
+    flex: 1.6,
+    paddingLeft: 18,
+    justifyContent: 'center',
+  },
+  aiCardMetricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  aiCardMetricBox: {
+    width: '48%',
+    backgroundColor: colors.lightGray,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    paddingVertical: 12,
+  },
+  aiCardMetricLabel: {
+    fontSize: 13,
+    color: colors.gray,
+    fontFamily: 'DMSans-Medium',
+    marginBottom: 2,
+  },
+  aiCardMetricValue: {
+    fontSize: 18,
+    color: colors.darkGray,
+    fontFamily: 'DMSans-Bold',
+  },
+  aiCardInfoBlock: {
+    marginTop: 2,
+    marginBottom: 12,
+  },
+  aiCardExerciseTitle: {
+    fontSize: 16,
+    color: colors.primary,
+    fontFamily: 'DMSans-Bold',
+    marginBottom: 2,
+  },
+  aiCardInfoText: {
+    fontSize: 13,
+    color: colors.darkGray,
+    fontFamily: 'DMSans-Regular',
+    marginBottom: 1,
   },
 }); 
