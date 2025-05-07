@@ -10,5 +10,8 @@
     "android": "cd gymvid-frontend && npx expo start --android",
     "ios": "cd gymvid-frontend && npx expo start --ios",
     "web": "cd gymvid-frontend && npx expo start --web"
+  },
+  "dependencies": {
+    "expo-image-picker": "^16.1.4"
   }
 }

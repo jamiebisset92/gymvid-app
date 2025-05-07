@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   title: {
-    fontSize: 24,
+    fontSize: 16,
     fontFamily: 'DMSans-Black',
     color: colors.darkGray,
     textAlign: 'center',
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   historyLabel: {
-    fontSize: 16,
+    fontSize: 12,
     fontFamily: 'DMSans-Bold',
     color: colors.darkGray,
   },
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   exerciseName: {
-    fontSize: 18,
+    fontSize: 12,
     fontFamily: 'DMSans-Medium',
     color: colors.darkGray,
   },
