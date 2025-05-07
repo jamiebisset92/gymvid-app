@@ -6,28 +6,32 @@ import re
 import numpy as np
 from openai import OpenAI
 from dotenv import load_dotenv
+from fastapi.responses import JSONResponse
 
 # ✅ Load environment variables
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ✅ Subprocess mode check
+# ✅ Check if running as subprocess
 IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
 
-# ✅ Safe conversion of NumPy types
+# ✅ Convert NumPy safely
 def convert_numpy(obj):
     if isinstance(obj, np.generic):
         return obj.item()
     return obj
 
-# ✅ Extract clean JSON from GPT block
+# ✅ Extract JSON from GPT response
 def extract_json_block(text):
-    match = re.search(r"```json\n(.*?)```", text, re.DOTALL)
+    json_pattern = re.compile(r"```json\s*(.*?)```", re.DOTALL)
+    match = json_pattern.search(text)
     if match:
         return match.group(1).strip()
+
+    # Fallback to just try and strip the content
     return text.strip()
 
-# ✅ Generate coaching feedback
+# ✅ Coaching feedback function
 def generate_feedback(video_data, rep_data):
     exercise_name = video_data.get("predicted_exercise", "an exercise")
     rep_data_serialized = json.dumps(rep_data, indent=2, default=convert_numpy)
@@ -67,28 +71,33 @@ Rules:
 - Focus on performance benefits. E.g., instead of saying 'avoid injury', say 'this will help improve posture and allow more weight to be lifted.'
 - Avoid repeating phrasing in tips or observations.
 - Only provide advice that is necessary, not excessive.
-- Do NOT include any text outside the JSON block.
+- ❌ Do NOT include any extra text. Only return the JSON block.
 """
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are a professional lifting coach."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=800,
-    )
-
     try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a professional lifting coach."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=800,
+        )
+
         raw_text = response.choices[0].message.content
+
         if not IS_SUBPROCESS:
             print("🧠 Raw GPT Coaching Response:\n", raw_text)
 
+        # ✅ Ensure clean JSON only
         json_text = extract_json_block(raw_text)
         parsed = json.loads(json_text)
+
         return parsed["coaching_feedback"]
 
     except Exception as e:
+        if not IS_SUBPROCESS:
+            print("❌ GPT JSON parsing failed:", str(e))
         return {
             "form_rating": 0,
             "observations": [{
