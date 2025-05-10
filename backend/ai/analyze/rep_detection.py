@@ -75,3 +75,7 @@ def run_rep_detection_from_landmark_y(raw_y: list, fps: float) -> list:
             })
 
     return rep_data
+
+# ✅ Compatibility alias for analyze_set.py
+def detect_reps(video_data: dict) -> list:
+    return run_rep_detection_from_landmark_y(video_data["raw_y"], video_data["fps"])
