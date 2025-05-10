@@ -42,18 +42,8 @@ export default function SignUpScreen({ navigation }) {
     }
   };
 
-  const handleSignIn = async () => {
-    console.log('Sign In button pressed');
-    try {
-      const { user, session, error } = await supabase.auth.signIn({ email, password });
-      if (error) {
-        console.log('Sign in error:', error);
-        Alert.alert('Sign in error', error.message);
-      }
-    } catch (error) {
-      console.log('Sign in error:', error);
-      Alert.alert('Sign in error', error.message);
-    }
+  const handleSignIn = () => {
+    navigation.navigate('Login');
   };
 
   return (

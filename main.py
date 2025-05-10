@@ -4,43 +4,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from dotenv import load_dotenv
+from pydantic import BaseModel
 import os
 import shutil
 import subprocess
 import json
 
-# ✅ Import utils, AI modules, and routers
+# ✅ Import utils and AI modules
 from backend.utils.aws_utils import download_file_from_s3
 from backend.utils.save_set_to_supabase import save_set_to_supabase
-from backend.ai.analyze import analyze_set
 from backend.api.manual_log import router as manual_log_router
+from backend.utils.download_from_s3 import download_video_from_url
+from backend.ai.analyze.video_analysis import analyze_video
+from backend.ai.analyze.rep_detection import run_rep_detection_from_landmark_y
+from backend.ai.analyze.keyframe_exporter import export_keyframes
+from backend.ai.analyze.coaching_feedback import generate_feedback
+from backend.ai.analyze import analyze_set
 
-# ✅ Load environment variables
+# ✅ Load env
 load_dotenv()
 
-# ✅ Initialize FastAPI app
 app = FastAPI()
 
-# ✅ Add JSON Exception Handlers
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    return JSONResponse(
-        status_code=422,
-        content={
-            "success": False,
-            "error": "Validation failed",
-            "details": exc.errors(),
-        },
-    )
-
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"success": False, "error": exc.detail},
-    )
-
-# ✅ CORS (for frontend or mobile app)
+# ✅ CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -49,10 +35,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Mount routers
+# ✅ Global error handlers
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={"success": False, "error": "Validation failed", "details": exc.errors()})
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"success": False, "error": exc.detail})
+
+# ✅ Routers
 app.include_router(manual_log_router)
 
-# ✅ Legacy subprocess-based analysis route
+# ✅ AI set analysis
+@app.post("/analyze/log_set")
+async def log_set(
+    video: UploadFile = File(...),
+    user_provided_exercise: str = Form(None),
+    known_exercise_info: str = Form(None)
+):
+    os.makedirs("temp_uploads", exist_ok=True)
+    temp_video_path = f"temp_uploads/{video.filename}"
+    with open(temp_video_path, "wb") as buffer:
+        shutil.copyfileobj(video.file, buffer)
+
+    try:
+        args = [temp_video_path]
+        if user_provided_exercise:
+            args.append(user_provided_exercise)
+        if known_exercise_info:
+            args.append(known_exercise_info)
+
+        final_result = analyze_set.run_cli_args(args)
+        save_set_to_supabase(final_result)
+        return JSONResponse({"success": True, "data": final_result})
+    finally:
+        if os.path.exists(temp_video_path):
+            os.remove(temp_video_path)
+
+# ✅ Legacy subprocess route
 @app.post("/process_set")
 async def process_set(
     video: UploadFile = File(None),
@@ -60,7 +81,6 @@ async def process_set(
     coaching: bool = Form(False)
 ):
     os.makedirs("temp_uploads", exist_ok=True)
-
     if s3_key:
         save_path = f"temp_uploads/{os.path.basename(s3_key)}"
         success = download_file_from_s3(s3_key, save_path)
@@ -86,68 +106,55 @@ async def process_set(
             check=True,
             env=env
         )
-
         try:
             output = json.loads(result.stdout.strip())
-            return JSONResponse({
-                "success": True,
-                "data": output,
-                "stderr": result.stderr
-            })
+            return JSONResponse({"success": True, "data": output, "stderr": result.stderr})
         except json.JSONDecodeError as e:
-            return JSONResponse({
-                "success": False,
-                "error": f"Failed to parse JSON: {str(e)}",
-                "stdout": result.stdout,
-                "stderr": result.stderr
-            })
-
+            return JSONResponse({"success": False, "error": f"Failed to parse JSON: {str(e)}", "stdout": result.stdout, "stderr": result.stderr})
     except subprocess.CalledProcessError as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "success": False,
-                "error": f"Subprocess failed with exit code {e.returncode}",
-                "stdout": e.stdout,
-                "stderr": e.stderr
-            }
+        return JSONResponse(status_code=500, content={"success": False, "error": f"Subprocess failed with exit code {e.returncode}", "stdout": e.stdout, "stderr": e.stderr})
+
+# ✅ Coaching Feedback Endpoint
+class FeedbackRequest(BaseModel):
+    user_id: str
+    movement: str
+    video_url: str
+
+@app.post("/analyze/feedback")
+async def analyze_feedback(request: FeedbackRequest):
+    try:
+        local_path = download_video_from_url(request.video_url)
+
+        # ✅ Extract vertical motion and detect reps
+        video_data = analyze_video(local_path)
+        rep_data = run_rep_detection_from_landmark_y(video_data["raw_y"], video_data["fps"])
+
+        # ✅ Optionally save keyframes
+        export_keyframes(local_path, rep_data)
+
+        # ✅ Generate GPT feedback
+        feedback = generate_feedback(
+            video_data={ "predicted_exercise": request.movement },
+            rep_data=rep_data
         )
 
-# ✅ Analyze and log a set (AI-based)
-@app.post("/analyze/log_set")
-async def log_set(
-    video: UploadFile = File(...),
-    user_provided_exercise: str = Form(None),
-    known_exercise_info: str = Form(None)
-):
-    os.makedirs("temp_uploads", exist_ok=True)
+        return { "success": True, "feedback": feedback }
 
-    temp_video_path = f"temp_uploads/{video.filename}"
-    with open(temp_video_path, "wb") as buffer:
-        shutil.copyfileobj(video.file, buffer)
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "feedback": {
+                "form_rating": 0,
+                "observations": [{
+                    "observation": "👀 We couldn't process your video.",
+                    "tip": "🧠 Try uploading a different angle or clearer rep.",
+                    "summary": f"👉 Error: {str(e)}"
+                }]
+            }
+        }
 
-    try:
-        args = [temp_video_path]
-        if user_provided_exercise:
-            args.append(user_provided_exercise)
-        if known_exercise_info:
-            args.append(known_exercise_info)
-
-        final_result = analyze_set.run_cli_args(args)
-
-        # ✅ Save this set to Supabase
-        save_set_to_supabase(final_result)
-
-        return JSONResponse({
-            "success": True,
-            "data": final_result
-        })
-
-    finally:
-        if os.path.exists(temp_video_path):
-            os.remove(temp_video_path)
-
-# ✅ Debug environment
+# ✅ Debug
 @app.get("/debug/env")
 def debug_env():
     return {
@@ -156,7 +163,7 @@ def debug_env():
         "bucket": os.getenv("S3_BUCKET_NAME"),
     }
 
-# ✅ Local dev mode
+# ✅ Run locally
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=10000)

@@ -1,19 +1,17 @@
 import numpy as np
 
-def detect_reps(video_data: dict) -> list:
+def run_rep_detection_from_landmark_y(raw_y: list, fps: float) -> list:
     """
-    Detects repetitions using vertical movement of the most active landmark,
-    and returns detailed rep data including RPE and TUT.
-    
-    Args:
-        video_data (dict): Output from analyze_video containing raw_y and fps.
-        
-    Returns:
-        list of dicts: Each dict includes rep timing and effort metrics.
-    """
-    raw_y = np.array(video_data["raw_y"])
-    fps = video_data["fps"]
+    Detects reps using vertical movement of a selected landmark.
 
+    Args:
+        raw_y (list): List of Y-values from pose tracking (e.g. nose, hip, wrist)
+        fps (float): Video frame rate
+
+    Returns:
+        list of dicts: Each rep with timing + estimated RPE/RIR
+    """
+    raw_y = np.array(raw_y)
     smooth_y = np.convolve(raw_y, np.ones(5) / 5, mode="valid")
     rep_frames = []
     state = "down"
@@ -48,6 +46,7 @@ def detect_reps(video_data: dict) -> list:
             concentric = duration
             eccentric = concentric * 1.2
             total_tut = round(concentric + eccentric, 2)
+
             if duration >= 3.50:
                 rpe = 10.0
             elif duration >= 3.00:

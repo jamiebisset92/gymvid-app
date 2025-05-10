@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
   },
   stickyAddExercisesContainer: {
     width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: '#fff',
     padding: 16,
     paddingTop: 0,
     paddingBottom: 32,
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   },
   stickyAddExercisesText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'DMSans-Bold',
   },
   stickyAddExercisesRow: {
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: '#fff',
     padding: 16,
     paddingTop: 0,
     paddingBottom: 32,
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
   },
   stickySupersetText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'DMSans-Bold',
   },
 }); 

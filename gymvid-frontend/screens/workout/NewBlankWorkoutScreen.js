@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import {
   InputAccessoryView,
   ActivityIndicator,
   Switch,
+  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Feather } from '@expo/vector-icons';
@@ -34,6 +35,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View as RNView } from 'react-native';
 import { supabase } from '../../config/supabase';
 import CoachingFeedbackModal from '../../components/CoachingFeedbackModal';
+import { Picker } from '@react-native-picker/picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Svg, Circle } from 'react-native-svg';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { Video } from 'expo-av';
+import * as MediaLibrary from 'expo-media-library';
+import * as VideoThumbnails from 'expo-video-thumbnails';
+
+// API base URL for uploads
+const API_URL = 'https://gymvid-app.onrender.com';
 
 const getOrdinalSuffix = (day) => {
   if (day > 3 && day < 21) return 'th';
@@ -57,7 +68,20 @@ const formatDate = () => {
   return `${dayName} ${day}${getOrdinalSuffix(day)} of ${month}`;
 };
 
-const REST_TIME_OPTIONS = [15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 210, 240, 270, 300];
+const REST_TIME_OPTIONS = [
+  { label: '0:15', value: 15 },
+  { label: '0:30', value: 30 },
+  { label: '0:45', value: 45 },
+  { label: '1:00', value: 60 },
+  { label: '1:30', value: 90 },
+  { label: '2:00', value: 120 },
+  { label: '2:30', value: 150 },
+  { label: '3:00', value: 180 },
+  { label: '3:30', value: 210 },
+  { label: '4:00', value: 240 },
+  { label: '4:30', value: 270 },
+  { label: '5:00', value: 300 }
+];
 
 // Add this helper function above the component
 function getAIMetrics(set) {
@@ -75,6 +99,38 @@ function getAIMetrics(set) {
   }
   return { weight, reps, avgRPE, sumTUT };
 }
+
+// Update the video preview modal
+const VideoPreviewModal = ({ visible, videoUri, onClose }) => {
+  const videoRef = useRef(null);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <Video
+            ref={videoRef}
+            source={{ uri: videoUri }}
+            style={styles.video}
+            useNativeControls
+            resizeMode="contain"
+            isLooping
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 export default function NewBlankWorkoutScreen({ navigation = {} }) {
   const [exercises, setExercises] = useState([]);
@@ -105,8 +161,6 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   const slideAnim = useRef(new Animated.Value(0)).current;
   const [restTimeStart, setRestTimeStart] = useState(60);
   const [showExitModal, setShowExitModal] = useState(false);
-  const [showDeleteExerciseModal, setShowDeleteExerciseModal] = useState(false);
-  const [pendingDeleteExerciseIdx, setPendingDeleteExerciseIdx] = useState(null);
   const [uploadingSet, setUploadingSet] = useState(null);
   const [analyzingSet, setAnalyzingSet] = useState(null);
   const [showCoachingFeedback, setShowCoachingFeedback] = useState({});
@@ -115,7 +169,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   const [enableVideoUploads, setEnableVideoUploads] = useState(false);
   const [autoStartRestTimer, setAutoStartRestTimer] = useState(false);
   const [weightUnits, setWeightUnits] = useState('kg');
-  const [autoPredictWeights, setAutoPredictWeights] = useState(false);
+  const [autoPredictWeights, setAutoPredictWeights] = useState(true);
   const [exertionMetric, setExertionMetric] = useState('RPE');
   const [enableExertionTracking, setEnableExertionTracking] = useState(false);
   // Add at the top with other useState hooks
@@ -127,9 +181,32 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   const [feedbackVideoUrl, setFeedbackVideoUrl] = useState(null);
   const [feedbackExerciseId, setFeedbackExerciseId] = useState(null);
   const [feedbackSetId, setFeedbackSetId] = useState(null);
+  const [showRestTimePicker, setShowRestTimePicker] = useState(false);
+  const [isRestTimeExpanded, setIsRestTimeExpanded] = useState(false);
+  // Animated value for progress bar
+  const progressAnim = useRef(new Animated.Value(1)).current;
 
   // Add a unique ID for the accessory view
   const inputAccessoryViewID = 'doneAccessoryView';
+
+  // PanResponder for swipe down to close settings modal
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Only respond to vertical swipes starting on the handle
+        return Math.abs(gestureState.dy) > 10 && Math.abs(gestureState.dx) < 30 && gestureState.dy > 0;
+      },
+      onPanResponderMove: () => {},
+      onPanResponderRelease: (evt, gestureState) => {
+        if (gestureState.dy > 40) {
+          setShowSettingsModal(false);
+        }
+      },
+    })
+  ).current;
+
+  const [previewVideo, setPreviewVideo] = useState(null);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
 
   useLayoutEffect(() => {
     nav.getParent()?.setOptions({
@@ -315,8 +392,9 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
       const lastSet = sets.length > 0 ? sets[sets.length - 1] : {};
       const newSet = {
         id: generateId(),
-        weight: lastSet.weight ?? '',
-        reps: lastSet.reps ?? '',
+        weight: autoPredictWeights ? (lastSet.weight ?? '') : '',
+        weightUnit: weightUnits,
+        reps: autoPredictWeights ? (lastSet.reps ?? '') : '',
         completed: false,
         video: null
       };
@@ -328,74 +406,37 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   const handleCompleteSet = (exerciseId, setId, subExerciseId = null) => {
     setExercises(prev => {
       const updated = [...prev];
-      const exerciseIdx = updated.findIndex(e => e.id === exerciseId);
-      if (exerciseIdx === -1) return prev;
-      let currentSet;
-      if (updated[exerciseIdx].isSuperset && Array.isArray(updated[exerciseIdx].exercises) && subExerciseId) {
-        const subIdx = updated[exerciseIdx].exercises.findIndex(ex => ex.id === subExerciseId);
-        if (subIdx === -1) return prev;
-        const setIdx = updated[exerciseIdx].exercises[subIdx].sets.findIndex(s => s.id === setId);
-        if (setIdx === -1) return prev;
-        currentSet = updated[exerciseIdx].exercises[subIdx].sets[setIdx];
-        // Show error if missing weight/reps
-        if (!currentSet.completed && (!currentSet.weight?.toString().trim() || !currentSet.reps?.toString().trim())) {
-          Toast.show('You need to add the weight & reps!', {
-            duration: Toast.durations.LONG,
-            position: Toast.positions.BOTTOM,
-            shadow: false,
-            animation: true,
-            hideOnPress: true,
-            delay: 0,
-            backgroundColor: colors.error,
-            textColor: colors.white,
-            containerStyle: {
-              marginBottom: 100,
-              zIndex: 9999,
-              elevation: 0,
-            },
-            opacity: 1,
-          });
-          return prev;
+      const exIdx = updated.findIndex(e => e.id === exerciseId);
+      if (exIdx === -1) return prev;
+
+      if (subExerciseId) {
+        // Handle superset
+        const subExIdx = updated[exIdx].exercises.findIndex(e => e.id === subExerciseId);
+        if (subExIdx === -1) return prev;
+        const sIdx = updated[exIdx].exercises[subExIdx].sets.findIndex(s => s.id === setId);
+        if (sIdx === -1) return prev;
+
+        const set = updated[exIdx].exercises[subExIdx].sets[sIdx];
+        updated[exIdx].exercises[subExIdx].sets[sIdx] = {
+          ...set,
+          completed: !set.completed
+        };
+        if (!set.completed) {
+          handleSetConfirm(exerciseId, setId, subExerciseId);
         }
-        // FULLY IMMUTABLE: superset, sub-exercise, sets
-        const superset = { ...updated[exerciseIdx] };
-        superset.exercises = superset.exercises.map((ex, i) => {
-          if (i !== subIdx) return ex;
-          const newSets = ex.sets.map((s, j) =>
-            j === setIdx ? { ...s, completed: !s.completed } : s
-          );
-          return { ...ex, sets: newSets };
-        });
-        updated[exerciseIdx] = superset;
       } else {
-        const setIdx = updated[exerciseIdx].sets.findIndex(s => s.id === setId);
-        if (setIdx === -1) return prev;
-        currentSet = updated[exerciseIdx].sets[setIdx];
-        // Show error if missing weight/reps
-        if (!currentSet.completed && (!currentSet.weight?.toString().trim() || !currentSet.reps?.toString().trim())) {
-          Toast.show('You need to add the weight & reps!', {
-            duration: Toast.durations.LONG,
-            position: Toast.positions.BOTTOM,
-            shadow: false,
-            animation: true,
-            hideOnPress: true,
-            delay: 0,
-            backgroundColor: colors.error,
-            textColor: colors.white,
-            containerStyle: {
-              marginBottom: 100,
-              zIndex: 9999,
-              elevation: 0,
-            },
-            opacity: 1,
-          });
-          return prev;
+        // Handle regular set
+        const sIdx = updated[exIdx].sets.findIndex(s => s.id === setId);
+        if (sIdx === -1) return prev;
+
+        const set = updated[exIdx].sets[sIdx];
+        updated[exIdx].sets[sIdx] = {
+          ...set,
+          completed: !set.completed
+        };
+        if (!set.completed) {
+          handleSetConfirm(exerciseId, setId);
         }
-        // FULLY IMMUTABLE: exercise, sets
-        const newSets = updated[exerciseIdx].sets.map((s, j) =>
-          j === setIdx ? { ...s, completed: !s.completed } : s
-        );
-        updated[exerciseIdx] = { ...updated[exerciseIdx], sets: newSets };
       }
       return updated;
     });
@@ -441,77 +482,189 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
 
   const handleVideoUpload = async (exerciseId, setId) => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-        allowsEditing: false,
-        quality: 1,
-      });
-      if (result.canceled || !result.assets || !result.assets[0].uri) return;
-
-      const videoUri = result.assets[0].uri;
-      setUploadingSet(setId);
-
-      // Find the correct indices
-      const exerciseIdx = exercises.findIndex(e => e.id === exerciseId);
-      if (exerciseIdx === -1) throw new Error('Exercise not found');
-      const setIdx = exercises[exerciseIdx].sets.findIndex(s => s.id === setId);
-      if (setIdx === -1) throw new Error('Set not found');
-
-      // Prepare FormData for initial upload
-      const formData = new FormData();
-      formData.append('video', {
-        uri: videoUri,
-        type: 'video/mp4',
-        name: videoUri.split('/').pop()
-      });
-      formData.append('coaching', 'false');
-
-      // Upload to backend for AI analysis
-      const response = await fetch('https://gymvid-app.onrender.com/process_set', {
-        method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to process video');
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant media library permissions to upload videos.');
+        return;
       }
 
-      const data = await response.json();
-      console.log('AI Analysis Response:', data);
-
-      // Update set with AI analysis results
-      setExercises(prev => {
-        const updated = [...prev];
-        const exIdx = updated.findIndex(e => e.id === exerciseId);
-        if (exIdx === -1) return prev;
-        const sIdx = updated[exIdx].sets.findIndex(s => s.id === setId);
-        if (sIdx === -1) return prev;
-
-        // Update set with AI analysis results
-        updated[exIdx].sets[sIdx] = {
-          ...updated[exIdx].sets[sIdx],
-          video: data.video_url,
-          thumbnail_url: data.thumbnail_url,
-          weight: data.estimated_weight_kg?.toString() || '',
-          reps: data.rep_data?.length?.toString() || '',
-          rpe: data.estimated_RPE?.toString() || '',
-          tut: data.estimated_TUT?.toString() || '',
-          ai_analysis: {
-            exercise_name: data.predicted_exercise,
-            equipment: data.equipment,
-            variation: data.variation,
-            confidence: data.confidence
-          }
-        };
-        return updated;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        allowsEditing: true,
+        quality: 1,
+        videoMaxDuration: 60,
       });
 
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const videoUri = result.assets[0].uri;
+        
+        // Generate thumbnail immediately
+        const { uri: thumbnailUri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
+          time: 0,
+          quality: 0.5,
+        });
+
+        setExercises(prevExercises => {
+          const exerciseExists = prevExercises.some(ex => ex.id === exerciseId);
+          if (!exerciseExists) {
+            console.error('No exercise found for id:', exerciseId, prevExercises);
+            return prevExercises;
+          }
+          return prevExercises.map(exercise => {
+            if (exercise.id === exerciseId) {
+              if (!exercise.sets) {
+                console.error('No sets found for exercise:', exercise);
+                return exercise;
+              }
+              return {
+                ...exercise,
+                sets: exercise.sets.map(set => {
+                  if (set.id === setId) {
+                    return {
+                      ...set,
+                      localVideo: videoUri,
+                      thumbnail: thumbnailUri,
+                      isUploading: false
+                    };
+                  }
+                  return set;
+                })
+              };
+            }
+            return exercise;
+          });
+        });
+
+        // Start upload in background
+        handleSetConfirm(exerciseId, setId);
+      }
     } catch (error) {
-      console.error('Video upload error:', error);
-      Alert.alert('Error', 'Failed to upload video. Please try again.');
-    } finally {
-      setUploadingSet(null);
+      console.error('Error selecting video:', error);
+      Alert.alert('Error', 'Failed to select video. Please try again.');
+    }
+  };
+
+  const handleSetConfirm = async (exerciseId, setId, subExerciseId = null) => {
+    try {
+      const exercise = exercises.find(e => e.id === exerciseId);
+      if (!exercise) return console.error('No exercise found:', exerciseId);
+
+      const set = subExerciseId
+        ? exercise.exercises?.find(e => e.id === subExerciseId)?.sets?.find(s => s.id === setId)
+        : exercise.sets?.find(s => s.id === setId);
+      if (!set) return console.error('No set found:', setId);
+
+      if (set.isSubmitting) return; // 🚫 Prevent double-tap submits
+      set.isSubmitting = true;
+
+      const userId = supabase.auth?.user()?.id || 'demo-user';
+      const formData = new FormData();
+
+      formData.append('user_id', String(userId));
+      formData.append('movement', String(set.exerciseName || exercise.name || 'Unknown Movement'));
+      formData.append('equipment', String(set.equipment || 'Unknown Equipment'));
+      formData.append('weight', String(set.kg || set.weight || '0'));
+      formData.append('weight_unit', 'kg');
+      formData.append('reps', String(set.reps || '0'));
+      if (set.rpe) formData.append('rpe', String(set.rpe));
+      if (set.rir) formData.append('rir', String(set.rir));
+
+      if (set.localVideo) {
+        const uri = set.localVideo.startsWith('file://') ? set.localVideo : `file://${set.localVideo}`;
+        const name = uri.split('/').pop();
+        const ext = name.split('.').pop()?.toLowerCase();
+        const typeMap = {
+          mp4: 'video/mp4',
+          mov: 'video/quicktime',
+          webm: 'video/webm',
+          avi: 'video/x-msvideo',
+          mkv: 'video/x-matroska',
+        };
+        const type = typeMap[ext] || 'video/mp4';
+
+        if (!uri.startsWith('file://')) console.error('❌ Invalid video URI:', uri);
+
+        const videoFile = {
+          uri,
+          name,
+          type
+        };
+        console.log('✅ Attaching video to FormData:', videoFile);
+        formData.append('video', videoFile);
+      } else {
+        console.log('⚠️ No video attached to this set');
+      }
+
+      for (let pair of formData.entries()) {
+        if (pair[0] === 'video') {
+          console.log(`video: uri=${pair[1]?.uri}, name=${pair[1]?.name}`);
+        } else {
+          console.log(`${pair[0]}: ${pair[1]}`);
+        }
+      }
+
+      const response = await fetch(`${API_URL}/manual_log`, {
+        method: 'POST',
+        // Do NOT set Content-Type header for FormData in React Native
+        body: formData
+      });
+
+      const text = await response.text();
+      console.log('🔥 Raw response from /manual_log:', text);
+      const data = JSON.parse(text);
+
+      const hasUploadedVideo = !!data.video_url;
+
+      setExercises(prev => {
+        return prev.map(ex => {
+          if (ex.id === exerciseId) {
+            if (subExerciseId) {
+              return {
+                ...ex,
+                exercises: ex.exercises.map(subEx => {
+                  if (subEx.id === subExerciseId) {
+                    return {
+                      ...subEx,
+                      sets: subEx.sets.map(s =>
+                        s.id === setId
+                          ? {
+                              ...s,
+                              video_url: hasUploadedVideo ? data.video_url : s.video_url || null,
+                              thumbnail_url: hasUploadedVideo ? data.thumbnail_url : s.thumbnail || s.thumbnail_url || null,
+                              localVideo: hasUploadedVideo ? null : s.localVideo,
+                              isConfirmed: true,
+                              isSubmitting: false,
+                            }
+                          : s
+                      )
+                    };
+                  }
+                  return subEx;
+                })
+              };
+            } else {
+              return {
+                ...ex,
+                sets: ex.sets.map(s =>
+                  s.id === setId
+                    ? {
+                        ...s,
+                        video_url: hasUploadedVideo ? data.video_url : s.video_url || null,
+                        thumbnail_url: hasUploadedVideo ? data.thumbnail_url : s.thumbnail || s.thumbnail_url || null,
+                        localVideo: hasUploadedVideo ? null : s.localVideo,
+                        isConfirmed: true,
+                        isSubmitting: false,
+                      }
+                    : s
+                )
+              };
+            }
+          }
+          return ex;
+        });
+      });
+    } catch (error) {
+      console.error('❌ Error uploading set to /manual_log:', error);
     }
   };
 
@@ -576,7 +729,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
     }
   };
 
-  const handleExerciseOptions = (exerciseIdx) => {
+  const handleExerciseOptions = (exerciseId) => {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -588,8 +741,13 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
           if (buttonIndex === 1) {
             setShowPicker(true);
           } else if (buttonIndex === 2) {
-            setPendingDeleteExerciseIdx(exerciseIdx);
-            setShowDeleteExerciseModal(true);
+            // Immediately delete the exercise by id
+            setExercises(prev => prev.filter(e => e.id !== exerciseId));
+            setExpandedExercises(prev => {
+              const updated = { ...prev };
+              delete updated[exerciseId];
+              return updated;
+            });
           }
         }
       );
@@ -598,12 +756,14 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
 
   const renderRightActions = (exerciseId, setId, subExerciseId = null) => {
     return (
-      <TouchableOpacity
-        style={styles.deleteAction}
-        onPress={() => handleDeleteSet(exerciseId, setId, subExerciseId)}
-      >
-        <Ionicons name="trash-outline" size={24} color={colors.white} />
-      </TouchableOpacity>
+      <View style={styles.rightActions}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.deleteButton]}
+          onPress={() => handleDeleteSet(exerciseId, setId, subExerciseId)}
+        >
+          <Ionicons name="trash-outline" size={24} color={colors.white} />
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -618,6 +778,23 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
     setShowSettingsModal(true);
   };
 
+  // Animate progress bar when rest timer starts or updates
+  useEffect(() => {
+    if (isResting) {
+      // Animate from full width to zero over restTimeStart seconds
+      progressAnim.setValue(1);
+      Animated.timing(progressAnim, {
+        toValue: 0,
+        duration: restTimeStart * 1000,
+        useNativeDriver: false,
+        easing: t => t, // linear
+      }).start();
+    } else {
+      progressAnim.setValue(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isResting, restTimeStart]);
+
   const handleRestTimer = () => {
     if (isResting) {
       if (restInterval.current) {
@@ -625,16 +802,19 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         restInterval.current = null;
       }
       setIsResting(false);
-      setRestTimeSeconds(60); // reset to default 1:00
+      setRestTimeSeconds(defaultRestTime); // reset to default
+      setRestTimeStart(defaultRestTime);
     } else {
-      setRestTimeStart(restTimeSeconds); // remember the starting value
+      setRestTimeStart(restTimeSeconds); // always set to current value
       setIsResting(true);
       restInterval.current = setInterval(() => {
         setRestTimeSeconds(prev => {
           if (prev <= 1) {
             clearInterval(restInterval.current);
             setIsResting(false);
-            return 60; // reset to default 1:00
+            setRestTimeSeconds(defaultRestTime);
+            setRestTimeStart(defaultRestTime);
+            return defaultRestTime;
           }
           return prev - 1;
         });
@@ -674,28 +854,33 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         Toast.show('User not authenticated.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
         return;
       }
+
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Please grant access to your photo library.');
         return;
       }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Videos,
         allowsEditing: false,
         quality: 1,
       });
-      if (result.canceled) return;
-      const videoUri = result.assets?.[0]?.uri;
-      if (!videoUri) {
+
+      if (result.canceled || !result.assets?.[0]?.uri) {
         Alert.alert('Error', 'No video selected. Please try again.');
         return;
       }
+
+      const videoUri = result.assets[0].uri;
+
       // Show placeholder card
       const placeholderId = generateId();
       setPendingCards(prev => [
         ...prev,
         { id: placeholderId, videoUri }
       ]);
+
       // POST to /analyze/log_set
       const formData = new FormData();
       formData.append('user_id', user_id);
@@ -704,59 +889,48 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         type: 'video/mp4',
         name: videoUri.split('/').pop()
       });
-      let response, json;
-      try {
-        response = await fetch('https://gymvid-app.onrender.com/analyze/log_set', {
-          method: 'POST',
-          headers: { 'Content-Type': 'multipart/form-data' },
-          body: formData,
-        });
-        json = await response.json();
-      } catch (err) {
-        console.error('Video analysis error:', err);
-        Toast.show('Video analysis failed. Please try again.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
-        setPendingCards(prev => prev.filter(card => card.id !== placeholderId));
-        return;
-      }
+
+      const response = await fetch('https://gymvid-app.onrender.com/analyze/log_set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'multipart/form-data' },
+        body: formData,
+      });
+
+      const json = await response.json();
       if (!json.success || !json.data) {
-        console.error('Video analysis failed:', json);
-        Toast.show('Video analysis failed. Please try again.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
-        setPendingCards(prev => prev.filter(card => card.id !== placeholderId));
-        return;
+        throw new Error('Video upload failed');
       }
-      const data = json.data;
+
+      // Remove placeholder card
       setPendingCards(prev => prev.filter(card => card.id !== placeholderId));
+
+      // Add new exercise with video
       setExercises(prev => [
         ...prev,
         {
           id: generateId(),
-          name: (data.exercise_prediction?.movement || data.predicted_exercise || 'AI Exercise') + (data.exercise_prediction?.equipment ? ` (${data.exercise_prediction.equipment})` : ''),
+          name: 'New Exercise',
           sets: [
             {
               id: generateId(),
-              weight: data.weight_estimation?.estimated_weight_kg?.toString() || data.estimated_weight_kg?.toString() || '',
-              reps: data.rep_data?.length?.toString() || data.reps?.toString() || '',
-              rpe: data.rep_data?.[0]?.estimated_RPE?.toString() || data.estimated_RPE?.toString() || '',
-              tut: data.rep_data?.[0]?.total_TUT?.toString() || data.estimated_TUT?.toString() || '',
+              weight: '',
+              weightUnit: weightUnits,
+              reps: '',
+              rpe: '',
+              tut: '',
               completed: false,
-              video: data.video_url,
-              thumbnail_url: data.thumbnail_url || null,
-              ai_analysis: {
-                exercise_name: data.exercise_prediction?.movement || data.predicted_exercise || 'AI Exercise',
-                equipment: data.exercise_prediction?.equipment || data.equipment,
-                variation: data.exercise_prediction?.variation || data.variation,
-                confidence: data.exercise_prediction?.confidence || data.confidence
-              },
-              canAnalyzeForm: true,
-              coaching_feedback: null,
-              analyzingForm: false
+              video: json.data.video_url,
+              thumbnail_url: json.data.thumbnail_url,
+              canAnalyzeForm: true
             }
           ]
         }
       ]);
+
     } catch (error) {
       console.error('Video upload error:', error);
       Toast.show('Video upload failed. Please try again.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+      setPendingCards(prev => prev.filter(card => card.id !== placeholderId));
     }
   };
 
@@ -769,45 +943,75 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   // Handler for Add AI Video Set (below each exercise card)
   const handleAddAIVideoSet = async (exerciseIdx) => {
     try {
+      const user = supabase.auth.user();
+      const user_id = user?.id;
+      if (!user_id) {
+        Toast.show('User not authenticated.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+        return;
+      }
+
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Please grant access to your photo library.');
         return;
       }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Videos,
         allowsEditing: false,
         quality: 1,
       });
-      Alert.alert('Picker Result', JSON.stringify(result));
-      let videoUri = null;
-      if (result.assets && result.assets.length > 0) {
-        videoUri = result.assets[0].uri;
-      } else if (result.uri) {
-        videoUri = result.uri;
-      }
-      if (!result.canceled && videoUri) {
-        setExercises(prev => {
-          const updated = [...prev];
-          const newSet = {
-            id: generateId(),
-            weight: '',
-            reps: '',
-            rpe: '',
-            tut: '',
-            completed: false,
-            video: videoUri,
-            isVideoSet: true,
-          };
-          updated[exerciseIdx].sets = [...updated[exerciseIdx].sets, newSet];
-          return updated;
-        });
-        setExpandedExercises(prev => ({ ...prev, [exerciseIdx]: true }));
-      } else if (!result.canceled) {
+
+      if (result.canceled || !result.assets?.[0]?.uri) {
         Alert.alert('Error', 'No video selected. Please try again.');
+        return;
       }
+
+      const videoUri = result.assets[0].uri;
+
+      // POST to /analyze/log_set
+      const formData = new FormData();
+      formData.append('user_id', user_id);
+      formData.append('video', {
+        uri: videoUri,
+        type: 'video/mp4',
+        name: videoUri.split('/').pop()
+      });
+
+      const response = await fetch('https://gymvid-app.onrender.com/analyze/log_set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'multipart/form-data' },
+        body: formData,
+      });
+
+      const json = await response.json();
+      if (!json.success || !json.data) {
+        throw new Error('Video upload failed');
+      }
+
+      setExercises(prev => {
+        const updated = [...prev];
+        const newSet = {
+          id: generateId(),
+          weight: '',
+          weightUnit: weightUnits,
+          reps: '',
+          rpe: '',
+          tut: '',
+          completed: false,
+          video: json.data.video_url,
+          thumbnail_url: json.data.thumbnail_url,
+          canAnalyzeForm: true
+        };
+        updated[exerciseIdx].sets = [...updated[exerciseIdx].sets, newSet];
+        return updated;
+      });
+
+      setExpandedExercises(prev => ({ ...prev, [exerciseIdx]: true }));
+
     } catch (error) {
-      Alert.alert('Error', 'Failed to select video. Please try again.');
+      console.error('Video upload error:', error);
+      Alert.alert('Error', 'Failed to upload video. Please try again.');
     }
   };
 
@@ -826,7 +1030,14 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
             ...ex,
             sets: [
               ...ex.sets,
-              { id: generateId(), weight: lastSet.weight ?? '', reps: lastSet.reps ?? '', completed: false, video: null }
+              {
+                id: generateId(),
+                weight: autoPredictWeights ? (lastSet.weight ?? '') : '',
+                weightUnit: weightUnits,
+                reps: autoPredictWeights ? (lastSet.reps ?? '') : '',
+                completed: false,
+                video: null
+              }
             ]
           };
         });
@@ -835,7 +1046,14 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         // Normal exercise
         const sets = exercise.sets;
         const lastSet = sets.length > 0 ? sets[sets.length - 1] : {};
-        const newSet = { id: generateId(), weight: lastSet.weight ?? '', reps: lastSet.reps ?? '', completed: false, video: null };
+        const newSet = {
+          id: generateId(),
+          weight: autoPredictWeights ? (lastSet.weight ?? '') : '',
+          weightUnit: weightUnits,
+          reps: autoPredictWeights ? (lastSet.reps ?? '') : '',
+          completed: false,
+          video: null
+        };
         exercise.sets = [...exercise.sets, newSet];
         updated[idx] = exercise;
       }
@@ -895,12 +1113,12 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
 
   // When the slider changes, set restTimeSeconds to the selected increment
   const handleSliderChange = (idx) => {
-    setRestTimeSeconds(REST_TIME_OPTIONS[idx]);
+    setRestTimeSeconds(REST_TIME_OPTIONS[idx].value);
   };
 
   // Helper to get the slider index from the current seconds value
   const getSliderIndex = (seconds) => {
-    const idx = REST_TIME_OPTIONS.indexOf(seconds);
+    const idx = REST_TIME_OPTIONS.findIndex(option => option.value === seconds);
     return idx === -1 ? 3 : idx; // default to 1:00 if not found
   };
 
@@ -988,9 +1206,59 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
     }
   };
 
+  useEffect(() => {
+    const loadDefaultRestTime = async () => {
+      try {
+        const savedTime = await AsyncStorage.getItem('defaultRestTime');
+        if (savedTime) {
+          const time = parseInt(savedTime);
+          setDefaultRestTime(time);
+          setRestTimeSeconds(time);
+        }
+      } catch (error) {
+        console.error('Error loading default rest time:', error);
+      }
+    };
+    loadDefaultRestTime();
+  }, []);
+
+  // First, let's modify the handleRestTimeSelect function to accept a parameter that controls modal closing
+  const handleRestTimeSelect = async (time, shouldCloseModal = false) => {
+    try {
+      await AsyncStorage.setItem('defaultRestTime', time.toString());
+      setDefaultRestTime(time);
+      setRestTimeSeconds(time);
+      if (shouldCloseModal) {
+        setShowRestTimePicker(false);
+        setShowSettingsModal(false);
+      }
+    } catch (error) {
+      console.error('Error saving default rest time:', error);
+    }
+  };
+
+  const formatRestTimeDisplay = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   if (!isReady) {
     return null; // or a loading spinner if you prefer
   }
+
+  const handleVideoPreview = (set) => {
+    const videoUriToPreview = set.localVideo || set.video_url;
+    if (videoUriToPreview) {
+      setPreviewVideo(videoUriToPreview);
+      setIsPreviewVisible(true);
+    }
+  };
+
+  const closePreview = () => {
+    setIsPreviewVisible(false);
+    setPreviewVideo(null);
+  };
 
   return (
     <RootSiblingParent>
@@ -1112,7 +1380,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                       <View style={styles.headerButtons}>
                         <TouchableOpacity 
                           style={styles.optionsButton}
-                          onPress={() => handleExerciseOptions(exerciseIdx)}
+                          onPress={() => handleExerciseOptions(exercise.id)}
                         >
                           <Ionicons name="ellipsis-horizontal" size={20} color={colors.gray} />
                         </TouchableOpacity>
@@ -1162,7 +1430,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                 </View>
                                 <TextInput
                                   style={styles.tableCellInputHeaderInput}
-                                  value="kg"
+                                  value={weightUnits}
                                   editable={false}
                                   selectTextOnFocus={false}
                                   pointerEvents="none"
@@ -1239,29 +1507,27 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                         inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                                       />
                                     )}
-                                    <TouchableOpacity
-                                      style={styles.tableCellIcon}
-                                      onPress={() => handleVideoUpload(exercise.id, set.id)}
-                                      disabled={isUploading || uploadingSet === set.id}
-                                    >
-                                      <View style={styles.cameraCornerBox}>
-                                        <View style={styles.cornerTLH} />
-                                        <View style={styles.cornerTLV} />
-                                        <View style={styles.cornerTRH} />
-                                        <View style={styles.cornerTRV} />
-                                        <View style={styles.cornerBLH} />
-                                        <View style={styles.cornerBLV} />
-                                        <View style={styles.cornerBRH} />
-                                        <View style={styles.cornerBRV} />
-                                        {uploadingSet === set.id ? (
-                                          <ActivityIndicator size="small" color={colors.primary} />
-                                        ) : set.thumbnail_url ? (
-                                          <Image source={{ uri: set.thumbnail_url }} style={styles.videoThumb} />
-                                        ) : (
-                                          <Ionicons name="camera-outline" size={20} color={colors.gray} />
-                                        )}
-                                      </View>
-                                    </TouchableOpacity>
+                                    {set.thumbnail || set.thumbnail_url ? (
+                                      <TouchableOpacity 
+                                        style={styles.thumbnailContainer}
+                                        onPress={() => handleVideoPreview(set)}
+                                      >
+                                        <Image 
+                                          source={{ uri: set.thumbnail || set.thumbnail_url }} 
+                                          style={styles.thumbnail}
+                                          resizeMode="cover"
+                                        />
+                                      </TouchableOpacity>
+                                    ) : (
+                                      <TouchableOpacity 
+                                        style={styles.cameraButtonContainer}
+                                        onPress={() => handleVideoUpload(exercise.id, set.id)}
+                                      >
+                                        <View style={styles.cameraButtonInner}>
+                                          <Ionicons name="camera-outline" size={24} color={colors.gray} />
+                                        </View>
+                                      </TouchableOpacity>
+                                    )}
                                     <TouchableOpacity
                                       style={styles.tableCellCheck}
                                       onPress={() => handleCompleteSet(exercise.id, set.id, ex.id)}
@@ -1335,6 +1601,16 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                       <Text style={styles.motivation}>{set.coaching_feedback.motivation}</Text>
                                     </View>
                                   )}
+                                  {/* AI Coaching Feedback Button */}
+                                  {set.completed && set.video_url && (
+                                    <TouchableOpacity
+                                      style={[styles.aiCoachingButton]}
+                                      onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video_url, set.thumbnail_url)}
+                                    >
+                                      <Ionicons name="analytics-outline" size={18} color="#6C3EF6" />
+                                      <Text style={styles.aiCoachingButtonText}>AI Coaching Feedback</Text>
+                                    </TouchableOpacity>
+                                  )}
                                 </Swipeable>
                               ))}
                             </View>
@@ -1370,7 +1646,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                             </View>
                             <TextInput
                               style={styles.tableCellInputHeaderInput}
-                              value="kg"
+                              value={weightUnits}
                               editable={false}
                               selectTextOnFocus={false}
                               pointerEvents="none"
@@ -1437,7 +1713,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                   <TextInput
                                     style={styles.tableCellInputNarrow}
                                     value={set[exertionMetric.toLowerCase()]?.toString() ?? ''}
-                                    onChangeText={v => handleUpdateSet(exercise.id, set.id, exertionMetric.toLowerCase(), v, ex.id)}
+                                    onChangeText={v => handleUpdateSet(exercise.id, set.id, exertionMetric.toLowerCase(), v)}
                                     keyboardType="decimal-pad"
                                     placeholder={exertionMetric}
                                     placeholderTextColor="#AAAAAA"
@@ -1447,29 +1723,27 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                     inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                                   />
                                 )}
-                                <TouchableOpacity
-                                  style={styles.tableCellIcon}
-                                  onPress={() => handleVideoUpload(exercise.id, set.id)}
-                                  disabled={isUploading || uploadingSet === set.id}
-                                >
-                                  <View style={styles.cameraCornerBox}>
-                                    <View style={styles.cornerTLH} />
-                                    <View style={styles.cornerTLV} />
-                                    <View style={styles.cornerTRH} />
-                                    <View style={styles.cornerTRV} />
-                                    <View style={styles.cornerBLH} />
-                                    <View style={styles.cornerBLV} />
-                                    <View style={styles.cornerBRH} />
-                                    <View style={styles.cornerBRV} />
-                                    {uploadingSet === set.id ? (
-                                      <ActivityIndicator size="small" color={colors.primary} />
-                                    ) : set.thumbnail_url ? (
-                                      <Image source={{ uri: set.thumbnail_url }} style={styles.videoThumb} />
-                                    ) : (
-                                      <Ionicons name="camera-outline" size={20} color={colors.gray} />
-                                    )}
-                                  </View>
-                                </TouchableOpacity>
+                                {set.thumbnail || set.thumbnail_url ? (
+                                  <TouchableOpacity 
+                                    style={styles.thumbnailContainer}
+                                    onPress={() => handleVideoPreview(set)}
+                                  >
+                                    <Image 
+                                      source={{ uri: set.thumbnail || set.thumbnail_url }} 
+                                      style={styles.thumbnail}
+                                      resizeMode="cover"
+                                    />
+                                  </TouchableOpacity>
+                                ) : (
+                                  <TouchableOpacity 
+                                    style={styles.cameraButtonContainer}
+                                    onPress={() => handleVideoUpload(exercise.id, set.id)}
+                                  >
+                                    <View style={styles.cameraButtonInner}>
+                                      <Ionicons name="camera-outline" size={24} color={colors.gray} />
+                                    </View>
+                                  </TouchableOpacity>
+                                )}
                                 <TouchableOpacity
                                   style={styles.tableCellCheck}
                                   onPress={() => handleCompleteSet(exercise.id, set.id)}
@@ -1543,6 +1817,16 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                   <Text style={styles.motivation}>{set.coaching_feedback.motivation}</Text>
                                 </View>
                               )}
+                              {/* AI Coaching Feedback Button */}
+                              {set.completed && set.video_url && (
+                                <TouchableOpacity
+                                  style={[styles.aiCoachingButton]}
+                                  onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video_url, set.thumbnail_url)}
+                                >
+                                  <Ionicons name="analytics-outline" size={18} color="#6C3EF6" />
+                                  <Text style={styles.aiCoachingButtonText}>AI Coaching Feedback</Text>
+                                </TouchableOpacity>
+                              )}
                             </Swipeable>
                           ))}
                         </View>
@@ -1587,10 +1871,13 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                   {isResting ? (
                     // Show a custom progress bar
                     <RNView style={styles.progressBarBackground}>
-                      <RNView
+                      <Animated.View
                         style={[
                           styles.progressBarFill,
-                          { width: `${(restTimeSeconds / restTimeStart) * 100}%` }
+                          { width: progressAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: ['0%', '100%']
+                            }) }
                         ]}
                       />
                     </RNView>
@@ -1627,7 +1914,45 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
               style={styles.minimizedTimer}
               onPress={toggleTimerMinimize}
             >
-              <Ionicons name="timer-outline" size={29} color={colors.gray} />
+              {isResting ? (
+                <View style={StyleSheet.absoluteFill}>
+                  <Svg width={53} height={53}>
+                    <Circle
+                      cx={26.5}
+                      cy={26.5}
+                      r={18}
+                      stroke={colors.lightGray}
+                      strokeWidth={4}
+                      fill="none"
+                    />
+                    <Circle
+                      cx={26.5}
+                      cy={26.5}
+                      r={18}
+                      stroke={colors.primary}
+                      strokeWidth={4}
+                      fill="none"
+                      strokeDasharray={2 * Math.PI * 18}
+                      strokeDashoffset={(2 * Math.PI * 18) * (1 - (restTimeSeconds / restTimeStart))}
+                      strokeLinecap="round"
+                      transform={`rotate(-90, 26.5, 26.5)`}
+                    />
+                  </Svg>
+                  {/* Centered timer text */}
+                  <View style={{
+                    position: 'absolute',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Text style={{ fontSize: 11.2, fontWeight: 'bold', color: colors.darkGray }}>
+                      {formatRestTime(restTimeSeconds)}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <Ionicons name="timer-outline" size={29} color={colors.gray} />
+              )}
             </TouchableOpacity>
           )}
           <View style={styles.footer}>
@@ -1673,7 +1998,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
           onRequestClose={() => setShowTimerSettings(false)}
         >
           <TouchableOpacity 
-            style={styles.modalOverlay}
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'flex-end' }}
             activeOpacity={1}
             onPress={() => setShowTimerSettings(false)}
           >
@@ -1681,42 +2006,138 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
               activeOpacity={1} 
               onPress={e => e.stopPropagation()}
             >
-              <View style={styles.modalContent}>
-                <View style={styles.modalHandle} />
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Set Default Rest Time</Text>
-                </View>
-                <View style={styles.modalMainContent}>
-                  <Text style={styles.timerValue}>{formatRestTime(sliderValue)}</Text>
-                  <View style={styles.modalLeftSection}>
-                    <Slider
-                      style={styles.slider}
-                      minimumValue={15}
-                      maximumValue={480}
-                      step={15}
-                      value={defaultRestTime}
-                      onValueChange={setSliderValue}
-                      minimumTrackTintColor={colors.primary}
-                      maximumTrackTintColor={colors.lightGray}
-                      thumbTintColor={colors.primary}
-                    />
-                  </View>
-                  <TouchableOpacity 
-                    style={styles.confirmButton}
-                    onPress={handleSaveDefaultTime}
+              <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 0, paddingBottom: 32, paddingHorizontal: 0, width: '100%', minHeight: 420 }}>
+                {/* Header */}
+                <View style={{ alignItems: 'center', justifyContent: 'center', position: 'relative', paddingTop: 18, paddingBottom: 20 }}>
+                  <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB', marginBottom: 12 }} />
+                  <Text style={{ fontSize: 24, fontFamily: 'DMSans-Black', color: colors.darkGray, textAlign: 'left', flex: 1 }}>Workout Settings</Text>
+                  <TouchableOpacity
+                    style={{ position: 'absolute', right: 18, top: 18, padding: 4 }}
+                    onPress={() => setShowTimerSettings(false)}
                   >
-                    <View style={[styles.checkSquare, styles.checkSquareCompleted]}>
-                      <Ionicons 
-                        name="checkmark-sharp" 
-                        size={24} 
-                        color={colors.white} 
-                      />
+                    <Ionicons name="close" size={28} color="#B0B0B0" />
+                  </TouchableOpacity>
+                </View>
+                {/* Settings Rows */}
+                <View style={{ borderTopWidth: 1, borderColor: '#F0F0F0' }}>
+                  {/* 1. Auto-Start Rest Timer */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
+                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Auto-Start Rest Timer</Text>
+                    <Switch value={autoStartRestTimer} onValueChange={setAutoStartRestTimer} />
+                  </View>
+
+                  {/* 2. Default Rest Time */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
+                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Default Rest Time</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <TouchableOpacity 
+                        style={{ padding: 8 }}
+                        onPress={() => {
+                          const currentIndex = REST_TIME_OPTIONS.findIndex(opt => opt.value === defaultRestTime);
+                          if (currentIndex > 0) {
+                            handleRestTimeSelect(REST_TIME_OPTIONS[currentIndex - 1].value, false);
+                          }
+                        }}
+                      >
+                        <Ionicons name="remove-circle-outline" size={24} color={colors.gray} />
+                      </TouchableOpacity>
+                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Regular', color: colors.gray, marginHorizontal: 3 }}>
+                        {formatRestTimeDisplay(defaultRestTime)}
+                      </Text>
+                      <TouchableOpacity 
+                        style={{ padding: 8 }}
+                        onPress={() => {
+                          const currentIndex = REST_TIME_OPTIONS.findIndex(opt => opt.value === defaultRestTime);
+                          if (currentIndex < REST_TIME_OPTIONS.length - 1) {
+                            handleRestTimeSelect(REST_TIME_OPTIONS[currentIndex + 1].value, false);
+                          }
+                        }}
+                      >
+                        <Ionicons name="add-circle-outline" size={24} color={colors.gray} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* 3. Auto-Predict Weights */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
+                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Auto-Predict Weights</Text>
+                    <Switch value={autoPredictWeights} onValueChange={setAutoPredictWeights} />
+                  </View>
+
+                  {/* 4. Weight Units Dropdown */}
+                  <TouchableOpacity onPress={handleWeightUnitsPress} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
+                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Weight Units</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Regular', color: colors.gray, marginRight: 4 }}>{weightUnits}</Text>
+                      <Ionicons name="chevron-forward" size={18} color="#B0B0B0" />
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* 5. Enable Exertion Tracking */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
+                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Enable Exertion Tracking</Text>
+                    <Switch value={enableExertionTracking} onValueChange={setEnableExertionTracking} />
+                  </View>
+
+                  {/* 6. Exertion Metric Dropdown */}
+                  <TouchableOpacity onPress={handleExertionMetricPress} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, backgroundColor: 'white' }}>
+                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Exertion Metric</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Regular', color: colors.gray, marginRight: 4 }}>{exertionMetric}</Text>
+                      <Ionicons name="chevron-forward" size={18} color="#B0B0B0" />
                     </View>
                   </TouchableOpacity>
                 </View>
               </View>
             </TouchableOpacity>
           </TouchableOpacity>
+        </Modal>
+
+        {/* Rest Time Picker Modal */}
+        <Modal
+          visible={showRestTimePicker}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowRestTimePicker(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 16, paddingBottom: 32 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB', alignSelf: 'center', marginBottom: 12 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 12, position: 'relative' }}>
+                <Text style={{ fontSize: 20, fontFamily: 'DMSans-Bold', color: colors.darkGray }}>Default Rest Time</Text>
+                <TouchableOpacity
+                  style={{ position: 'absolute', right: 20, padding: 4 }}
+                  onPress={() => setShowRestTimePicker(false)}
+                >
+                  <Ionicons name="close" size={28} color="#B0B0B0" />
+                </TouchableOpacity>
+              </View>
+              <View style={{ paddingHorizontal: 20, paddingVertical: 16 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 }}>
+                  {REST_TIME_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.timeButton,
+                        defaultRestTime === option.value && styles.timeButtonSelected
+                      ]}
+                      onPress={() => {
+                        handleRestTimeSelect(option.value);
+                        setShowRestTimePicker(false);
+                      }}
+                    >
+                      <Text style={[
+                        styles.timeButtonText,
+                        defaultRestTime === option.value && styles.timeButtonTextSelected
+                      ]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </View>
         </Modal>
         <Modal
           visible={showExitModal}
@@ -1759,98 +2180,109 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
             </View>
           </InputAccessoryView>
         )}
-        {/* Delete Exercise Modal */}
-        <Modal
-          visible={showDeleteExerciseModal}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowDeleteExerciseModal(false)}
-        >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'flex-end', alignItems: 'center' }}>
-            <View style={{ width: '94%', borderRadius: 18, backgroundColor: 'white', alignItems: 'center', paddingTop: 22.5, paddingBottom: 6.3, marginBottom: 8.1, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.13, shadowRadius: 12, elevation: 8 }}>
-              <Text style={{ fontSize: 16, color: '#828284', textAlign: 'center', marginBottom: 19.44, fontFamily: 'DMSans-Regular', paddingHorizontal: 8.1 }}>
-                Are you sure you want to delete this exercise?
-              </Text>
-              <TouchableOpacity
-                style={{ width: '100%', paddingVertical: 12.96, alignItems: 'center', borderTopWidth: 1, borderColor: '#eee' }}
-                onPress={() => {
-                  setShowDeleteExerciseModal(false);
-                  setExercises(prev => prev.filter((_, idx) => idx !== pendingDeleteExerciseIdx));
-                  setPendingDeleteExerciseIdx(null);
-                }}
-              >
-                <Text style={{ color: '#FF3B30', fontSize: 20, fontWeight: '600', fontFamily: 'DMSans-Bold' }}>Delete Exercise</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={{ width: '94%', borderRadius: 18, backgroundColor: 'white', alignItems: 'center', marginBottom: 19.44, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.13, shadowRadius: 12, elevation: 8 }}>
-              <TouchableOpacity
-                style={{ width: '100%', paddingVertical: 16, alignItems: 'center' }}
-                onPress={() => { setShowDeleteExerciseModal(false); setPendingDeleteExerciseIdx(null); }}
-              >
-                <Text style={{ color: '#007AFF', fontSize: 20, fontWeight: '600', fontFamily: 'DMSans-Bold' }}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
         <Modal
           visible={showSettingsModal}
           transparent={true}
           animationType="slide"
           onRequestClose={() => setShowSettingsModal(false)}
         >
-          <TouchableOpacity 
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'flex-end' }}
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}
             activeOpacity={1}
             onPress={() => setShowSettingsModal(false)}
           >
-            <TouchableOpacity 
-              activeOpacity={1} 
+            <TouchableOpacity
+              activeOpacity={1}
               onPress={e => e.stopPropagation()}
             >
-              <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 0, paddingBottom: 32, paddingHorizontal: 0, width: '100%', minHeight: 420 }}>
-                {/* Header */}
-                <View style={{ alignItems: 'center', justifyContent: 'center', position: 'relative', paddingTop: 18, paddingBottom: 20 }}>
-                  <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB', marginBottom: 12 }} />
-                  <Text style={{ fontSize: 20, fontFamily: 'DMSans-Black', color: colors.darkGray, textAlign: 'center', marginBottom: 0 }}>Workout Settings</Text>
-                  <TouchableOpacity
-                    style={{ position: 'absolute', right: 18, top: 18, padding: 4 }}
-                    onPress={() => setShowSettingsModal(false)}
-                  >
-                    <Ionicons name="close" size={28} color="#B0B0B0" />
-                  </TouchableOpacity>
+              <View style={{ backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 16, paddingBottom: 32, position: 'relative' }}>
+                {/* Close button flush with top, above modal content */}
+                <TouchableOpacity
+                  style={{ position: 'absolute', right: 12, top: 12, zIndex: 100, padding: 4, backgroundColor: colors.background, borderRadius: 16 }}
+                  onPress={() => setShowSettingsModal(false)}
+                >
+                  <Ionicons name="close" size={28} color={colors.gray} />
+                </TouchableOpacity>
+                <View
+                  style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB', alignSelf: 'center', marginBottom: 12, marginTop: 0 }}
+                  {...panResponder.panHandlers}
+                />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: 20, paddingVertical: 12, position: 'relative' }}>
+                  <Text style={{ fontSize: 24, fontFamily: 'DMSans-Black', color: colors.darkGray, textAlign: 'left', flex: 1 }}>Workout Settings</Text>
                 </View>
-                {/* Settings Rows */}
-                <View style={{ borderTopWidth: 1, borderColor: '#F0F0F0' }}>
-                  {/* Auto-Start Rest Timer */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Auto-Start Rest Timer</Text>
-                    <Switch value={autoStartRestTimer} onValueChange={setAutoStartRestTimer} />
-                  </View>
-                  {/* Weight Units Dropdown */}
-                  <TouchableOpacity onPress={handleWeightUnitsPress} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Weight Units</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Regular', color: colors.gray, marginRight: 4 }}>{weightUnits}</Text>
-                      <Ionicons name="chevron-forward" size={18} color="#B0B0B0" />
+                {/* Settings Groups */}
+                <View style={{ gap: 16, paddingHorizontal: 16 }}>
+                  {/* Group 1 */}
+                  <View style={{ backgroundColor: colors.white, borderRadius: 18, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56 }}>
+                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Auto-Start Rest Timer</Text>
+                      <Switch value={autoStartRestTimer} onValueChange={setAutoStartRestTimer} />
                     </View>
-                  </TouchableOpacity>
-                  {/* Auto-Predict Weights */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Auto-Predict Weights</Text>
-                    <Switch value={autoPredictWeights} onValueChange={setAutoPredictWeights} />
-                  </View>
-                  {/* Exertion Metric Dropdown */}
-                  <TouchableOpacity onPress={handleExertionMetricPress} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, borderBottomWidth: 1, borderColor: '#F0F0F0', backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Exertion Metric</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Regular', color: colors.gray, marginRight: 4 }}>{exertionMetric}</Text>
-                      <Ionicons name="chevron-forward" size={18} color="#B0B0B0" />
+                    <View style={{ height: 1, backgroundColor: colors.background, marginHorizontal: 20 }} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56 }}>
+                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Default Rest Time</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <TouchableOpacity 
+                          style={{ padding: 8 }}
+                          onPress={() => {
+                            const currentIndex = REST_TIME_OPTIONS.findIndex(opt => opt.value === defaultRestTime);
+                            if (currentIndex > 0) {
+                              handleRestTimeSelect(REST_TIME_OPTIONS[currentIndex - 1].value, false);
+                            }
+                          }}
+                        >
+                          <Ionicons name="remove-circle-outline" size={24} color={colors.gray} />
+                        </TouchableOpacity>
+                        <Text style={{ fontSize: 16, fontFamily: 'DMSans-Regular', color: colors.gray, marginHorizontal: 3 }}>
+                          {formatRestTimeDisplay(defaultRestTime)}
+                        </Text>
+                        <TouchableOpacity 
+                          style={{ padding: 8 }}
+                          onPress={() => {
+                            const currentIndex = REST_TIME_OPTIONS.findIndex(opt => opt.value === defaultRestTime);
+                            if (currentIndex < REST_TIME_OPTIONS.length - 1) {
+                              handleRestTimeSelect(REST_TIME_OPTIONS[currentIndex + 1].value, false);
+                            }
+                          }}
+                        >
+                          <Ionicons name="add-circle-outline" size={24} color={colors.gray} />
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </TouchableOpacity>
-                  {/* Enable Exertion Tracking */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56, backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Enable Exertion Tracking</Text>
-                    <Switch value={enableExertionTracking} onValueChange={setEnableExertionTracking} />
+                  </View>
+                  {/* Separator */}
+                  <View style={{ height: 1, backgroundColor: colors.lightGray, marginVertical: 0, marginHorizontal: 8 }} />
+                  {/* Group 2 */}
+                  <View style={{ backgroundColor: colors.white, borderRadius: 18, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56 }}>
+                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Auto-Predict Weights</Text>
+                      <Switch value={autoPredictWeights} onValueChange={setAutoPredictWeights} />
+                    </View>
+                    <View style={{ height: 1, backgroundColor: colors.lightGray, marginHorizontal: 20 }} />
+                    <TouchableOpacity onPress={handleWeightUnitsPress} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56 }}>
+                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Weight Units</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontFamily: 'DMSans-Regular', color: colors.gray, marginRight: 4 }}>{weightUnits}</Text>
+                        <Ionicons name="chevron-forward" size={18} color="#B0B0B0" />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                  {/* Separator */}
+                  <View style={{ height: 1, backgroundColor: colors.lightGray, marginVertical: 0, marginHorizontal: 8 }} />
+                  {/* Group 3 */}
+                  <View style={{ backgroundColor: colors.white, borderRadius: 18, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56 }}>
+                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Enable Exertion Tracking</Text>
+                      <Switch value={enableExertionTracking} onValueChange={setEnableExertionTracking} />
+                    </View>
+                    <View style={{ height: 1, backgroundColor: colors.lightGray, marginHorizontal: 20 }} />
+                    <TouchableOpacity onPress={handleExertionMetricPress} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: 56 }}>
+                      <Text style={{ fontSize: 16, fontFamily: 'DMSans-Medium', color: colors.darkGray }}>Exertion Metric</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontFamily: 'DMSans-Regular', color: colors.gray, marginRight: 4 }}>{exertionMetric}</Text>
+                        <Ionicons name="chevron-forward" size={18} color="#B0B0B0" />
+                      </View>
+                    </TouchableOpacity>
                   </View>
                 </View>
               </View>
@@ -1863,6 +2295,13 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
           loading={feedbackLoading}
           feedback={feedbackData}
           videoThumbnail={feedbackThumbnail}
+        />
+        
+        {/* Video Preview Modal */}
+        <VideoPreviewModal
+          visible={isPreviewVisible}
+          videoUri={previewVideo}
+          onClose={closePreview}
         />
       </View>
     </RootSiblingParent>
@@ -2302,7 +2741,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.18)',
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -2777,5 +3216,163 @@ const styles = StyleSheet.create({
     color: colors.darkGray,
     fontFamily: 'DMSans-Regular',
     marginBottom: 1,
+  },
+  pickerModalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 16,
+    paddingBottom: 32,
+    width: '100%',
+    backgroundColor: 'white',
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    position: 'relative',
+  },
+  pickerModalTitle: {
+    fontSize: 20,
+    fontFamily: 'DMSans-Bold',
+    color: colors.darkGray,
+  },
+  pickerModalCloseButton: {
+    position: 'absolute',
+    right: 20,
+    padding: 4,
+  },
+  pickerContainer: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  picker: {
+    width: '100%',
+    height: '100%',
+  },
+  pickerItem: {
+    fontSize: 24,
+    fontFamily: 'DMSans-Regular',
+    color: colors.darkGray,
+  },
+  timeButton: {
+    width: '30%',
+    margin: '1.66%',
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  timeButtonSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  timeButtonText: {
+    fontSize: 16,
+    fontFamily: 'DMSans-Medium',
+    color: colors.darkGray,
+  },
+  timeButtonTextSelected: {
+    color: colors.white,
+  },
+  thumbnailContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginLeft: 3,
+    marginRight: 5,
+    position: 'relative',
+  },
+  confirmOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+  },
+  videoButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: colors.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 3,
+    marginRight: 5,
+  },
+  cameraButtonContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 3,
+    marginRight: 5,
+    backgroundColor: 'transparent',
+  },
+  cameraButtonInner: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalHeader: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    zIndex: 1,
+  },
+  closeButton: {
+    padding: 10,
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
+  aiCoachingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: -2,
+    marginHorizontal: 12,
+    marginBottom: 6,
+  },
+  aiCoachingButtonText: {
+    color: '#6C3EF6',
+    fontSize: 16,
+    fontFamily: 'DMSans-Bold',
+    marginLeft: 6,
   },
 }); 
