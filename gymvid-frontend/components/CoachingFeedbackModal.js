@@ -34,12 +34,16 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
                 <Text style={styles.sectionLabel}>🔟 Form Rating</Text>
                 <Text style={styles.sectionValue}>{feedback.form_rating ? `${feedback.form_rating}/10` : 'N/A'}</Text>
               </View>
-              {feedback.observations && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>👀 Observations</Text>
-                  <Text style={styles.sectionValue}>{feedback.observations}</Text>
+              {feedback.observations && feedback.observations.map((item, index) => (
+                <View key={index} style={styles.section}>
+                  <Text style={styles.sectionLabel}>👀 Observation</Text>
+                  <Text style={styles.sectionValue}>{item.observation}</Text>
+                  <Text style={styles.sectionLabel}>🧠 Tip</Text>
+                  <Text style={styles.sectionValue}>{item.tip}</Text>
+                  <Text style={styles.sectionLabel}>👉 Summary</Text>
+                  <Text style={styles.sectionValue}>{item.summary}</Text>
                 </View>
-              )}
+              ))}
               {feedback.cues && (
                 <View style={styles.section}>
                   <Text style={styles.sectionLabel}>🧠 Coaching Cues</Text>

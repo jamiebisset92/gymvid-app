@@ -1170,39 +1170,151 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
     );
   };
 
-  const handleShowCoachingFeedback = (exerciseId, setId, videoUrl, thumbnailUrl) => {
+  const handleShowCoachingFeedback = async (exerciseId, setId, videoUrl, thumbnailUrl, subExerciseId = null) => {
+    // Get the set from the exercises array
+    const exercise = exercises.find(e => e.id === exerciseId);
+    if (!exercise) return;
+
+    const set = subExerciseId 
+      ? exercise.exercises?.find(e => e.id === subExerciseId)?.sets?.find(s => s.id === setId)
+      : exercise.sets?.find(s => s.id === setId);
+
+    if (!set || !set.video_url) return;
+
+    // Don't proceed if already loading or has successful feedback
+    if (set.coaching?.status === 'loading' || set.coaching?.status === 'success') {
+      setFeedbackModalVisible(true);
+      setFeedbackLoading(false);
+      setFeedbackData(set.coaching?.feedback);
+      setFeedbackThumbnail(thumbnailUrl);
+      setFeedbackVideoUrl(videoUrl);
+      return;
+    }
+
+    // Set loading state
+    setExercises(prev => prev.map(ex => {
+      if (ex.id !== exerciseId) return ex;
+      if (subExerciseId) {
+        return {
+          ...ex,
+          exercises: ex.exercises.map(subEx => {
+            if (subEx.id !== subExerciseId) return subEx;
+            return {
+              ...subEx,
+              sets: subEx.sets.map(s => 
+                s.id === setId 
+                  ? { ...s, coaching: { status: 'loading', feedback: null } }
+                  : s
+              )
+            };
+          })
+        };
+      }
+      return {
+        ...ex,
+        sets: ex.sets.map(s => 
+          s.id === setId 
+            ? { ...s, coaching: { status: 'loading', feedback: null } }
+            : s
+        )
+      };
+    }));
+
+    // Show modal with loading state
     setFeedbackModalVisible(true);
     setFeedbackLoading(true);
     setFeedbackData(null);
     setFeedbackThumbnail(thumbnailUrl);
     setFeedbackVideoUrl(videoUrl);
-    setFeedbackExerciseId(exerciseId);
-    setFeedbackSetId(setId);
-    // Start fetching feedback
-    fetchCoachingFeedback(videoUrl);
-  };
 
-  const fetchCoachingFeedback = async (videoUrl) => {
     try {
-      // POST to /process_set with coaching=true, using the already-logged video URL
-      const formData = new FormData();
-      formData.append('video', videoUrl); // send the video URL, not a file
-      formData.append('coaching', 'true');
-      const response = await fetch('https://gymvid-app.onrender.com/process_set', {
+      const user = supabase.auth.user();
+      const user_id = user?.id;
+      if (!user_id) throw new Error('User not authenticated');
+
+      const response = await fetch(`${API_URL}/analyze/feedback`, {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id,
+          movement: set.exerciseName || 'Unknown',
+          video_url: set.video_url
+        })
       });
-      const json = await response.json();
-      if (!json.success || !json.data) {
-        throw new Error('Coaching feedback failed');
-      }
-      setFeedbackData(json.data.coaching_feedback || null);
+
+      const data = await response.json();
+      if (!data.success) throw new Error('Failed to get coaching feedback');
+
+      // Update state with success
+      setExercises(prev => prev.map(ex => {
+        if (ex.id !== exerciseId) return ex;
+        if (subExerciseId) {
+          return {
+            ...ex,
+            exercises: ex.exercises.map(subEx => {
+              if (subEx.id !== subExerciseId) return subEx;
+              return {
+                ...subEx,
+                sets: subEx.sets.map(s => 
+                  s.id === setId 
+                    ? { ...s, coaching: { status: 'success', feedback: data.feedback } }
+                    : s
+                )
+              };
+            })
+          };
+        }
+        return {
+          ...ex,
+          sets: ex.sets.map(s => 
+            s.id === setId 
+              ? { ...s, coaching: { status: 'success', feedback: data.feedback } }
+              : s
+          )
+        };
+      }));
+
       setFeedbackLoading(false);
+      setFeedbackData(data.feedback);
+
     } catch (error) {
-      console.error('Coaching feedback error:', error);
+      console.error('Error getting coaching feedback:', error);
+      
+      // Update state with error
+      setExercises(prev => prev.map(ex => {
+        if (ex.id !== exerciseId) return ex;
+        if (subExerciseId) {
+          return {
+            ...ex,
+            exercises: ex.exercises.map(subEx => {
+              if (subEx.id !== subExerciseId) return subEx;
+              return {
+                ...subEx,
+                sets: subEx.sets.map(s => 
+                  s.id === setId 
+                    ? { ...s, coaching: { status: 'error', feedback: null } }
+                    : s
+                )
+              };
+            })
+          };
+        }
+        return {
+          ...ex,
+          sets: ex.sets.map(s => 
+            s.id === setId 
+              ? { ...s, coaching: { status: 'error', feedback: null } }
+              : s
+          )
+        };
+      }));
+
       setFeedbackLoading(false);
       setFeedbackData(null);
-      Toast.show('Coaching feedback failed. Please try again.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+      Toast.show('Failed to get coaching feedback. Please try again.', { 
+        duration: Toast.durations.SHORT, 
+        position: Toast.positions.BOTTOM 
+      });
     }
   };
 
@@ -2573,7 +2685,7 @@ const styles = StyleSheet.create({
   addSetText: {
     fontSize: 16,
     fontFamily: 'DMSans-Bold',
-    color: '#6C3EF6',
+    color: '#007AFF',
     marginLeft: 6,
   },
   footer: {
