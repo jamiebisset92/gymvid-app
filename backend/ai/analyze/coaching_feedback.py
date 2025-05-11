@@ -63,10 +63,10 @@ Please return your response in the following JSON format — and use only plain 
     "observations": [
       {{
         "observation": "Start with an insight like 'I can see that...', 'It looks like you're...', etc.",
-        "tip": "Follow with a coaching cue like 'Try and think about...', 'Next time, be sure to...', etc.",
-        "summary": "End with a short wrap-up (1–3 sentences) that feels encouraging and natural."
+        "tip": "Follow with a coaching cue like 'Try and think about...', 'Next time, be sure to...', etc."
       }}
-    ]
+    ],
+    "summary": "Wrap up the entire feedback in 1–3 encouraging sentences. Do not repeat previous tips or observations."
   }}
 }}
 
@@ -101,6 +101,6 @@ Important:
             "observations": [{
                 "observation": "Unable to evaluate form due to error.",
                 "tip": "Please try uploading a different video or check your form manually.",
-                "summary": f"Something went wrong generating your feedback: {str(e)}"
-            }]
+            }],
+            "summary": f"Something went wrong generating your feedback: {str(e)}"
         }

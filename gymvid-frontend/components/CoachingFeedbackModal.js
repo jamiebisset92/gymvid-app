@@ -3,7 +3,7 @@ import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Scr
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../config/colors';
 
-export default function CoachingFeedbackModal({ visible, onClose, loading, feedback, videoThumbnail }) {
+export default function CoachingFeedbackModal({ visible, onClose, loading, feedback, videoThumbnail, exerciseName, setNumber, metrics }) {
   return (
     <Modal
       visible={visible}
@@ -13,16 +13,16 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
     >
       <View style={styles.overlay}>
         <View style={styles.drawer}>
-          <View style={styles.header}>
+          <View style={styles.headerRowCustom}>
             <View style={styles.handle} />
-            <Text style={styles.title}>AI Coaching Feedback</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.exerciseTitle}>{exerciseName || 'Exercise'}</Text>
+              <Text style={styles.setSubtitle}>{`Set ${setNumber}: AI Form Analysis`}</Text>
+            </View>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
               <Ionicons name="close" size={28} color={colors.gray} />
             </TouchableOpacity>
           </View>
-          {videoThumbnail && (
-            <Image source={{ uri: videoThumbnail }} style={styles.thumbnail} />
-          )}
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
@@ -30,32 +30,35 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
             </View>
           ) : feedback ? (
             <ScrollView contentContainerStyle={styles.content}>
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>🔟 Form Rating</Text>
-                <Text style={styles.sectionValue}>{feedback.form_rating ? `${feedback.form_rating}/10` : 'N/A'}</Text>
+              <View style={styles.metricsRow}>
+                {videoThumbnail ? (
+                  <Image source={{ uri: videoThumbnail }} style={styles.roundedThumbnail} />
+                ) : (
+                  <View style={styles.roundedThumbnailPlaceholder} />
+                )}
+                <View style={styles.metricsCard}>
+                  <Text style={styles.formRatingLabel}>Form Rating</Text>
+                  <Text style={styles.formRatingValue}>{metrics.form_rating ? <Text style={{color:'#007AFF',fontWeight:'bold'}}>{metrics.form_rating} <Text style={{color:colors.gray,fontWeight:'normal'}}>/ 10</Text></Text> : 'N/A'}</Text>
+                  <View style={styles.metricsGridRow}>
+                    <View style={styles.metricBox}><Text style={styles.metricLabel}>kg</Text><Text style={styles.metricValue}>{metrics.weight || '-'}</Text></View>
+                    <View style={styles.metricBox}><Text style={styles.metricLabel}>Reps</Text><Text style={styles.metricValue}>{metrics.reps || '-'}</Text></View>
+                  </View>
+                  <View style={styles.metricsGridRow}>
+                    <View style={styles.metricBox}><Text style={styles.metricLabel}>RPE</Text><Text style={styles.metricValue}>{metrics.rpe || '-'}</Text></View>
+                    <View style={styles.metricBox}><Text style={styles.metricLabel}>TUT</Text><Text style={styles.metricValue}>{metrics.tut ? `${metrics.tut}s` : '-'}</Text></View>
+                  </View>
+                </View>
               </View>
-              {feedback.observations && feedback.observations.map((item, index) => (
-                <View key={index} style={styles.section}>
-                  <Text style={styles.sectionLabel}>👀 Observation</Text>
-                  <Text style={styles.sectionValue}>{item.observation}</Text>
-                  <Text style={styles.sectionLabel}>🧠 Tip</Text>
-                  <Text style={styles.sectionValue}>{item.tip}</Text>
-                  <Text style={styles.sectionLabel}>👉 Summary</Text>
-                  <Text style={styles.sectionValue}>{item.summary}</Text>
+              {feedback.observations && feedback.observations.map((item, idx) => (
+                <View key={idx} style={styles.feedbackBlock}>
+                  {item.observation ? <><Text style={styles.feedbackHeader}>👀 Observation</Text><Text style={styles.feedbackText}>{item.observation}</Text></> : null}
+                  {item.tip ? <><Text style={styles.feedbackHeader}>🧠 Tip</Text><Text style={styles.feedbackText}>{item.tip}</Text></> : null}
                 </View>
               ))}
-              {feedback.cues && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>🧠 Coaching Cues</Text>
-                  {Array.isArray(feedback.cues) ? feedback.cues.map((cue, idx) => (
-                    <Text key={idx} style={styles.sectionValue}>• {cue}</Text>
-                  )) : <Text style={styles.sectionValue}>{feedback.cues}</Text>}
-                </View>
-              )}
-              {feedback.summary && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>👉 Summary</Text>
-                  <Text style={styles.sectionValue}>{feedback.summary}</Text>
+              {feedback.observations && feedback.observations[0]?.summary && (
+                <View style={styles.feedbackBlock}>
+                  <Text style={styles.feedbackHeader}>👉 Summary</Text>
+                  <Text style={styles.feedbackText}>{feedback.observations[0].summary}</Text>
                 </View>
               )}
             </ScrollView>
@@ -84,12 +87,12 @@ const styles = StyleSheet.create({
     minHeight: 340,
     maxHeight: '80%',
   },
-  header: {
+  headerRowCustom: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 8,
     position: 'relative',
+    paddingBottom: 8,
   },
   handle: {
     position: 'absolute',
@@ -100,28 +103,109 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: colors.lightGray,
+    zIndex: 1,
   },
-  title: {
-    fontSize: 18,
+  exerciseTitle: {
+    fontSize: 22,
     fontFamily: 'DMSans-Bold',
-    color: colors.primary,
-    flex: 1,
-    textAlign: 'center',
+    color: colors.darkGray,
+    textAlign: 'left',
     marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 0,
+  },
+  setSubtitle: {
+    fontSize: 15,
+    fontFamily: 'DMSans-Regular',
+    color: colors.primary,
+    marginBottom: 4,
+    marginTop: 2,
+    textAlign: 'left',
   },
   closeButton: {
     position: 'absolute',
     right: 0,
     top: 0,
     padding: 8,
+    zIndex: 2,
   },
-  thumbnail: {
-    width: '100%',
-    height: 120,
-    borderRadius: 12,
-    marginBottom: 12,
+  metricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+    marginTop: 8,
+    gap: 18,
+  },
+  roundedThumbnail: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     backgroundColor: colors.lightGray,
+    marginRight: 16,
+  },
+  roundedThumbnailPlaceholder: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: colors.lightGray,
+    marginRight: 16,
+  },
+  metricsCard: {
+    flex: 1,
+    backgroundColor: '#F7F7FA',
+    borderRadius: 18,
+    padding: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 140,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  formRatingLabel: {
+    fontSize: 13,
+    color: colors.gray,
+    fontFamily: 'DMSans-Medium',
+    marginBottom: 2,
+  },
+  formRatingValue: {
+    fontSize: 22,
+    fontFamily: 'DMSans-Bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  metricsGridRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    gap: 8,
+  },
+  metricBox: {
+    flex: 1,
+    backgroundColor: colors.white,
+    borderRadius: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginHorizontal: 2,
+    marginBottom: 2,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: colors.gray,
+    fontFamily: 'DMSans-Medium',
+    marginBottom: 1,
+  },
+  metricValue: {
+    fontSize: 17,
+    color: colors.darkGray,
+    fontFamily: 'DMSans-Bold',
   },
   loadingContainer: {
     alignItems: 'center',
@@ -137,16 +221,23 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 32,
   },
-  section: {
+  feedbackBlock: {
     marginBottom: 18,
+    backgroundColor: '#F7F7FA',
+    borderRadius: 14,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
   },
-  sectionLabel: {
+  feedbackHeader: {
     fontSize: 15,
     fontFamily: 'DMSans-Bold',
     color: colors.darkGray,
     marginBottom: 4,
   },
-  sectionValue: {
+  feedbackText: {
     fontSize: 15,
     fontFamily: 'DMSans-Regular',
     color: colors.gray,

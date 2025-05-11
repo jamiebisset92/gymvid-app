@@ -2407,6 +2407,57 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
           loading={feedbackLoading}
           feedback={feedbackData}
           videoThumbnail={feedbackThumbnail}
+          exerciseName={(() => {
+            if (!feedbackExerciseId || !feedbackSetId) return '';
+            const exercise = exercises.find(e => e.id === feedbackExerciseId);
+            if (!exercise) return '';
+            if (exercise.isSuperset) {
+              for (const subEx of exercise.exercises) {
+                const set = subEx.sets.find(s => s.id === feedbackSetId);
+                if (set) return subEx.name;
+              }
+              return '';
+            } else {
+              return exercise.name;
+            }
+          })()}
+          setNumber={(() => {
+            if (!feedbackExerciseId || !feedbackSetId) return 1;
+            const exercise = exercises.find(e => e.id === feedbackExerciseId);
+            if (!exercise) return 1;
+            if (exercise.isSuperset) {
+              for (const subEx of exercise.exercises) {
+                const idx = subEx.sets.findIndex(s => s.id === feedbackSetId);
+                if (idx !== -1) return idx + 1;
+              }
+              return 1;
+            } else {
+              const idx = exercise.sets.findIndex(s => s.id === feedbackSetId);
+              return idx !== -1 ? idx + 1 : 1;
+            }
+          })()}
+          metrics={(() => {
+            if (!feedbackExerciseId || !feedbackSetId) return {};
+            const exercise = exercises.find(e => e.id === feedbackExerciseId);
+            if (!exercise) return {};
+            let set = null;
+            if (exercise.isSuperset) {
+              for (const subEx of exercise.exercises) {
+                set = subEx.sets.find(s => s.id === feedbackSetId);
+                if (set) break;
+              }
+            } else {
+              set = exercise.sets.find(s => s.id === feedbackSetId);
+            }
+            if (!set) return {};
+            return {
+              form_rating: feedbackData?.form_rating ?? '',
+              weight: set.weight ?? '',
+              reps: set.reps ?? '',
+              rpe: set.rpe ?? '',
+              tut: set.tut ?? '',
+            };
+          })()}
         />
         
         {/* Video Preview Modal */}
