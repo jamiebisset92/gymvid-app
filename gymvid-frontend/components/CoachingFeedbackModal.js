@@ -3,7 +3,16 @@ import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Scr
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../config/colors';
 
-export default function CoachingFeedbackModal({ visible, onClose, loading, feedback, videoThumbnail, exerciseName, setNumber, metrics }) {
+export default function CoachingFeedbackModal({ visible, onClose, loading, feedback, videoThumbnail, exerciseName, setNumber, metrics, set, parentExerciseName }) {
+  let displayExerciseName = parentExerciseName || exerciseName;
+  const isFallbackHeader = !displayExerciseName;
+  if (isFallbackHeader) displayExerciseName = 'AI Form Analysis';
+  const weight = set?.weight || set?.kg || '-';
+  const reps = set?.reps || '-';
+  const rpe = feedback?.rpe || '-';
+  const tut = feedback?.total_tut ? `${feedback.total_tut}s` : '-';
+  const formRating = feedback?.form_rating || 'N/A';
+
   return (
     <Modal
       visible={visible}
@@ -11,54 +20,64 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
       transparent
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.drawer}>
+      <View style={styles.overlayTrueBlack}>
+        <View style={styles.drawerTrueGray}>
           <View style={styles.headerRowCustom}>
             <View style={styles.handle} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.exerciseTitle}>{exerciseName || 'Exercise'}</Text>
-              <Text style={styles.setSubtitle}>{`Set ${setNumber}: AI Form Analysis`}</Text>
-            </View>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
               <Ionicons name="close" size={28} color={colors.gray} />
             </TouchableOpacity>
           </View>
+          <Text style={[styles.exerciseTitleTrue, isFallbackHeader && styles.exerciseTitleTrueFallback]}>{displayExerciseName}</Text>
+          {!isFallbackHeader && (
+            <Text style={styles.setSubtitleTrue}>{`Set ${setNumber}: AI Form Analysis`}</Text>
+          )}
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.loadingText}>Analyzing your form...</Text>
             </View>
           ) : feedback ? (
-            <ScrollView contentContainerStyle={styles.content}>
-              <View style={styles.metricsRow}>
+            <ScrollView contentContainerStyle={styles.contentCustom}>
+              <View style={styles.metricsCardBlockFull}>
                 {videoThumbnail ? (
-                  <Image source={{ uri: videoThumbnail }} style={styles.roundedThumbnail} />
+                  <Image source={{ uri: videoThumbnail }} style={styles.rectangleThumbnailInCard} />
                 ) : (
-                  <View style={styles.roundedThumbnailPlaceholder} />
+                  <View style={styles.rectangleThumbnailInCard} />
                 )}
-                <View style={styles.metricsCard}>
-                  <Text style={styles.formRatingLabel}>Form Rating</Text>
-                  <Text style={styles.formRatingValue}>{metrics.form_rating ? <Text style={{color:'#007AFF',fontWeight:'bold'}}>{metrics.form_rating} <Text style={{color:colors.gray,fontWeight:'normal'}}>/ 10</Text></Text> : 'N/A'}</Text>
-                  <View style={styles.metricsGridRow}>
-                    <View style={styles.metricBox}><Text style={styles.metricLabel}>kg</Text><Text style={styles.metricValue}>{metrics.weight || '-'}</Text></View>
-                    <View style={styles.metricBox}><Text style={styles.metricLabel}>Reps</Text><Text style={styles.metricValue}>{metrics.reps || '-'}</Text></View>
-                  </View>
-                  <View style={styles.metricsGridRow}>
-                    <View style={styles.metricBox}><Text style={styles.metricLabel}>RPE</Text><Text style={styles.metricValue}>{metrics.rpe || '-'}</Text></View>
-                    <View style={styles.metricBox}><Text style={styles.metricLabel}>TUT</Text><Text style={styles.metricValue}>{metrics.tut ? `${metrics.tut}s` : '-'}</Text></View>
+                <View style={styles.metricsBlockRight}>
+                  <Text style={styles.formRatingLabelBlock}>Form Rating</Text>
+                  <Text style={styles.formRatingValueBlock}>{formRating !== 'N/A' ? `${formRating}/10` : 'N/A'}</Text>
+                  <View style={styles.metricsGridBlockTrue}>
+                    <View style={styles.metricBlockCellTrue}>
+                      <Text style={styles.metricBlockLabel}>kg</Text>
+                      <Text style={styles.metricBlockValue}>{weight}</Text>
+                    </View>
+                    <View style={styles.metricBlockCellTrue}>
+                      <Text style={styles.metricBlockLabel}>Reps</Text>
+                      <Text style={styles.metricBlockValue}>{reps}</Text>
+                    </View>
+                    <View style={styles.metricBlockCellTrue}>
+                      <Text style={styles.metricBlockLabel}>RPE</Text>
+                      <Text style={styles.metricBlockValue}>{rpe}</Text>
+                    </View>
+                    <View style={styles.metricBlockCellTrue}>
+                      <Text style={styles.metricBlockLabel}>TUT</Text>
+                      <Text style={styles.metricBlockValue}>{tut}</Text>
+                    </View>
                   </View>
                 </View>
               </View>
               {feedback.observations && feedback.observations.map((item, idx) => (
-                <View key={idx} style={styles.feedbackBlock}>
-                  {item.observation ? <><Text style={styles.feedbackHeader}>👀 Observation</Text><Text style={styles.feedbackText}>{item.observation}</Text></> : null}
-                  {item.tip ? <><Text style={styles.feedbackHeader}>🧠 Tip</Text><Text style={styles.feedbackText}>{item.tip}</Text></> : null}
+                <View key={idx} style={styles.feedbackBlockCustom}>
+                  {item.observation ? <><Text style={styles.feedbackHeaderCustom}>👀 Observation</Text><Text style={styles.feedbackTextCustom}>{item.observation}</Text></> : null}
+                  {item.tip ? <><Text style={styles.feedbackHeaderCustom}>🧠 Tip</Text><Text style={styles.feedbackTextCustom}>{item.tip}</Text></> : null}
                 </View>
               ))}
-              {feedback.observations && feedback.observations[0]?.summary && (
-                <View style={styles.feedbackBlock}>
-                  <Text style={styles.feedbackHeader}>👉 Summary</Text>
-                  <Text style={styles.feedbackText}>{feedback.observations[0].summary}</Text>
+              {feedback.summary && (
+                <View style={styles.feedbackBlockCustom}>
+                  <Text style={styles.feedbackHeaderCustom}>👉 Summary</Text>
+                  <Text style={styles.feedbackTextCustom}>{feedback.summary}</Text>
                 </View>
               )}
             </ScrollView>
@@ -72,13 +91,13 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  overlayTrueBlack: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.18)',
     justifyContent: 'flex-end',
   },
-  drawer: {
-    backgroundColor: colors.white,
+  drawerTrueGray: {
+    backgroundColor: '#F7F7F7',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 16,
@@ -90,36 +109,17 @@ const styles = StyleSheet.create({
   headerRowCustom: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 0,
     position: 'relative',
-    paddingBottom: 8,
+    paddingBottom: 0,
   },
   handle: {
-    position: 'absolute',
-    top: 8,
-    left: '50%',
-    marginLeft: -18,
+    alignSelf: 'center',
     width: 36,
     height: 4,
     borderRadius: 2,
     backgroundColor: colors.lightGray,
-    zIndex: 1,
-  },
-  exerciseTitle: {
-    fontSize: 22,
-    fontFamily: 'DMSans-Bold',
-    color: colors.darkGray,
-    textAlign: 'left',
-    marginTop: 16,
-    marginBottom: 0,
-  },
-  setSubtitle: {
-    fontSize: 15,
-    fontFamily: 'DMSans-Regular',
-    color: colors.primary,
-    marginBottom: 4,
-    marginTop: 2,
-    textAlign: 'left',
+    marginBottom: 16,
   },
   closeButton: {
     position: 'absolute',
@@ -128,82 +128,92 @@ const styles = StyleSheet.create({
     padding: 8,
     zIndex: 2,
   },
-  metricsRow: {
+  exerciseTitleTrue: {
+    fontSize: 20,
+    fontFamily: 'DMSans-Bold',
+    color: colors.darkGray,
+    textAlign: 'left',
+    marginBottom: 0,
+    marginTop: 0,
+  },
+  exerciseTitleTrueFallback: {
+    marginBottom: 18,
+  },
+  setSubtitleTrue: {
+    fontSize: 15,
+    fontFamily: 'DMSans-Regular',
+    color: '#007AFF',
+    marginBottom: 18,
+    marginTop: 2,
+    textAlign: 'left',
+  },
+  metricsCardBlockFull: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 18,
-    marginTop: 8,
-    gap: 18,
-  },
-  roundedThumbnail: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: colors.lightGray,
-    marginRight: 16,
-  },
-  roundedThumbnailPlaceholder: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: colors.lightGray,
-    marginRight: 16,
-  },
-  metricsCard: {
-    flex: 1,
-    backgroundColor: '#F7F7FA',
+    backgroundColor: '#fff',
     borderRadius: 18,
-    padding: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 140,
-    elevation: 1,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+    elevation: 2,
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
+    marginBottom: 18,
+    minHeight: 160,
   },
-  formRatingLabel: {
-    fontSize: 13,
+  rectangleThumbnailInCard: {
+    width: 140,
+    height: 180,
+    borderRadius: 16,
+    backgroundColor: colors.lightGray,
+    marginRight: 18,
+  },
+  metricsBlockRight: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  formRatingLabelBlock: {
+    fontSize: 15,
     color: colors.gray,
-    fontFamily: 'DMSans-Medium',
-    marginBottom: 2,
-  },
-  formRatingValue: {
-    fontSize: 22,
     fontFamily: 'DMSans-Bold',
-    marginBottom: 8,
+    marginBottom: 2,
     textAlign: 'center',
   },
-  metricsGridRow: {
-    flexDirection: 'row',
+  formRatingValueBlock: {
+    fontSize: 26,
+    color: colors.darkGray,
+    fontFamily: 'DMSans-Bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  metricsGridBlockTrue: {
     width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 4,
-    gap: 8,
-  },
-  metricBox: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    paddingVertical: 8,
     alignItems: 'center',
-    marginHorizontal: 2,
-    marginBottom: 2,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
+    gap: 0,
   },
-  metricLabel: {
+  metricBlockCellTrue: {
+    width: '46%',
+    backgroundColor: '#F7F7F7',
+    borderRadius: 8,
+    marginBottom: 8,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricBlockLabel: {
     fontSize: 12,
     color: colors.gray,
-    fontFamily: 'DMSans-Medium',
+    fontFamily: 'DMSans-Bold',
     marginBottom: 1,
   },
-  metricValue: {
-    fontSize: 17,
+  metricBlockValue: {
+    fontSize: 15,
     color: colors.darkGray,
     fontFamily: 'DMSans-Bold',
   },
@@ -218,26 +228,26 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: 'center',
   },
-  content: {
+  contentCustom: {
     paddingBottom: 32,
   },
-  feedbackBlock: {
+  feedbackBlockCustom: {
     marginBottom: 18,
-    backgroundColor: '#F7F7FA',
+    backgroundColor: '#fff',
     borderRadius: 14,
-    padding: 14,
+    padding: 16,
     shadowColor: '#000',
-    shadowOpacity: 0.02,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
-  feedbackHeader: {
+  feedbackHeaderCustom: {
     fontSize: 15,
     fontFamily: 'DMSans-Bold',
     color: colors.darkGray,
     marginBottom: 4,
   },
-  feedbackText: {
+  feedbackTextCustom: {
     fontSize: 15,
     fontFamily: 'DMSans-Regular',
     color: colors.gray,

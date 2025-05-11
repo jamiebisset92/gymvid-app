@@ -12,18 +12,15 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # ✅ Subprocess flag
 IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
 
-# ✅ Safely convert NumPy types
 def convert_numpy(obj):
     if isinstance(obj, np.generic):
         return obj.item()
     return obj
 
-# ✅ Extract valid JSON from GPT block
 def extract_json_block(text):
     match = re.search(r"```json\s*(.*?)```", text, re.DOTALL)
     return match.group(1).strip() if match else text.strip()
 
-# ✅ Simplify rep data to avoid token overload
 def compress_rep_data(rep_data):
     simplified = []
     for rep in rep_data:
@@ -35,11 +32,16 @@ def compress_rep_data(rep_data):
         })
     return simplified
 
-# ✅ Main feedback generator
+def calculate_tut_and_rpe(rep_data):
+    total_tut = sum([rep.get("duration_sec", 0) for rep in rep_data])
+    last_rpe = rep_data[-1].get("estimated_RPE", None) if rep_data else None
+    return round(total_tut, 2), last_rpe
+
 def generate_feedback(video_data, rep_data):
     exercise_name = video_data.get("predicted_exercise", "an exercise")
     compressed_reps = compress_rep_data(rep_data)
     rep_data_serialized = json.dumps(compressed_reps, indent=2, default=convert_numpy)
+    total_tut, last_rpe = calculate_tut_and_rpe(rep_data)
 
     prompt = f"""
 You are a highly experienced lifting coach. A user has uploaded a video of themselves performing: {exercise_name}.
@@ -52,27 +54,27 @@ Please return your response in the following JSON format — and use only plain 
 
 {{
   "coaching_feedback": {{
-    "form_rating": integer from 1 to 10 based on these guidelines:
-      10 = textbook form
-      9 = extremely good form – only 1 suggested point of improvement
-      8 = good form – only 2 suggested points of improvement
-      7 = ok form – 3 suggested points of improvement
-      6 = fair form – 4 suggested points of improvement
-      5 = bad form – VERY noticeable risk of injury (only if significant),
-
+    "form_rating": integer (1–10),
     "observations": [
       {{
-        "observation": "Start with an insight like 'I can see that...', 'It looks like you're...', etc.",
-        "tip": "Follow with a coaching cue like 'Try and think about...', 'Next time, be sure to...', etc."
+        "observation": "Your first point here.",
+        "tip": "Your tip for this observation."
+      }},
+      {{
+        "observation": "Second insight here.",
+        "tip": "Second coaching tip."
       }}
     ],
-    "summary": "Wrap up the entire feedback in 1–3 encouraging sentences. Do not repeat previous tips or observations."
+    "summary": "End with a short wrap-up that encourages the user and affirms their efforts."
   }}
 }}
 
-Important:
-- ❌ Do NOT include emojis in the output. We will add them in the frontend headers.
-- ❌ Do NOT include any text or formatting outside of the JSON block.
+Rules:
+- Do NOT include emojis. We'll handle that in the frontend.
+- Avoid mentioning injury or safety unless critically necessary.
+- Focus on cues that help improve performance and movement quality.
+- Keep language encouraging, human, and efficient.
+- ❌ Only return valid JSON. No markdown or explanation.
 """
 
     try:
@@ -91,16 +93,22 @@ Important:
 
         json_text = extract_json_block(raw_text)
         parsed = json.loads(json_text)
-        return parsed["coaching_feedback"]
+
+        result = parsed["coaching_feedback"]
+        result["total_tut"] = total_tut
+        result["rpe"] = last_rpe
+        return result
 
     except Exception as e:
         if not IS_SUBPROCESS:
             print("❌ Coaching GPT parsing error:", str(e))
         return {
             "form_rating": 0,
+            "rpe": None,
+            "total_tut": None,
             "observations": [{
                 "observation": "Unable to evaluate form due to error.",
-                "tip": "Please try uploading a different video or check your form manually.",
+                "tip": "Try uploading a different video or review your form manually."
             }],
             "summary": f"Something went wrong generating your feedback: {str(e)}"
         }
