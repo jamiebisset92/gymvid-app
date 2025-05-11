@@ -1,5 +1,3 @@
-# backend/ai/analyze/coaching_feedback.py
-
 import os
 import json
 import re
@@ -11,59 +9,70 @@ from dotenv import load_dotenv
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# ✅ Subprocess flag
 IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
 
+# ✅ Safely convert NumPy types
 def convert_numpy(obj):
     if isinstance(obj, np.generic):
         return obj.item()
     return obj
 
+# ✅ Extract valid JSON from GPT block
 def extract_json_block(text):
     match = re.search(r"```json\s*(.*?)```", text, re.DOTALL)
     return match.group(1).strip() if match else text.strip()
 
+# ✅ Simplify rep data to avoid token overload
 def compress_rep_data(rep_data):
-    return [
-        {
+    simplified = []
+    for rep in rep_data:
+        simplified.append({
             "rep": rep.get("rep"),
             "duration_sec": rep.get("duration_sec"),
             "estimated_RPE": rep.get("estimated_RPE"),
             "estimated_RIR": rep.get("estimated_RIR")
-        }
-        for rep in rep_data
-    ]
+        })
+    return simplified
 
+# ✅ Main feedback generator
 def generate_feedback(video_data, rep_data):
     exercise_name = video_data.get("predicted_exercise", "an exercise")
     compressed_reps = compress_rep_data(rep_data)
     rep_data_serialized = json.dumps(compressed_reps, indent=2, default=convert_numpy)
 
     prompt = f"""
-You are a highly experienced lifting coach. A user uploaded a video of themselves performing: {exercise_name}.
+You are a highly experienced lifting coach. A user has uploaded a video of themselves performing: {exercise_name}.
 
-Here is the rep data:
+Here is the data extracted from their reps:
 
 {rep_data_serialized}
 
-Please follow this exact format and return JSON only:
+Please return your response in the following JSON format — and use only plain text, no emojis or decorative characters:
 
 {{
   "coaching_feedback": {{
-    "form_rating": integer (1–10),
+    "form_rating": integer from 1 to 10 based on these guidelines:
+      10 = textbook form
+      9 = extremely good form – only 1 suggested point of improvement
+      8 = good form – only 2 suggested points of improvement
+      7 = ok form – 3 suggested points of improvement
+      6 = fair form – 4 suggested points of improvement
+      5 = bad form – VERY noticeable risk of injury (only if significant),
+
     "observations": [
       {{
-        "👀 Observation": "Start with an insight like 'It looks like you're...', etc. No emoji inside.",
-        "🧠 Tip": "Give a helpful cue like 'Try to...', etc. No emoji inside.",
-        "👉 Summary": "Encouraging 1–3 sentence summary. No emoji inside."
+        "observation": "Start with an insight like 'I can see that...', 'It looks like you're...', etc.",
+        "tip": "Follow with a coaching cue like 'Try and think about...', 'Next time, be sure to...', etc.",
+        "summary": "End with a short wrap-up (1–3 sentences) that feels encouraging and natural."
       }}
     ]
   }}
 }}
 
-Rules:
-- Do NOT include emojis in the values — they are in the keys only.
-- Do NOT mention injury or safety unless essential.
-- Do NOT include any extra commentary or preamble — just JSON.
+Important:
+- ❌ Do NOT include emojis in the output. We will add them in the frontend headers.
+- ❌ Do NOT include any text or formatting outside of the JSON block.
 """
 
     try:
@@ -90,8 +99,8 @@ Rules:
         return {
             "form_rating": 0,
             "observations": [{
-                "👀 Observation": "Unable to evaluate form due to error.",
-                "🧠 Tip": "Try uploading a different video or check your form manually.",
-                "👉 Summary": f"Something went wrong generating your feedback: {str(e)}"
+                "observation": "Unable to evaluate form due to error.",
+                "tip": "Please try uploading a different video or check your form manually.",
+                "summary": f"Something went wrong generating your feedback: {str(e)}"
             }]
         }
