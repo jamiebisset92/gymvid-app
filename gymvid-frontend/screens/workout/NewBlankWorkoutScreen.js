@@ -616,7 +616,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
       const hasUploadedVideo = !!data.video_url;
 
       setExercises(prev => {
-        return prev.map(ex => {
+        const updated = prev.map(ex => {
           if (ex.id === exerciseId) {
             if (subExerciseId) {
               return {
@@ -634,6 +634,20 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                               localVideo: hasUploadedVideo ? null : s.localVideo,
                               isConfirmed: true,
                               isSubmitting: false,
+                              weight: Number(
+                                data.data?.weight ??
+                                data.data?.weight_kg ??
+                                data.data?.kg ??
+                                s.weight ??
+                                s.weight_kg ??
+                                s.kg ??
+                                0
+                              ),
+                              reps: Number(
+                                data.data?.reps ??
+                                s.reps ??
+                                0
+                              ),
                             }
                           : s
                       )
@@ -654,6 +668,20 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                         localVideo: hasUploadedVideo ? null : s.localVideo,
                         isConfirmed: true,
                         isSubmitting: false,
+                        weight: Number(
+                          data.data?.weight ??
+                          data.data?.weight_kg ??
+                          data.data?.kg ??
+                          s.weight ??
+                          s.weight_kg ??
+                          s.kg ??
+                          0
+                        ),
+                        reps: Number(
+                          data.data?.reps ??
+                          s.reps ??
+                          0
+                        ),
                       }
                     : s
                 )
@@ -662,6 +690,20 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
           }
           return ex;
         });
+        // Log the updated set for debugging
+        const ex = updated.find(e => e.id === exerciseId);
+        let set = null;
+        if (ex) {
+          if (subExerciseId) {
+            const subEx = ex.exercises.find(se => se.id === subExerciseId);
+            if (subEx) set = subEx.sets.find(s => s.id === setId);
+          } else {
+            set = ex.sets.find(s => s.id === setId);
+          }
+        }
+        console.log('CONFIRMED SET:', set);
+        console.log('FULL EXERCISES STATE:', updated);
+        return updated;
       });
     } catch (error) {
       console.error('❌ Error uploading set to /manual_log:', error);
@@ -1371,6 +1413,27 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
     setIsPreviewVisible(false);
     setPreviewVideo(null);
   };
+
+  // Before rendering CoachingFeedbackModal
+  const modalSet = (() => {
+    if (!feedbackExerciseId || !feedbackSetId) return null;
+    const exercise = exercises.find(e => e.id === feedbackExerciseId);
+    if (!exercise) return null;
+    let set = null;
+    if (exercise.isSuperset) {
+      for (const subEx of exercise.exercises) {
+        set = subEx.sets.find(s => s.id === feedbackSetId);
+        if (set) break;
+      }
+    } else {
+      set = exercise.sets.find(s => s.id === feedbackSetId);
+    }
+    return set;
+  })();
+  console.log('MODAL SET PROP:', modalSet);
+  if (modalSet) {
+    console.log('MODAL SET WEIGHT:', modalSet.weight, 'REPS:', modalSet.reps);
+  }
 
   return (
     <RootSiblingParent>
@@ -2457,6 +2520,21 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
               rpe: set.rpe ?? '',
               tut: set.tut ?? '',
             };
+          })()}
+          set={(() => {
+            if (!feedbackExerciseId || !feedbackSetId) return null;
+            const exercise = exercises.find(e => e.id === feedbackExerciseId);
+            if (!exercise) return null;
+            let set = null;
+            if (exercise.isSuperset) {
+              for (const subEx of exercise.exercises) {
+                set = subEx.sets.find(s => s.id === feedbackSetId);
+                if (set) break;
+              }
+            } else {
+              set = exercise.sets.find(s => s.id === feedbackSetId);
+            }
+            return set;
           })()}
         />
         

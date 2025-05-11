@@ -3,32 +3,41 @@ import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Scr
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../config/colors';
 
-export default function CoachingFeedbackModal({ visible, onClose, loading, feedback, videoThumbnail, exerciseName, setNumber, metrics, set, parentExerciseName }) {
-  let displayExerciseName = parentExerciseName || exerciseName;
+export default function CoachingFeedbackModal({
+  visible,
+  onClose,
+  loading,
+  feedback,
+  videoThumbnail,
+  exerciseName,
+  setNumber,
+  metrics,
+  set,
+  parentExerciseName
+}) {
+  let displayExerciseName = parentExerciseName || set?.movement || exerciseName;
   const isFallbackHeader = !displayExerciseName;
   if (isFallbackHeader) displayExerciseName = 'AI Form Analysis';
-  const weight = set?.weight || set?.kg || '-';
-  const reps = set?.reps || '-';
+
+  const weight = (set?.kg || set?.weight) ?? '-';
+  const reps = set?.reps ?? '-';
   const rpe = feedback?.rpe || '-';
   const tut = feedback?.total_tut ? `${feedback.total_tut}s` : '-';
   const formRating = feedback?.form_rating || 'N/A';
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlayTrueBlack}>
         <View style={styles.drawerTrueGray}>
+          <View style={styles.handle} />
           <View style={styles.headerRowCustom}>
-            <View style={styles.handle} />
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
               <Ionicons name="close" size={28} color={colors.gray} />
             </TouchableOpacity>
           </View>
-          <Text style={[styles.exerciseTitleTrue, isFallbackHeader && styles.exerciseTitleTrueFallback]}>{displayExerciseName}</Text>
+          <Text style={[styles.exerciseTitleTrue, isFallbackHeader && styles.exerciseTitleTrueFallback]}>
+            {displayExerciseName}
+          </Text>
           {!isFallbackHeader && (
             <Text style={styles.setSubtitleTrue}>{`Set ${setNumber}: AI Form Analysis`}</Text>
           )}
@@ -70,8 +79,18 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
               </View>
               {feedback.observations && feedback.observations.map((item, idx) => (
                 <View key={idx} style={styles.feedbackBlockCustom}>
-                  {item.observation ? <><Text style={styles.feedbackHeaderCustom}>👀 Observation</Text><Text style={styles.feedbackTextCustom}>{item.observation}</Text></> : null}
-                  {item.tip ? <><Text style={styles.feedbackHeaderCustom}>🧠 Tip</Text><Text style={styles.feedbackTextCustom}>{item.tip}</Text></> : null}
+                  {item.observation && (
+                    <>
+                      <Text style={styles.feedbackHeaderCustom}>👀 Observation</Text>
+                      <Text style={styles.feedbackTextCustom}>{item.observation}</Text>
+                    </>
+                  )}
+                  {item.tip && (
+                    <>
+                      <Text style={styles.feedbackHeaderCustom}>🧠 Tip</Text>
+                      <Text style={styles.feedbackTextCustom}>{item.tip}</Text>
+                    </>
+                  )}
                 </View>
               ))}
               {feedback.summary && (
@@ -106,13 +125,6 @@ const styles = StyleSheet.create({
     minHeight: 340,
     maxHeight: '80%',
   },
-  headerRowCustom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 0,
-    position: 'relative',
-    paddingBottom: 0,
-  },
   handle: {
     alignSelf: 'center',
     width: 36,
@@ -120,6 +132,12 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.lightGray,
     marginBottom: 16,
+  },
+  headerRowCustom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+    paddingBottom: 0,
   },
   closeButton: {
     position: 'absolute',
@@ -146,6 +164,20 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     marginTop: 2,
     textAlign: 'left',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 32,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.gray,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  contentCustom: {
+    paddingBottom: 32,
   },
   metricsCardBlockFull: {
     width: '100%',
@@ -217,20 +249,6 @@ const styles = StyleSheet.create({
     color: colors.darkGray,
     fontFamily: 'DMSans-Bold',
   },
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 32,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: colors.gray,
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  contentCustom: {
-    paddingBottom: 32,
-  },
   feedbackBlockCustom: {
     marginBottom: 18,
     backgroundColor: '#fff',
@@ -254,4 +272,4 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     lineHeight: 20,
   },
-}); 
+});
