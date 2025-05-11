@@ -534,9 +534,6 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
             return exercise;
           });
         });
-
-        // Start upload in background
-        handleSetConfirm(exerciseId, setId);
       }
     } catch (error) {
       console.error('Error selecting video:', error);
@@ -616,7 +613,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
       const hasUploadedVideo = !!data.video_url;
 
       setExercises(prev => {
-        const updated = prev.map(ex => {
+        return prev.map(ex => {
           if (ex.id === exerciseId) {
             if (subExerciseId) {
               return {
@@ -634,20 +631,8 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                               localVideo: hasUploadedVideo ? null : s.localVideo,
                               isConfirmed: true,
                               isSubmitting: false,
-                              weight: Number(
-                                data.data?.weight ??
-                                data.data?.weight_kg ??
-                                data.data?.kg ??
-                                s.weight ??
-                                s.weight_kg ??
-                                s.kg ??
-                                0
-                              ),
-                              reps: Number(
-                                data.data?.reps ??
-                                s.reps ??
-                                0
-                              ),
+                              weight: (data.data?.weight !== undefined ? data.data.weight : (data.data?.weight_kg !== undefined ? data.data.weight_kg : (s.kg !== undefined ? s.kg : s.weight))),
+                              reps: (data.data?.reps !== undefined ? data.data.reps : s.reps),
                             }
                           : s
                       )
@@ -668,20 +653,8 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                         localVideo: hasUploadedVideo ? null : s.localVideo,
                         isConfirmed: true,
                         isSubmitting: false,
-                        weight: Number(
-                          data.data?.weight ??
-                          data.data?.weight_kg ??
-                          data.data?.kg ??
-                          s.weight ??
-                          s.weight_kg ??
-                          s.kg ??
-                          0
-                        ),
-                        reps: Number(
-                          data.data?.reps ??
-                          s.reps ??
-                          0
-                        ),
+                        weight: (data.data?.weight !== undefined ? data.data.weight : (data.data?.weight_kg !== undefined ? data.data.weight_kg : (s.kg !== undefined ? s.kg : s.weight))),
+                        reps: (data.data?.reps !== undefined ? data.data.reps : s.reps),
                       }
                     : s
                 )
@@ -690,20 +663,6 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
           }
           return ex;
         });
-        // Log the updated set for debugging
-        const ex = updated.find(e => e.id === exerciseId);
-        let set = null;
-        if (ex) {
-          if (subExerciseId) {
-            const subEx = ex.exercises.find(se => se.id === subExerciseId);
-            if (subEx) set = subEx.sets.find(s => s.id === setId);
-          } else {
-            set = ex.sets.find(s => s.id === setId);
-          }
-        }
-        console.log('CONFIRMED SET:', set);
-        console.log('FULL EXERCISES STATE:', updated);
-        return updated;
       });
     } catch (error) {
       console.error('❌ Error uploading set to /manual_log:', error);
@@ -888,6 +847,8 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
 
   // Replace handleAddVideoAI with the new flow
   const handleAddVideoAI = async () => {
+    let placeholderId = null;
+    
     try {
       // Fix for Supabase v1.x
       const user = supabase.auth.user();
@@ -917,62 +878,93 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
       const videoUri = result.assets[0].uri;
 
       // Show placeholder card
-      const placeholderId = generateId();
+      placeholderId = generateId();
       setPendingCards(prev => [
         ...prev,
         { id: placeholderId, videoUri }
       ]);
 
-      // POST to /analyze/log_set
+      // Upload video directly to process_set endpoint
       const formData = new FormData();
-      formData.append('user_id', user_id);
       formData.append('video', {
         uri: videoUri,
         type: 'video/mp4',
         name: videoUri.split('/').pop()
       });
+      formData.append('user_id', user_id);
+      formData.append('coaching', 'false');
 
-      const response = await fetch('https://gymvid-app.onrender.com/analyze/log_set', {
+      console.log('Uploading video to process_set...');
+      const response = await fetch('https://gymvid-app.onrender.com/process_set', {
         method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
         body: formData,
       });
 
       const json = await response.json();
+      console.log('Process set response:', json);
+
       if (!json.success || !json.data) {
-        throw new Error('Video upload failed');
+        throw new Error(json.message || 'Video analysis failed');
       }
 
-      // Remove placeholder card
-      setPendingCards(prev => prev.filter(card => card.id !== placeholderId));
+      // Remove placeholder card if it exists
+      if (placeholderId) {
+        setPendingCards(prev => prev.filter(card => card.id !== placeholderId));
+      }
 
-      // Add new exercise with video
+      // Add new exercise with analyzed data
       setExercises(prev => [
         ...prev,
         {
           id: generateId(),
-          name: 'New Exercise',
+          name: json.data.predicted_exercise || 'New Exercise',
           sets: [
             {
               id: generateId(),
-              weight: '',
+              weight: json.data.estimated_weight?.toString() || '',
               weightUnit: weightUnits,
-              reps: '',
-              rpe: '',
-              tut: '',
+              reps: json.data.reps?.toString() || '',
+              rpe: json.data.rpe?.toString() || '',
+              tut: json.data.total_tut?.toString() || '',
               completed: false,
               video: json.data.video_url,
               thumbnail_url: json.data.thumbnail_url,
-              canAnalyzeForm: true
+              canAnalyzeForm: !!json.data.coaching_feedback,
+              ai_analysis: {
+                exercise_name: json.data.predicted_exercise,
+                confidence: json.data.confidence || 0,
+                equipment: json.data.equipment,
+                variation: json.data.variation
+              }
             }
           ]
         }
       ]);
 
+      // Expand the newly added exercise
+      setExpandedExercises(prev => ({ ...prev, [exercises.length]: true }));
+
     } catch (error) {
-      console.error('Video upload error:', error);
-      Toast.show('Video upload failed. Please try again.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
-      setPendingCards(prev => prev.filter(card => card.id !== placeholderId));
+      console.error('Video upload/analysis error:', error?.response?.data || error.message);
+      
+      // Remove placeholder card if it exists
+      if (placeholderId) {
+        setPendingCards(prev => prev.filter(card => card.id !== placeholderId));
+      }
+
+      // Show error toast
+      Toast.show(
+        'Failed to analyze video. Please try again.',
+        { 
+          duration: Toast.durations.LONG,
+          position: Toast.positions.BOTTOM,
+          backgroundColor: '#FF3B30',
+          textColor: '#FFFFFF'
+        }
+      );
     }
   };
 
@@ -1413,27 +1405,6 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
     setIsPreviewVisible(false);
     setPreviewVideo(null);
   };
-
-  // Before rendering CoachingFeedbackModal
-  const modalSet = (() => {
-    if (!feedbackExerciseId || !feedbackSetId) return null;
-    const exercise = exercises.find(e => e.id === feedbackExerciseId);
-    if (!exercise) return null;
-    let set = null;
-    if (exercise.isSuperset) {
-      for (const subEx of exercise.exercises) {
-        set = subEx.sets.find(s => s.id === feedbackSetId);
-        if (set) break;
-      }
-    } else {
-      set = exercise.sets.find(s => s.id === feedbackSetId);
-    }
-    return set;
-  })();
-  console.log('MODAL SET PROP:', modalSet);
-  if (modalSet) {
-    console.log('MODAL SET WEIGHT:', modalSet.weight, 'REPS:', modalSet.reps);
-  }
 
   return (
     <RootSiblingParent>

@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import json
+import re
 
 # ✅ Import utils and AI modules
 from backend.utils.aws_utils import download_file_from_s3
@@ -73,7 +74,7 @@ async def log_set(
         if os.path.exists(temp_video_path):
             os.remove(temp_video_path)
 
-# ✅ Legacy subprocess route
+# ✅ Legacy subprocess route with robust stdout JSON extraction
 @app.post("/process_set")
 async def process_set(
     video: UploadFile = File(None),
@@ -107,9 +108,14 @@ async def process_set(
             env=env
         )
         try:
-            output = json.loads(result.stdout.strip())
-            return JSONResponse({"success": True, "data": output, "stderr": result.stderr})
-        except json.JSONDecodeError as e:
+            # Extract JSON block even if logs are included
+            match = re.search(r"({.*})", result.stdout.strip(), re.DOTALL)
+            if match:
+                output = json.loads(match.group(1))
+                return JSONResponse({"success": True, "data": output, "stderr": result.stderr})
+            else:
+                raise ValueError("No valid JSON found in output.")
+        except Exception as e:
             return JSONResponse({"success": False, "error": f"Failed to parse JSON: {str(e)}", "stdout": result.stdout, "stderr": result.stderr})
     except subprocess.CalledProcessError as e:
         return JSONResponse(status_code=500, content={"success": False, "error": f"Subprocess failed with exit code {e.returncode}", "stdout": e.stdout, "stderr": e.stderr})
