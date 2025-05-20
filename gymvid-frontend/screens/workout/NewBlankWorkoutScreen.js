@@ -471,11 +471,74 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
       return;
     }
     try {
-      // TODO: Implement save to Supabase
-      console.log('Saving workout to Supabase:', exercises);
+      const user = await supabase.auth.getUser();
+      const userId = user.data?.id;
+      if (!userId) throw new Error('User not authenticated');
+
+      const workoutName = workoutNameInput || new Date().toLocaleString();
+      const workoutDuration = calculateWorkoutDuration(); // Implement this function to calculate duration
+
+      let totalExercises = 0;
+      let totalSets = 0;
+      let totalReps = 0;
+      let totalWeightLifted = 0;
+
+      const exerciseData = exercises.map(exercise => {
+        const sets = exercise.sets.map(set => {
+          const setTotalWeight = (set.weight_kg || set.weight_lb) * set.reps;
+          totalWeightLifted += setTotalWeight;
+          totalReps += set.reps;
+          totalSets += 1;
+          return {
+            weight: set.weight_kg || set.weight_lb,
+            reps: set.reps,
+            rpe: set.rpe,
+            rir: set.rir,
+            video_url: set.video_url,
+            set_total_weight: setTotalWeight
+          };
+        });
+
+        const exerciseTotalWeight = sets.reduce((sum, set) => sum + set.set_total_weight, 0);
+        const exerciseTotalReps = sets.reduce((sum, set) => sum + set.reps, 0);
+        const numberOfSets = sets.length;
+
+        totalExercises += 1;
+
+        return {
+          name: exercise.exercise_name,
+          sets: JSON.stringify(sets),
+          exercise_total_weight: exerciseTotalWeight,
+          exercise_total_reps: exerciseTotalReps,
+          number_of_sets: numberOfSets
+        };
+      });
+
+      const { data: workoutData, error: workoutError } = await supabase.from('workouts').insert({
+        user_id: userId,
+        workout_name: workoutName,
+        duration: workoutDuration,
+        total_exercises: totalExercises,
+        total_sets: totalSets,
+        total_reps: totalReps,
+        total_weight_lifted: totalWeightLifted,
+        created_at: new Date().toISOString()
+      }).single();
+
+      if (workoutError) throw workoutError;
+
+      const workoutId = workoutData.id;
+
+      const { error: exercisesError } = await supabase.from('exercises').insert(
+        exerciseData.map(exercise => ({ ...exercise, workout_id: workoutId }))
+      );
+
+      if (exercisesError) throw exercisesError;
+
       Alert.alert('Success', 'Workout saved successfully');
       navigation.goBack();
     } catch (error) {
+      console.error('Failed to save workout:', error);
       Alert.alert('Error', 'Failed to save workout. Please try again.');
     }
   };
@@ -920,24 +983,24 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
         ...prev,
         {
           id: generateId(),
-          name: json.data.predicted_exercise || 'New Exercise',
+          name: json.data.exercise_prediction?.movement || 'New Exercise',
           sets: [
             {
               id: generateId(),
-              weight: json.data.estimated_weight?.toString() || '',
+              weight: json.data.weight_estimation?.estimated_weight_kg?.toString() || '',
               weightUnit: weightUnits,
-              reps: json.data.reps?.toString() || '',
-              rpe: json.data.rpe?.toString() || '',
-              tut: json.data.total_tut?.toString() || '',
+              reps: json.data.rep_data?.length?.toString() || '',
+              rpe: '',
+              tut: '',
               completed: false,
               video: json.data.video_url,
               thumbnail_url: json.data.thumbnail_url,
               canAnalyzeForm: !!json.data.coaching_feedback,
               ai_analysis: {
-                exercise_name: json.data.predicted_exercise,
-                confidence: json.data.confidence || 0,
-                equipment: json.data.equipment,
-                variation: json.data.variation
+                exercise_name: json.data.exercise_prediction?.movement,
+                confidence: json.data.exercise_prediction?.confidence || 0,
+                equipment: json.data.exercise_prediction?.equipment,
+                variation: json.data.exercise_prediction?.variation
               }
             }
           ]
@@ -1505,485 +1568,491 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
               const faded = draggingIndex !== null && !isActive;
               const expanded = expandedExercises[exercise.id];
               return (
-                <TouchableOpacity
-                  onPress={() => toggleExerciseExpanded(exercise.id)}
-                  onLongPress={drag}
-                  disabled={isActive}
-                  activeOpacity={0.95}
-                  style={{ opacity: faded ? 0.4 : 1 }}
+                <Swipeable
+                  ref={ref => swipeableRefs.current[`${exercise.id}`] = ref}
+                  renderRightActions={() => renderRightActions(exercise.id)}
+                  rightThreshold={5} // Reduce the swipe threshold to bring the delete button closer
                 >
-                  <View style={styles.exerciseTableCard}>
-                    {/* Card Header with expand/collapse and options */}
-                    <View style={styles.exerciseTableHeader}>
-                      {exercise.isSuperset ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name="repeat" size={20} color={colors.primary} style={{ marginRight: 8 }} />
-                          <Text style={[styles.exerciseTableTitle, { color: colors.primary, fontSize: 17, fontFamily: 'DMSans-Regular' }]}>Superset</Text>
-                        </View>
-                      ) : (
-                        <Text style={styles.exerciseTableTitle}>{exercise.name}</Text>
-                      )}
-                      <View style={styles.headerButtons}>
-                        <TouchableOpacity 
-                          style={styles.optionsButton}
-                          onPress={() => handleExerciseOptions(exercise.id)}
-                        >
-                          <Ionicons name="ellipsis-horizontal" size={20} color={colors.gray} />
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={styles.expandButton}
-                        >
-                          <Ionicons 
-                            name={expanded ? "chevron-down" : "chevron-forward"} 
-                            size={20} 
-                            color={colors.gray} 
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                    {/* Collapsed Superset View */}
-                    {!expanded && exercise.isSuperset ? (
-                      <View style={{ paddingVertical: 0 }}>
-                        {exercise.exercises.map((ex, i) => (
-                          <View key={ex.id} style={{ flexDirection: 'row', alignItems: 'center', marginTop: i === 0 ? 0 : 4 }}>
-                            <Feather name="corner-right-up" size={18} color={colors.primary} style={{ marginRight: 6, transform: [{ rotate: '90deg' }] }} />
-                            <Text style={styles.exerciseTableTitle}>{ex.name}</Text>
+                  <TouchableOpacity
+                    onPress={() => toggleExerciseExpanded(exercise.id)}
+                    // REMOVE onLongPress={drag} from here
+                    disabled={isActive}
+                    activeOpacity={0.95}
+                    style={{ opacity: faded ? 0.4 : 1 }}
+                  >
+                    <View style={styles.exerciseTableCard}>
+                      {/* Card Header with expand/collapse and options */}
+                      <View style={styles.exerciseTableHeader}>
+                        {exercise.isSuperset ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Ionicons name="repeat" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+                            <Text style={[styles.exerciseTableTitle, { color: colors.primary, fontSize: 17, fontFamily: 'DMSans-Regular' }]}>Superset</Text>
                           </View>
-                        ))}
-                        <Text style={[styles.exerciseTableSubtitle, { marginTop: 7 }]}> 
-                          {exercise.exercises.reduce((sum, ex) => sum + (ex.sets?.length || 0), 0)} sets completed
-                        </Text>
+                        ) : (
+                          <Text style={styles.exerciseTableTitle}>{exercise.name}</Text>
+                        )}
+                        <View style={styles.headerButtons}>
+                          <TouchableOpacity 
+                            style={styles.optionsButton}
+                            onPress={() => handleExerciseOptions(exercise.id)}
+                          >
+                            <Ionicons name="ellipsis-horizontal" size={20} color={colors.gray} />
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={styles.expandButton}
+                          >
+                            <Ionicons 
+                              name={expanded ? "chevron-down" : "chevron-forward"} 
+                              size={20} 
+                              color={colors.gray} 
+                            />
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                    ) : null}
-                    {/* Expanded Superset View */}
-                    {expanded && exercise.isSuperset ? (
-                      <>
-                        {exercise.exercises.map((ex, exIdx) => (
-                          <React.Fragment key={ex.id}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 0 }}>
+                      {/* Collapsed Superset View */}
+                      {!expanded && exercise.isSuperset ? (
+                        <View style={{ paddingVertical: 0 }}>
+                          {exercise.exercises.map((ex, i) => (
+                            <View key={ex.id} style={{ flexDirection: 'row', alignItems: 'center', marginTop: i === 0 ? 0 : 4 }}>
                               <Feather name="corner-right-up" size={18} color={colors.primary} style={{ marginRight: 6, transform: [{ rotate: '90deg' }] }} />
-                              <Text style={[
-                                styles.exerciseTableTitle,
-                                exIdx === 0 && { marginTop: 0 },
-                                { marginBottom: 10 }
-                              ]}>{ex.name}</Text>
+                              <Text style={styles.exerciseTableTitle}>{ex.name}</Text>
                             </View>
-                            <View style={styles.tableContainer}>
-                              {/* Superset expanded header row */}
-                              <View style={styles.tableHeaderRow}>
-                                <View style={styles.tableCellSetHeader}>
-                                  <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}>#</Text>
-                                </View>
-                                <TextInput
-                                  style={styles.tableCellInputHeaderInput}
-                                  value={weightUnits}
-                                  editable={false}
-                                  selectTextOnFocus={false}
-                                  pointerEvents="none"
-                                />
-                                <TextInput
-                                  style={styles.tableCellInputHeaderInput}
-                                  value="Reps"
-                                  editable={false}
-                                  selectTextOnFocus={false}
-                                  pointerEvents="none"
-                                />
-                                {enableExertionTracking ? (
+                          ))}
+                          <Text style={[styles.exerciseTableSubtitle, { marginTop: 7 }]}> 
+                            {exercise.exercises.reduce((sum, ex) => sum + (ex.sets?.length || 0), 0)} sets completed
+                          </Text>
+                        </View>
+                      ) : null}
+                      {/* Expanded Superset View */}
+                      {expanded && exercise.isSuperset ? (
+                        <>
+                          {exercise.exercises.map((ex, exIdx) => (
+                            <React.Fragment key={ex.id}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 0 }}>
+                                <Feather name="corner-right-up" size={18} color={colors.primary} style={{ marginRight: 6, transform: [{ rotate: '90deg' }] }} />
+                                <Text style={[
+                                  styles.exerciseTableTitle,
+                                  exIdx === 0 && { marginTop: 0 },
+                                  { marginBottom: 10 }
+                                ]}>{ex.name}</Text>
+                              </View>
+                              <View style={styles.tableContainer}>
+                                {/* Superset expanded header row */}
+                                <View style={styles.tableHeaderRow}>
+                                  <View style={styles.tableCellSetHeader}>
+                                    <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}>#</Text>
+                                  </View>
                                   <TextInput
-                                    style={styles.tableCellInputHeaderInputNarrow}
-                                    value={exertionMetric}
+                                    style={styles.tableCellInputHeaderInput}
+                                    value={weightUnits}
                                     editable={false}
                                     selectTextOnFocus={false}
                                     pointerEvents="none"
                                   />
-                                ) : null}
-                                <View style={styles.tableCellIconHeader}>
-                                  <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
-                                </View>
-                                <View style={styles.tableCellCheckHeader}>
-                                  <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
-                                </View>
-                              </View>
-                              {ex.sets.map((set, setIdx) => (
-                                <Swipeable
-                                  key={set.id}
-                                  ref={ref => swipeableRefs.current[`superset-${exercise.id}-${ex.id}-${set.id}`] = ref}
-                                  renderRightActions={() => renderRightActions(exercise.id, set.id, ex.id)}
-                                  rightThreshold={40}
-                                >
-                                  <View style={styles.tableRow}>
-                                    <Text style={styles.tableCellSet}>{setIdx + 1}</Text>
+                                  <TextInput
+                                    style={styles.tableCellInputHeaderInput}
+                                    value="Reps"
+                                    editable={false}
+                                    selectTextOnFocus={false}
+                                    pointerEvents="none"
+                                  />
+                                  {enableExertionTracking ? (
                                     <TextInput
-                                      style={styles.tableCellInput}
-                                      value={set.weight?.toString() ?? ''}
-                                      onChangeText={v => handleUpdateSet(exercise.id, set.id, 'weight', v, ex.id)}
-                                      onEndEditing={e => handlePropagateSetValue(exercise.id, set.id, 'weight', e.nativeEvent.text, ex.id)}
-                                      keyboardType="decimal-pad"
-                                      placeholder="0"
-                                      placeholderTextColor="#AAAAAA"
-                                      editable={!set.completed}
-                                      maxLength={4}
-                                      returnKeyType="done"
-                                      inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
+                                      style={styles.tableCellInputHeaderInputNarrow}
+                                      value={exertionMetric}
+                                      editable={false}
+                                      selectTextOnFocus={false}
+                                      pointerEvents="none"
                                     />
-                                    <TextInput
-                                      style={styles.tableCellInput}
-                                      value={set.reps?.toString() ?? ''}
-                                      onChangeText={v => handleUpdateSet(exercise.id, set.id, 'reps', v, ex.id)}
-                                      onEndEditing={e => handlePropagateSetValue(exercise.id, set.id, 'reps', e.nativeEvent.text, ex.id)}
-                                      keyboardType="number-pad"
-                                      placeholder="0"
-                                      placeholderTextColor="#AAAAAA"
-                                      editable={!set.completed}
-                                      maxLength={3}
-                                      returnKeyType="done"
-                                      inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
-                                    />
-                                    {enableExertionTracking && (
+                                  ) : null}
+                                  <View style={styles.tableCellIconHeader}>
+                                    <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
+                                  </View>
+                                  <View style={styles.tableCellCheckHeader}>
+                                    <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
+                                  </View>
+                                </View>
+                                {ex.sets.map((set, setIdx) => (
+                                  <Swipeable
+                                    key={set.id}
+                                    ref={ref => swipeableRefs.current[`superset-${exercise.id}-${ex.id}-${set.id}`] = ref}
+                                    renderRightActions={() => renderRightActions(exercise.id, set.id, ex.id)}
+                                    rightThreshold={40}
+                                  >
+                                    <View style={styles.tableRow}>
+                                      <Text style={styles.tableCellSet}>{setIdx + 1}</Text>
                                       <TextInput
-                                        style={styles.tableCellInputNarrow}
-                                        value={set[exertionMetric.toLowerCase()]?.toString() ?? ''}
-                                        onChangeText={v => handleUpdateSet(exercise.id, set.id, exertionMetric.toLowerCase(), v, ex.id)}
+                                        style={styles.tableCellInput}
+                                        value={set.weight?.toString() ?? ''}
+                                        onChangeText={v => handleUpdateSet(exercise.id, set.id, 'weight', v, ex.id)}
+                                        onEndEditing={e => handlePropagateSetValue(exercise.id, set.id, 'weight', e.nativeEvent.text, ex.id)}
                                         keyboardType="decimal-pad"
-                                        placeholder={exertionMetric}
+                                        placeholder="0"
+                                        placeholderTextColor="#AAAAAA"
+                                        editable={!set.completed}
+                                        maxLength={4}
+                                        returnKeyType="done"
+                                        inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
+                                      />
+                                      <TextInput
+                                        style={styles.tableCellInput}
+                                        value={set.reps?.toString() ?? ''}
+                                        onChangeText={v => handleUpdateSet(exercise.id, set.id, 'reps', v, ex.id)}
+                                        onEndEditing={e => handlePropagateSetValue(exercise.id, set.id, 'reps', e.nativeEvent.text, ex.id)}
+                                        keyboardType="number-pad"
+                                        placeholder="0"
                                         placeholderTextColor="#AAAAAA"
                                         editable={!set.completed}
                                         maxLength={3}
                                         returnKeyType="done"
                                         inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                                       />
-                                    )}
-                                    {set.thumbnail || set.thumbnail_url ? (
-                                      <TouchableOpacity 
-                                        style={styles.thumbnailContainer}
-                                        onPress={() => handleVideoPreview(set)}
-                                      >
-                                        <Image 
-                                          source={{ uri: set.thumbnail || set.thumbnail_url }} 
-                                          style={styles.thumbnail}
-                                          resizeMode="cover"
+                                      {enableExertionTracking && (
+                                        <TextInput
+                                          style={styles.tableCellInputNarrow}
+                                          value={set[exertionMetric.toLowerCase()]?.toString() ?? ''}
+                                          onChangeText={v => handleUpdateSet(exercise.id, set.id, exertionMetric.toLowerCase(), v, ex.id)}
+                                          keyboardType="decimal-pad"
+                                          placeholder="-"
+                                          placeholderTextColor="#AAAAAA"
+                                          editable={!set.completed}
+                                          maxLength={3}
+                                          returnKeyType="done"
+                                          inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                                         />
-                                      </TouchableOpacity>
-                                    ) : (
-                                      <TouchableOpacity 
-                                        style={styles.cameraButtonContainer}
-                                        onPress={() => handleVideoUpload(exercise.id, set.id)}
-                                      >
-                                        <View style={styles.cameraButtonInner}>
-                                          <Ionicons name="camera-outline" size={24} color={colors.gray} />
-                                        </View>
-                                      </TouchableOpacity>
-                                    )}
-                                    <TouchableOpacity
-                                      style={styles.tableCellCheck}
-                                      onPress={() => handleCompleteSet(exercise.id, set.id, ex.id)}
-                                    >
-                                      <View style={[
-                                        styles.checkSquare,
-                                        set.completed ? styles.checkSquareCompleted : null
-                                      ]}>
-                                        <Ionicons 
-                                          name="checkmark-sharp" 
-                                          size={24} 
-                                          color={set.completed ? colors.white : colors.lightGray} 
-                                        />
-                                      </View>
-                                    </TouchableOpacity>
-                                  </View>
-                                  {/* AI Analysis Results */}
-                                  {set.ai_analysis && (
-                                    <View style={styles.aiAnalysisContainer}>
-                                      <View style={styles.aiAnalysisRow}>
-                                        <Text style={styles.aiAnalysisLabel}>Exercise:</Text>
-                                        <Text style={styles.aiAnalysisValue}>{set.ai_analysis.exercise_name}</Text>
-                                        <Text style={styles.aiAnalysisConfidence}>({set.ai_analysis.confidence}% confidence)</Text>
-                                      </View>
-                                      {set.ai_analysis.equipment && (
-                                        <View style={styles.aiAnalysisRow}>
-                                          <Text style={styles.aiAnalysisLabel}>Equipment:</Text>
-                                          <Text style={styles.aiAnalysisValue}>{set.ai_analysis.equipment}</Text>
-                                        </View>
                                       )}
-                                      {set.ai_analysis.variation && (
-                                        <View style={styles.aiAnalysisRow}>
-                                          <Text style={styles.aiAnalysisLabel}>Variation:</Text>
-                                          <Text style={styles.aiAnalysisValue}>{set.ai_analysis.variation}</Text>
-                                        </View>
-                                      )}
-                                      {set.canAnalyzeForm && !set.coaching_feedback && (
+                                      {set.thumbnail || set.thumbnail_url ? (
                                         <TouchableOpacity 
-                                          style={styles.aiAnalyzeButton}
-                                          onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video, set.thumbnail_url)}
-                                          disabled={feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id}
+                                          style={styles.thumbnailContainer}
+                                          onPress={() => handleVideoPreview(set)}
                                         >
-                                          {feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id ? (
-                                            <ActivityIndicator size="small" color={colors.white} />
-                                          ) : (
-                                            <>
-                                              <Ionicons name="analytics-outline" size={16} color={colors.white} style={styles.aiAnalyzeIcon} />
-                                              <Text style={styles.aiAnalyzeText}>Get Coaching Tips</Text>
-                                            </>
-                                          )}
+                                          <Image 
+                                            source={{ uri: set.thumbnail || set.thumbnail_url }} 
+                                            style={styles.thumbnail}
+                                            resizeMode="cover"
+                                          />
+                                        </TouchableOpacity>
+                                      ) : (
+                                        <TouchableOpacity 
+                                          style={styles.cameraButtonContainer}
+                                          onPress={() => handleVideoUpload(exercise.id, set.id)}
+                                        >
+                                          <View style={styles.cameraButtonInner}>
+                                            <Ionicons name="camera-outline" size={24} color={colors.gray} />
+                                          </View>
                                         </TouchableOpacity>
                                       )}
-                                    </View>
-                                  )}
-                                  {/* Coaching Feedback */}
-                                  {showCoachingFeedback[set.id] && set.coaching_feedback && (
-                                    <View style={styles.coachingFeedbackContainer}>
-                                      <Text style={styles.coachingFeedbackTitle}>Coaching Feedback</Text>
-                                      <Text style={styles.coachingFeedbackSummary}>{set.coaching_feedback.summary}</Text>
-                                      {set.coaching_feedback.technical_tips?.length > 0 && (
-                                        <View style={styles.technicalTipsContainer}>
-                                          <Text style={styles.technicalTipsTitle}>Technical Tips:</Text>
-                                          {set.coaching_feedback.technical_tips.map((tip, index) => (
-                                            <Text key={index} style={styles.technicalTip}>• {tip}</Text>
-                                          ))}
+                                      <TouchableOpacity
+                                        style={styles.tableCellCheck}
+                                        onPress={() => handleCompleteSet(exercise.id, set.id, ex.id)}
+                                      >
+                                        <View style={[
+                                          styles.checkSquare,
+                                          set.completed ? styles.checkSquareCompleted : null
+                                        ]}>
+                                          <Ionicons 
+                                            name="checkmark-sharp" 
+                                            size={24} 
+                                            color={set.completed ? colors.white : colors.lightGray} 
+                                          />
                                         </View>
-                                      )}
-                                      {set.coaching_feedback.tempo_guidance && (
-                                        <Text style={styles.tempoGuidance}>{set.coaching_feedback.tempo_guidance}</Text>
-                                      )}
-                                      <Text style={styles.motivation}>{set.coaching_feedback.motivation}</Text>
+                                      </TouchableOpacity>
                                     </View>
-                                  )}
-                                  {/* AI Coaching Feedback Button */}
-                                  {set.completed && set.video_url && (
-                                    <TouchableOpacity
-                                      style={[styles.aiCoachingButton]}
-                                      onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video_url, set.thumbnail_url)}
-                                    >
-                                      <Ionicons name="analytics-outline" size={18} color="#6C3EF6" />
-                                      <Text style={styles.aiCoachingButtonText}>AI Coaching Feedback</Text>
-                                    </TouchableOpacity>
-                                  )}
-                                </Swipeable>
-                              ))}
-                            </View>
-                            {exIdx < exercise.exercises.length - 1 && (
-                              <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 4 }}>
-                                <View style={{ height: 1, backgroundColor: '#E5E7EB', flex: 1 }} />
-                                <Ionicons name="chevron-down" size={18} color={colors.primary} style={{ marginHorizontal: 12 }} />
-                                <View style={{ height: 1, backgroundColor: '#E5E7EB', flex: 1 }} />
+                                    {/* AI Analysis Results */}
+                                    {set.ai_analysis && (
+                                      <View style={styles.aiAnalysisContainer}>
+                                        <View style={styles.aiAnalysisRow}>
+                                          <Text style={styles.aiAnalysisLabel}>Exercise:</Text>
+                                          <Text style={styles.aiAnalysisValue}>{set.ai_analysis.exercise_name}</Text>
+                                          <Text style={styles.aiAnalysisConfidence}>({set.ai_analysis.confidence}% confidence)</Text>
+                                        </View>
+                                        {set.ai_analysis.equipment && (
+                                          <View style={styles.aiAnalysisRow}>
+                                            <Text style={styles.aiAnalysisLabel}>Equipment:</Text>
+                                            <Text style={styles.aiAnalysisValue}>{set.ai_analysis.equipment}</Text>
+                                          </View>
+                                        )}
+                                        {set.ai_analysis.variation && (
+                                          <View style={styles.aiAnalysisRow}>
+                                            <Text style={styles.aiAnalysisLabel}>Variation:</Text>
+                                            <Text style={styles.aiAnalysisValue}>{set.ai_analysis.variation}</Text>
+                                          </View>
+                                        )}
+                                        {set.canAnalyzeForm && !set.coaching_feedback && (
+                                          <TouchableOpacity 
+                                            style={styles.aiAnalyzeButton}
+                                            onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video, set.thumbnail_url)}
+                                            disabled={feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id}
+                                          >
+                                            {feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id ? (
+                                              <ActivityIndicator size="small" color={colors.white} />
+                                            ) : (
+                                              <>
+                                                <Ionicons name="analytics-outline" size={16} color={colors.white} style={styles.aiAnalyzeIcon} />
+                                                <Text style={styles.aiAnalyzeText}>Get Coaching Tips</Text>
+                                              </>
+                                            )}
+                                          </TouchableOpacity>
+                                        )}
+                                      </View>
+                                    )}
+                                    {/* Coaching Feedback */}
+                                    {showCoachingFeedback[set.id] && set.coaching_feedback && (
+                                      <View style={styles.coachingFeedbackContainer}>
+                                        <Text style={styles.coachingFeedbackTitle}>Coaching Feedback</Text>
+                                        <Text style={styles.coachingFeedbackSummary}>{set.coaching_feedback.summary}</Text>
+                                        {set.coaching_feedback.technical_tips?.length > 0 && (
+                                          <View style={styles.technicalTipsContainer}>
+                                            <Text style={styles.technicalTipsTitle}>Technical Tips:</Text>
+                                            {set.coaching_feedback.technical_tips.map((tip, index) => (
+                                              <Text key={index} style={styles.technicalTip}>• {tip}</Text>
+                                            ))}
+                                          </View>
+                                        )}
+                                        {set.coaching_feedback.tempo_guidance && (
+                                          <Text style={styles.tempoGuidance}>{set.coaching_feedback.tempo_guidance}</Text>
+                                        )}
+                                        <Text style={styles.motivation}>{set.coaching_feedback.motivation}</Text>
+                                      </View>
+                                    )}
+                                    {/* AI Coaching Feedback Button */}
+                                    {set.completed && set.video_url && (
+                                      <TouchableOpacity
+                                        style={[styles.aiCoachingButton]}
+                                        onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video_url, set.thumbnail_url)}
+                                      >
+                                        <Ionicons name="analytics-outline" size={18} color="#6C3EF6" />
+                                        <Text style={styles.aiCoachingButtonText}>AI Coaching Feedback</Text>
+                                      </TouchableOpacity>
+                                    )}
+                                  </Swipeable>
+                                ))}
                               </View>
-                            )}
-                          </React.Fragment>
-                        ))}
-                        <TouchableOpacity style={[styles.addSetButton, { alignSelf: 'center', marginTop: 12 }]} onPress={() => handleAddManualSet(exercise.id)}>
-                          <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
-                          <Text style={styles.addSetText}>Add set</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : null}
-                    {/* Collapsed Normal Exercise View */}
-                    {!expanded && !exercise.isSuperset ? (
-                      <Text style={styles.exerciseTableSubtitle}>
-                        {`${exercise.sets.filter(s => s.completed).length} sets completed`}
-                      </Text>
-                    ) : null}
-                    {/* Expanded Normal Exercise View */}
-                    {expanded && !exercise.isSuperset ? (
-                      <>
-                        <View style={styles.tableContainer}>
-                          {/* Normal expanded header row */}
-                          <View style={styles.tableHeaderRow}>
-                            <View style={styles.tableCellSetHeader}>
-                              <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}>#</Text>
-                            </View>
-                            <TextInput
-                              style={styles.tableCellInputHeaderInput}
-                              value={weightUnits}
-                              editable={false}
-                              selectTextOnFocus={false}
-                              pointerEvents="none"
-                            />
-                            <TextInput
-                              style={styles.tableCellInputHeaderInput}
-                              value="Reps"
-                              editable={false}
-                              selectTextOnFocus={false}
-                              pointerEvents="none"
-                            />
-                            {enableExertionTracking ? (
+                              {exIdx < exercise.exercises.length - 1 && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 4 }}>
+                                  <View style={{ height: 1, backgroundColor: '#E5E7EB', flex: 1 }} />
+                                  <Ionicons name="chevron-down" size={18} color={colors.primary} style={{ marginHorizontal: 12 }} />
+                                  <View style={{ height: 1, backgroundColor: '#E5E7EB', flex: 1 }} />
+                                </View>
+                              )}
+                            </React.Fragment>
+                          ))}
+                          <TouchableOpacity style={[styles.addSetButton, { alignSelf: 'center', marginTop: 12 }]} onPress={() => handleAddManualSet(exercise.id)}>
+                            <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+                            <Text style={styles.addSetText}>Add set</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : null}
+                      {/* Collapsed Normal Exercise View */}
+                      {!expanded && !exercise.isSuperset ? (
+                        <Text style={styles.exerciseTableSubtitle}>
+                          {`${exercise.sets.filter(s => s.completed).length} sets completed`}
+                        </Text>
+                      ) : null}
+                      {/* Expanded Normal Exercise View */}
+                      {expanded && !exercise.isSuperset ? (
+                        <>
+                          <View style={styles.tableContainer}>
+                            {/* Normal expanded header row */}
+                            <View style={styles.tableHeaderRow}>
+                              <View style={styles.tableCellSetHeader}>
+                                <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}>#</Text>
+                              </View>
                               <TextInput
-                                style={styles.tableCellInputHeaderInputNarrow}
-                                value={exertionMetric}
+                                style={styles.tableCellInputHeaderInput}
+                                value={weightUnits}
                                 editable={false}
                                 selectTextOnFocus={false}
                                 pointerEvents="none"
                               />
-                            ) : null}
-                            <View style={styles.tableCellIconHeader}>
-                              <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
-                            </View>
-                            <View style={styles.tableCellCheckHeader}>
-                              <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
-                            </View>
-                          </View>
-                          {exercise.sets.map((set, setIdx) => (
-                            <Swipeable
-                              key={set.id}
-                              ref={ref => swipeableRefs.current[`${exercise.id}-${set.id}`] = ref}
-                              renderRightActions={() => renderRightActions(exercise.id, set.id)}
-                              rightThreshold={40}
-                            >
-                              <View style={styles.tableRow}>
-                                <Text style={styles.tableCellSet}>{setIdx + 1}</Text>
+                              <TextInput
+                                style={styles.tableCellInputHeaderInput}
+                                value="Reps"
+                                editable={false}
+                                selectTextOnFocus={false}
+                                pointerEvents="none"
+                              />
+                              {enableExertionTracking ? (
                                 <TextInput
-                                  style={styles.tableCellInput}
-                                  value={set.weight?.toString() ?? ''}
-                                  onChangeText={v => handleUpdateSet(exercise.id, set.id, 'weight', v)}
-                                  onEndEditing={e => handlePropagateSetValue(exercise.id, set.id, 'weight', e.nativeEvent.text)}
-                                  keyboardType="decimal-pad"
-                                  placeholder="0"
-                                  placeholderTextColor="#AAAAAA"
-                                  editable={!set.completed}
-                                  maxLength={4}
-                                  returnKeyType="done"
-                                  inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
+                                  style={styles.tableCellInputHeaderInputNarrow}
+                                  value={exertionMetric}
+                                  editable={false}
+                                  selectTextOnFocus={false}
+                                  pointerEvents="none"
                                 />
-                                <TextInput
-                                  style={styles.tableCellInput}
-                                  value={set.reps?.toString() ?? ''}
-                                  onChangeText={v => handleUpdateSet(exercise.id, set.id, 'reps', v)}
-                                  onEndEditing={e => handlePropagateSetValue(exercise.id, set.id, 'reps', e.nativeEvent.text)}
-                                  keyboardType="number-pad"
-                                  placeholder="0"
-                                  placeholderTextColor="#AAAAAA"
-                                  editable={!set.completed}
-                                  maxLength={3}
-                                  returnKeyType="done"
-                                  inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
-                                />
-                                {enableExertionTracking && (
+                              ) : null}
+                              <View style={styles.tableCellIconHeader}>
+                                <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
+                              </View>
+                              <View style={styles.tableCellCheckHeader}>
+                                <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
+                              </View>
+                            </View>
+                            {exercise.sets.map((set, setIdx) => (
+                              <Swipeable
+                                key={set.id}
+                                ref={ref => swipeableRefs.current[`${exercise.id}-${set.id}`] = ref}
+                                renderRightActions={() => renderRightActions(exercise.id, set.id)}
+                                rightThreshold={40}
+                              >
+                                <View style={styles.tableRow}>
+                                  <Text style={styles.tableCellSet}>{setIdx + 1}</Text>
                                   <TextInput
-                                    style={styles.tableCellInputNarrow}
-                                    value={set[exertionMetric.toLowerCase()]?.toString() ?? ''}
-                                    onChangeText={v => handleUpdateSet(exercise.id, set.id, exertionMetric.toLowerCase(), v)}
+                                    style={styles.tableCellInput}
+                                    value={set.weight?.toString() ?? ''}
+                                    onChangeText={v => handleUpdateSet(exercise.id, set.id, 'weight', v)}
+                                    onEndEditing={e => handlePropagateSetValue(exercise.id, set.id, 'weight', e.nativeEvent.text)}
                                     keyboardType="decimal-pad"
-                                    placeholder={exertionMetric}
+                                    placeholder="0"
+                                    placeholderTextColor="#AAAAAA"
+                                    editable={!set.completed}
+                                    maxLength={4}
+                                    returnKeyType="done"
+                                    inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
+                                  />
+                                  <TextInput
+                                    style={styles.tableCellInput}
+                                    value={set.reps?.toString() ?? ''}
+                                    onChangeText={v => handleUpdateSet(exercise.id, set.id, 'reps', v)}
+                                    onEndEditing={e => handlePropagateSetValue(exercise.id, set.id, 'reps', e.nativeEvent.text)}
+                                    keyboardType="number-pad"
+                                    placeholder="0"
                                     placeholderTextColor="#AAAAAA"
                                     editable={!set.completed}
                                     maxLength={3}
                                     returnKeyType="done"
                                     inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                                   />
-                                )}
-                                {set.thumbnail || set.thumbnail_url ? (
-                                  <TouchableOpacity 
-                                    style={styles.thumbnailContainer}
-                                    onPress={() => handleVideoPreview(set)}
-                                  >
-                                    <Image 
-                                      source={{ uri: set.thumbnail || set.thumbnail_url }} 
-                                      style={styles.thumbnail}
-                                      resizeMode="cover"
+                                  {enableExertionTracking && (
+                                    <TextInput
+                                      style={styles.tableCellInputNarrow}
+                                      value={set[exertionMetric.toLowerCase()]?.toString() ?? ''}
+                                      onChangeText={v => handleUpdateSet(exercise.id, set.id, exertionMetric.toLowerCase(), v)}
+                                      keyboardType="decimal-pad"
+                                      placeholder="-"
+                                      placeholderTextColor="#AAAAAA"
+                                      editable={!set.completed}
+                                      maxLength={3}
+                                      returnKeyType="done"
+                                      inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                                     />
-                                  </TouchableOpacity>
-                                ) : (
-                                  <TouchableOpacity 
-                                    style={styles.cameraButtonContainer}
-                                    onPress={() => handleVideoUpload(exercise.id, set.id)}
-                                  >
-                                    <View style={styles.cameraButtonInner}>
-                                      <Ionicons name="camera-outline" size={24} color={colors.gray} />
-                                    </View>
-                                  </TouchableOpacity>
-                                )}
-                                <TouchableOpacity
-                                  style={styles.tableCellCheck}
-                                  onPress={() => handleCompleteSet(exercise.id, set.id)}
-                                >
-                                  <View style={[
-                                    styles.checkSquare,
-                                    set.completed ? styles.checkSquareCompleted : null
-                                  ]}>
-                                    <Ionicons 
-                                      name="checkmark-sharp" 
-                                      size={24} 
-                                      color={set.completed ? colors.white : colors.lightGray} 
-                                    />
-                                  </View>
-                                </TouchableOpacity>
-                              </View>
-                              {/* AI Analysis Results */}
-                              {set.ai_analysis && (
-                                <View style={styles.aiAnalysisContainer}>
-                                  <View style={styles.aiAnalysisRow}>
-                                    <Text style={styles.aiAnalysisLabel}>Exercise:</Text>
-                                    <Text style={styles.aiAnalysisValue}>{set.ai_analysis.exercise_name}</Text>
-                                    <Text style={styles.aiAnalysisConfidence}>({set.ai_analysis.confidence}% confidence)</Text>
-                                  </View>
-                                  {set.ai_analysis.equipment && (
-                                    <View style={styles.aiAnalysisRow}>
-                                      <Text style={styles.aiAnalysisLabel}>Equipment:</Text>
-                                      <Text style={styles.aiAnalysisValue}>{set.ai_analysis.equipment}</Text>
-                                    </View>
                                   )}
-                                  {set.ai_analysis.variation && (
-                                    <View style={styles.aiAnalysisRow}>
-                                      <Text style={styles.aiAnalysisLabel}>Variation:</Text>
-                                      <Text style={styles.aiAnalysisValue}>{set.ai_analysis.variation}</Text>
-                                    </View>
-                                  )}
-                                  {set.canAnalyzeForm && !set.coaching_feedback && (
+                                  {set.thumbnail || set.thumbnail_url ? (
                                     <TouchableOpacity 
-                                      style={styles.aiAnalyzeButton}
-                                      onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video, set.thumbnail_url)}
-                                      disabled={feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id}
+                                      style={styles.thumbnailContainer}
+                                      onPress={() => handleVideoPreview(set)}
                                     >
-                                      {feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id ? (
-                                        <ActivityIndicator size="small" color={colors.white} />
-                                      ) : (
-                                        <>
-                                          <Ionicons name="analytics-outline" size={16} color={colors.white} style={styles.aiAnalyzeIcon} />
-                                          <Text style={styles.aiAnalyzeText}>Get Coaching Tips</Text>
-                                        </>
-                                      )}
+                                      <Image 
+                                        source={{ uri: set.thumbnail || set.thumbnail_url }} 
+                                        style={styles.thumbnail}
+                                        resizeMode="cover"
+                                      />
+                                    </TouchableOpacity>
+                                  ) : (
+                                    <TouchableOpacity 
+                                      style={styles.cameraButtonContainer}
+                                      onPress={() => handleVideoUpload(exercise.id, set.id)}
+                                    >
+                                      <View style={styles.cameraButtonInner}>
+                                        <Ionicons name="camera-outline" size={24} color={colors.gray} />
+                                      </View>
                                     </TouchableOpacity>
                                   )}
-                                </View>
-                              )}
-                              {/* Coaching Feedback */}
-                              {showCoachingFeedback[set.id] && set.coaching_feedback && (
-                                <View style={styles.coachingFeedbackContainer}>
-                                  <Text style={styles.coachingFeedbackTitle}>Coaching Feedback</Text>
-                                  <Text style={styles.coachingFeedbackSummary}>{set.coaching_feedback.summary}</Text>
-                                  {set.coaching_feedback.technical_tips?.length > 0 && (
-                                    <View style={styles.technicalTipsContainer}>
-                                      <Text style={styles.technicalTipsTitle}>Technical Tips:</Text>
-                                      {set.coaching_feedback.technical_tips.map((tip, index) => (
-                                        <Text key={index} style={styles.technicalTip}>• {tip}</Text>
-                                      ))}
+                                  <TouchableOpacity
+                                    style={styles.tableCellCheck}
+                                    onPress={() => handleCompleteSet(exercise.id, set.id)}
+                                  >
+                                    <View style={[
+                                      styles.checkSquare,
+                                      set.completed ? styles.checkSquareCompleted : null
+                                    ]}>
+                                      <Ionicons 
+                                        name="checkmark-sharp" 
+                                        size={24} 
+                                        color={set.completed ? colors.white : colors.lightGray} 
+                                      />
                                     </View>
-                                  )}
-                                  {set.coaching_feedback.tempo_guidance && (
-                                    <Text style={styles.tempoGuidance}>{set.coaching_feedback.tempo_guidance}</Text>
-                                  )}
-                                  <Text style={styles.motivation}>{set.coaching_feedback.motivation}</Text>
+                                  </TouchableOpacity>
                                 </View>
-                              )}
-                              {/* AI Coaching Feedback Button */}
-                              {set.completed && set.video_url && (
-                                <TouchableOpacity
-                                  style={[styles.aiCoachingButton]}
-                                  onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video_url, set.thumbnail_url)}
-                                >
-                                  <Ionicons name="analytics-outline" size={18} color="#6C3EF6" />
-                                  <Text style={styles.aiCoachingButtonText}>AI Coaching Feedback</Text>
-                                </TouchableOpacity>
-                              )}
-                            </Swipeable>
-                          ))}
-                        </View>
-                        <TouchableOpacity style={[styles.addSetButton, { alignSelf: 'center', marginTop: 3 }]} onPress={() => handleAddManualSet(exercise.id)}>
-                          <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
-                          <Text style={styles.addSetText}>Add set</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : null}
-                  </View>
-                </TouchableOpacity>
+                                {/* AI Analysis Results */}
+                                {set.ai_analysis && (
+                                  <View style={styles.aiAnalysisContainer}>
+                                    <View style={styles.aiAnalysisRow}>
+                                      <Text style={styles.aiAnalysisLabel}>Exercise:</Text>
+                                      <Text style={styles.aiAnalysisValue}>{set.ai_analysis.exercise_name}</Text>
+                                      <Text style={styles.aiAnalysisConfidence}>({set.ai_analysis.confidence}% confidence)</Text>
+                                    </View>
+                                    {set.ai_analysis.equipment && (
+                                      <View style={styles.aiAnalysisRow}>
+                                        <Text style={styles.aiAnalysisLabel}>Equipment:</Text>
+                                        <Text style={styles.aiAnalysisValue}>{set.ai_analysis.equipment}</Text>
+                                      </View>
+                                    )}
+                                    {set.ai_analysis.variation && (
+                                      <View style={styles.aiAnalysisRow}>
+                                        <Text style={styles.aiAnalysisLabel}>Variation:</Text>
+                                        <Text style={styles.aiAnalysisValue}>{set.ai_analysis.variation}</Text>
+                                      </View>
+                                    )}
+                                    {set.canAnalyzeForm && !set.coaching_feedback && (
+                                      <TouchableOpacity 
+                                        style={styles.aiAnalyzeButton}
+                                        onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video, set.thumbnail_url)}
+                                        disabled={feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id}
+                                      >
+                                        {feedbackLoading && feedbackExerciseId === exercise.id && feedbackSetId === set.id ? (
+                                          <ActivityIndicator size="small" color={colors.white} />
+                                        ) : (
+                                          <>
+                                            <Ionicons name="analytics-outline" size={16} color={colors.white} style={styles.aiAnalyzeIcon} />
+                                            <Text style={styles.aiAnalyzeText}>Get Coaching Tips</Text>
+                                          </>
+                                        )}
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+                                )}
+                                {/* Coaching Feedback */}
+                                {showCoachingFeedback[set.id] && set.coaching_feedback && (
+                                  <View style={styles.coachingFeedbackContainer}>
+                                    <Text style={styles.coachingFeedbackTitle}>Coaching Feedback</Text>
+                                    <Text style={styles.coachingFeedbackSummary}>{set.coaching_feedback.summary}</Text>
+                                    {set.coaching_feedback.technical_tips?.length > 0 && (
+                                      <View style={styles.technicalTipsContainer}>
+                                        <Text style={styles.technicalTipsTitle}>Technical Tips:</Text>
+                                        {set.coaching_feedback.technical_tips.map((tip, index) => (
+                                          <Text key={index} style={styles.technicalTip}>• {tip}</Text>
+                                        ))}
+                                      </View>
+                                    )}
+                                    {set.coaching_feedback.tempo_guidance && (
+                                      <Text style={styles.tempoGuidance}>{set.coaching_feedback.tempo_guidance}</Text>
+                                    )}
+                                    <Text style={styles.motivation}>{set.coaching_feedback.motivation}</Text>
+                                  </View>
+                                )}
+                                {/* AI Coaching Feedback Button */}
+                                {set.completed && set.video_url && (
+                                  <TouchableOpacity
+                                    style={[styles.aiCoachingButton]}
+                                    onPress={() => handleShowCoachingFeedback(exercise.id, set.id, set.video_url, set.thumbnail_url)}
+                                  >
+                                    <Ionicons name="analytics-outline" size={18} color="#6C3EF6" />
+                                    <Text style={styles.aiCoachingButtonText}>AI Coaching Feedback</Text>
+                                  </TouchableOpacity>
+                                )}
+                              </Swipeable>
+                            ))}
+                          </View>
+                          <TouchableOpacity style={[styles.addSetButton, { alignSelf: 'center', marginTop: 3 }]} onPress={() => handleAddManualSet(exercise.id)}>
+                            <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+                            <Text style={styles.addSetText}>Add set</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                </Swipeable>
               );
             }}
           />
@@ -2601,9 +2670,10 @@ const styles = StyleSheet.create({
   },
   tableRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'center', // Ensure vertical alignment
     marginBottom: 12,
     height: 48,
+    paddingVertical: 0, // Remove vertical padding
   },
   tableCellSet: {
     width: 12,
@@ -3586,5 +3656,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'DMSans-Bold',
     marginLeft: 6,
+  },
+  rightActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center', // Ensure vertical alignment
+    width: 80,
+    height: '100%',
+    marginVertical: -6.1,
+    paddingVertical: -10,
+  },
+  actionButton: {
+    backgroundColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 48,
+    height: 47,
+    borderRadius: 12,
+    marginHorizontal: 0, // Adjust margin to bring it closer to the tick button
   },
 }); 

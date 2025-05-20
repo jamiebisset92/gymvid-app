@@ -1,5 +1,3 @@
-# backend/utils/aws_utils.py
-
 import boto3
 import os
 import subprocess
@@ -65,3 +63,24 @@ def generate_thumbnail_with_rotation_fix(video_path, thumbnail_path):
     except subprocess.CalledProcessError as e:
         print(f"❌ Thumbnail generation failed: {e}")
         return False
+
+# ✅ NEW: Upload in-memory file object (e.g. from FastAPI UploadFile)
+def upload_fileobj_to_s3(file_obj, s3_key, content_type="image/jpeg", public=True):
+    """
+    Uploads an in-memory file-like object (e.g., UploadFile) to S3.
+    """
+    try:
+        s3.upload_fileobj(
+            Fileobj=file_obj,
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            ExtraArgs={
+                "ContentType": content_type,
+                "ACL": "public-read" if public else "private"
+            }
+        )
+        print(f"✅ Uploaded to s3://{S3_BUCKET}/{s3_key}")
+        return f"https://{S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
+    except (BotoCoreError, ClientError) as e:
+        print(f"❌ Upload failed: {e}")
+        return None

@@ -7,6 +7,7 @@ import ManualLogScreen from '../screens/workout/ManualLogScreen';
 import CreateWorkoutScreen from '../screens/workout/CreateWorkoutScreen';
 import QuickLogScreen from '../screens/workout/QuickLogScreen';
 import SavedWorkoutsScreen from '../screens/workout/SavedWorkoutsScreen';
+import ExploreWorkoutsScreen from '../screens/workout/ExploreWorkoutsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -16,6 +17,7 @@ export default function WorkoutStack() {
       initialRouteName="LogWorkout"
       screenOptions={{
         headerShown: false,
+        animation: 'slide_from_right',
       }}
     >
       <Stack.Screen name="LogWorkout" component={LogWorkoutScreen} />
@@ -25,6 +27,8 @@ export default function WorkoutStack() {
       <Stack.Screen name="CreateWorkout" component={CreateWorkoutScreen} />
       <Stack.Screen name="QuickLog" component={QuickLogScreen} />
       <Stack.Screen name="SavedWorkouts" component={SavedWorkoutsScreen} />
+      <Stack.Screen name="ExploreWorkouts" component={ExploreWorkoutsScreen} />
+      <Stack.Screen name="LogNewPR" component={ManualLogScreen} />
     </Stack.Navigator>
   );
 } 

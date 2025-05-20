@@ -1,8 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import colors from '../config/colors';
+import { supabase } from '../config/supabase';
+import { useFocusEffect } from '@react-navigation/native';
+import { useToast } from '../components/ToastProvider';
+
+// Create a debug logging function that only logs in development
+const debugLog = (...args) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
 
 const StatsCard = ({ icon, value, label }) => (
   <View style={styles.statsCard}>
@@ -19,7 +29,7 @@ const ActionButton = ({ icon, label, onPress }) => (
   </TouchableOpacity>
 );
 
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation, route }) {
   const { user } = useAuth();
   const [stats, setStats] = useState({
     streak: 0,
@@ -27,6 +37,114 @@ export default function HomeScreen({ navigation }) {
     prs: 0,
     hours: 0
   });
+  const [userName, setUserName] = useState("there");
+  const [isLoading, setIsLoading] = useState(true);
+  const toast = useToast(); // Get toast functions from context
+
+  // Check for welcome info from onboarding
+  useFocusEffect(
+    React.useCallback(() => {
+      // Check for route params first
+      if (route.params?.showWelcomeToast && route.params?.userName) {
+        // Show welcome toast
+        toast.success(`Welcome to GymVid ${route.params.userName}!`, {
+          duration: 4000,
+          position: 'top'
+        });
+        
+        // Clear the params
+        navigation.setParams({
+          showWelcomeToast: undefined,
+          userName: undefined
+        });
+      } 
+      // Then check for global welcome info (from onboarding)
+      else if (global.welcomeInfo?.showWelcomeToast) {
+        const name = global.welcomeInfo.userName || userName;
+        
+        // Show welcome toast
+        toast.success(`Welcome to GymVid ${name}!`, {
+          duration: 4000,
+          position: 'top'
+        });
+        
+        // Clear the global info
+        global.welcomeInfo = null;
+      }
+      
+      // Check for first time user from completing onboarding
+      const checkFirstTimeUser = async () => {
+        // Get the current user
+        const currentUser = supabase.auth.user();
+        if (!currentUser) return;
+        
+        // Fetch user profile data
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', currentUser.id)
+          .single();
+        
+        if (error) {
+          debugLog("Error fetching user profile:", error);
+        } else if (profile && profile.name) {
+          const firstName = profile.name.split(' ')[0]; // Use just the first name
+          setUserName(firstName);
+          debugLog("User name loaded:", profile.name);
+          
+          // If we still have global welcome info without a name, set it now
+          if (global.welcomeInfo && !global.welcomeInfo.userName) {
+            global.welcomeInfo.userName = firstName;
+          }
+        }
+      };
+      
+      checkFirstTimeUser();
+    }, [userName])
+  );
+
+  // Load user data and stats
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        setIsLoading(true);
+        debugLog("Loading user data for HomeScreen");
+        
+        // Get current user
+        const currentUser = supabase.auth.user();
+        if (!currentUser) {
+          debugLog("No user found in HomeScreen");
+          return;
+        }
+        
+        // Fetch user profile data
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', currentUser.id)
+          .single();
+        
+        if (error) {
+          debugLog("Error fetching user profile:", error);
+        } else if (profile && profile.name) {
+          const firstName = profile.name.split(' ')[0]; // Use just the first name
+          setUserName(firstName);
+          debugLog("User name loaded:", profile.name);
+          
+          // If we still have global welcome info without a name, set it now
+          if (global.welcomeInfo && !global.welcomeInfo.userName) {
+            global.welcomeInfo.userName = firstName;
+          }
+        }
+      } catch (err) {
+        console.error("Error in HomeScreen data loading:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadUserData();
+  }, []);
 
   // TODO: Fetch real stats from backend
   useEffect(() => {
@@ -34,26 +152,29 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   const handleStartWorkout = () => {
-    navigation.navigate('Log');
+    // Navigate to the Workout tab and then to LogWorkout as the initial screen
+    navigation.navigate('Workout', { 
+      screen: 'LogWorkout',
+    });
   };
 
   const handleQuickSet = () => {
-    navigation.navigate('QuickSet');
+    navigation.navigate('Workout', { screen: 'QuickLog' });
   };
 
   const handleImportVideo = () => {
-    navigation.navigate('ImportVideo');
+    navigation.navigate('Workout', { screen: 'AutoLog' });
   };
 
   const handleNewTemplate = () => {
-    navigation.navigate('NewTemplate');
+    navigation.navigate('Workout', { screen: 'CreateWorkout' });
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         <View style={styles.header}>
-          <Text style={styles.greeting}>Hi {user?.email?.split('@')[0] || 'Athlete'}</Text>
+          <Text style={styles.greeting}>Hi {userName}</Text>
           <Text style={styles.date}>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
           </Text>

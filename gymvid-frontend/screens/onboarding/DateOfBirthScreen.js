@@ -1,0 +1,503 @@
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Platform } from 'react-native';
+import { useAuth } from '../../hooks/useAuth';
+import colors from '../../config/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../config/supabase';
+import { ProgressContext } from '../../navigation/AuthStack';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useIsFocused } from '@react-navigation/native';
+import { Animated } from 'react-native';
+import { runWorldClassEntranceAnimation, ANIMATION_CONFIG } from '../../utils/animationUtils';
+
+// Create a debug logging function that only logs in development
+const debugLog = (...args) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
+export default function DateOfBirthScreen({ navigation, route }) {
+  const [dateOfBirth, setDateOfBirth] = useState(new Date());
+  const [age, setAge] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const { updateProfile, forceCompleteOnboarding } = useAuth();
+  
+  // Get userId and other params from route
+  const userId = route.params?.userId;
+  const userEmail = route.params?.email;
+  const fromSignUp = route.params?.fromSignUp;
+  
+  // Log received parameters for debugging
+  useEffect(() => {
+    debugLog('DateOfBirthScreen - Received params:', route.params);
+    if (userId) {
+      debugLog('DateOfBirthScreen - Got userId:', userId);
+    } else {
+      console.warn('DateOfBirthScreen - No userId provided!');
+    }
+  }, [route.params]);
+  
+  // Get progress context
+  const { progress, setProgress } = useContext(ProgressContext);
+  
+  const isFocused = useIsFocused();
+  // Entrance animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const titleAnim = useRef(new Animated.Value(20)).current;
+
+  // Load existing date of birth if available
+  useEffect(() => {
+    const loadUserDateOfBirth = async () => {
+      try {
+        // Get current user
+        const user = supabase.auth.user();
+        if (!user) return;
+
+        // Try to fetch existing profile
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('date_of_birth')
+          .eq('id', user.id)
+          .single();
+
+        // If we have a date of birth, set it in the state
+        if (!error && profile && profile.date_of_birth) {
+          debugLog('Loaded existing date of birth:', profile.date_of_birth);
+          setDateOfBirth(new Date(profile.date_of_birth));
+        }
+      } catch (err) {
+        console.error('Error loading user date of birth:', err);
+      }
+    };
+
+    loadUserDateOfBirth();
+  }, []);
+
+  // Calculate age whenever date changes
+  useEffect(() => {
+    calculateAge(dateOfBirth);
+  }, [dateOfBirth]);
+
+  const calculateAge = (birthDate) => {
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let calculatedAge = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      calculatedAge--;
+    }
+    
+    setAge(calculatedAge);
+  };
+
+  const handleDateChange = (event, selectedDate) => {
+    const currentDate = selectedDate || dateOfBirth;
+    setDateOfBirth(currentDate);
+  };
+
+  const handleContinue = async () => {
+    // Calculate if the user is at least 16 years old
+    if (age < 16) {
+      Alert.alert(
+        "Age Restriction",
+        "You must be at least 16 years old to use this app.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    // Update database first - before any animations
+    try {
+      setLoading(true);
+      
+      const updateData = {
+        date_of_birth: dateOfBirth.toISOString(),
+        onboarding_complete: false
+      };
+      debugLog('Updating profile with date of birth');
+      debugLog('Using userId:', userId);
+      
+      let error = null;
+      
+      // Always try direct database update if we have userId
+      if (userId) {
+        debugLog('Using direct database update with userId:', userId);
+        
+        const { error: directError } = await supabase
+          .from('users')
+          .upsert({
+            id: userId,
+            email: userEmail,
+            date_of_birth: dateOfBirth.toISOString(),
+            onboarding_complete: false
+          });
+          
+        if (directError) {
+          console.error('Error in direct update:', directError);
+          error = directError;
+        } else {
+          debugLog('Date of birth saved successfully via direct update');
+        }
+      } else {
+        // Fallback to updateProfile
+        debugLog('No userId available, using updateProfile method');
+        const result = await updateProfile(updateData);
+        error = result?.error;
+      }
+      
+      if (error) {
+        console.error('Error updating profile:', error);
+        Alert.alert('Error', 'Failed to save your data. Please try again.');
+        setLoading(false);
+        return;
+      }
+      
+      // After database is updated successfully, update progress
+      debugLog('Profile updated successfully, preparing navigation...');
+      setLoading(false);
+      
+      // Update progress for next screen
+      setProgress({ ...progress, current: 3 });
+      
+      // Fade out this screen completely before navigation
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: ANIMATION_CONFIG.screenTransition.fadeOut.duration,
+        easing: ANIMATION_CONFIG.screenTransition.fadeOut.easing,
+        useNativeDriver: true
+      }).start(() => {
+        // Navigate to the next screen only after screen is completely hidden
+        // Pass all necessary data to next screen
+        navigation.navigate('WeightPreference', { 
+          userId,
+          email: userEmail,
+          fromSignUp
+        });
+      });
+    } catch (err) {
+      console.error('Unexpected error in handleContinue:', err);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  const handleBack = () => {
+    // Update progress for previous screen first
+    setProgress({ ...progress, current: 1 });
+    
+    // Animate out before navigating back
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: ANIMATION_CONFIG.screenTransition.fadeOut.duration,
+      easing: ANIMATION_CONFIG.screenTransition.fadeOut.easing,
+      useNativeDriver: true
+    }).start(() => {
+      // Navigate back only after screen is no longer visible
+      navigation.goBack();
+    });
+  };
+
+  // Calculate progress percentage
+  const progressPercentage = progress.current / progress.total;
+
+  // Format date for display
+  const formatDate = (date) => {
+    const options = { year: 'numeric', month: 'long', day: 'numeric' };
+    return date.toLocaleDateString(undefined, options);
+  };
+
+  // Run entrance animations (world-class pattern)
+  useEffect(() => {
+    let timer;
+    if (isFocused) {
+      // Reset all animations immediately when the component mounts/focuses
+      fadeAnim.setValue(0);
+      slideAnim.setValue(30);
+      titleAnim.setValue(20);
+      
+      // Wait for the navigator transition to be fully complete
+      timer = setTimeout(() => {
+        // Use the world-class animation utility for consistent, premium feel
+        runWorldClassEntranceAnimation({
+          fadeAnim,
+          titleAnim,
+          slideAnim
+        });
+      }, 100);
+    }
+    
+    // Cleanup function - very important!
+    return () => {
+      clearTimeout(timer);
+      // Reset animations when component unmounts
+      fadeAnim.stopAnimation();
+      slideAnim.stopAnimation();
+      titleAnim.stopAnimation();
+    };
+  }, [isFocused]);
+
+  return (
+    <Animated.View style={[styles.container, { 
+      opacity: fadeAnim,
+      backgroundColor: '#FFFFFF' 
+    }]}>
+      <SafeAreaView style={styles.safeContainer}>
+        {/* Progress bar - remains static during transitions */}
+        <View style={styles.header}>
+          <View style={styles.progressWrapper}>
+            <View style={styles.progressContainer}>
+              <View style={[styles.progressBarFilled, { flex: progressPercentage || 0.5 }]} />
+              <View style={[styles.progressBarEmpty, { flex: 1 - (progressPercentage || 0.5) }]} />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.contentContainer}>
+          <Animated.Text style={[styles.titleText, { transform: [{ translateY: titleAnim }] }]}>
+            When were you born?
+          </Animated.Text>
+          
+          <Animated.View style={[styles.formContainer, { transform: [{ translateX: slideAnim }] }]}>
+            <View style={styles.dateContainer}>
+              <Text style={styles.dateText}>{formatDate(dateOfBirth)}</Text>
+              <View style={styles.dateIconContainer}>
+                <Ionicons name="calendar" size={24} color={colors.primary} />
+              </View>
+            </View>
+
+            <View style={styles.datePickerContainer}>
+              <DateTimePicker
+                value={dateOfBirth}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDateChange}
+                maximumDate={new Date()}
+                minimumDate={new Date(1920, 0, 1)}
+                style={styles.datePicker}
+              />
+            </View>
+
+            <View style={styles.ageContainer}>
+              <Text style={styles.ageText}>
+                You are <Text style={styles.ageNumber}>{age}</Text> years old
+              </Text>
+              {age < 16 && (
+                <Text style={styles.ageWarning}>
+                  You must be at least 16 years old to use this app
+                </Text>
+              )}
+            </View>
+          </Animated.View>
+        </View>
+        
+        <View style={styles.bottomButtonContainer}>
+          <TouchableOpacity 
+            style={styles.backButtonBottom} 
+            onPress={handleBack}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.gray} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.nextButton, age < 16 && styles.nextButtonDisabled]}
+            onPress={handleContinue}
+            disabled={loading || age < 16}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.nextButtonText}>Continue</Text>
+            <Ionicons name="chevron-forward" size={24} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  safeContainer: {
+    flex: 1,
+  },
+  header: {
+    height: 60,
+    paddingTop: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    position: 'relative',
+    zIndex: 10, // Ensure progress bar is above animations
+  },
+  progressWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressContainer: {
+    width: '50%',
+    flexDirection: 'row',
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#F0F0F0',
+    overflow: 'hidden',
+  },
+  progressBarFilled: {
+    backgroundColor: '#007BFF',
+  },
+  progressBarEmpty: {
+    backgroundColor: '#F0F0F0',
+  },
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: 40,
+    paddingBottom: 20,
+  },
+  formContainer: {
+    width: '100%',
+    paddingHorizontal: 20,
+  },
+  titleText: {
+    fontSize: 32,
+    fontWeight: '700',
+    marginBottom: 40,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+    color: '#1A1A1A',
+    width: '100%',
+  },
+  dateContainer: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    height: 70,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 30,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    paddingHorizontal: 20,
+  },
+  dateText: {
+    color: colors.darkGray,
+    fontSize: 22,
+    fontWeight: '500',
+    letterSpacing: -0.3,
+  },
+  dateIconContainer: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  datePickerContainer: {
+    marginTop: 20,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+    alignItems: 'center',
+  },
+  datePicker: {
+    width: 320,
+    height: 120,
+    backgroundColor: 'white',
+  },
+  ageContainer: {
+    marginTop: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+  },
+  ageText: {
+    fontSize: 18,
+    color: colors.darkGray,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  ageNumber: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  ageWarning: {
+    fontSize: 14,
+    color: '#FF3B30',
+    fontWeight: '500',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  bottomButtonContainer: {
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+    paddingTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  backButtonBottom: {
+    height: 56,
+    width: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+    marginRight: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  nextButton: {
+    backgroundColor: '#007BFF',
+    borderRadius: 16,
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  nextButtonDisabled: {
+    backgroundColor: '#AACEF5',
+    shadowOpacity: 0,
+  },
+  nextButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+}); 

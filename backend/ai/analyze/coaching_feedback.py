@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ✅ Subprocess flag
 IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
 
 def convert_numpy(obj):
@@ -21,37 +20,87 @@ def extract_json_block(text):
     match = re.search(r"```json\s*(.*?)```", text, re.DOTALL)
     return match.group(1).strip() if match else text.strip()
 
-def compress_rep_data(rep_data):
-    simplified = []
+# ✅ New: Compress raw rep data into coaching summaries
+def compress_rep_data_for_gpt(rep_data: list, feedback_depth: str = "standard") -> list:
+    summaries = []
+
     for rep in rep_data:
-        simplified.append({
-            "rep": rep.get("rep"),
-            "duration_sec": rep.get("duration_sec"),
-            "estimated_RPE": rep.get("estimated_RPE"),
-            "estimated_RIR": rep.get("estimated_RIR")
-        })
-    return simplified
+        rep_num = rep.get("rep")
+        rpe = rep.get("estimated_RPE")
+        stall = rep.get("velocity_stall", False)
+        rom = rep.get("range_of_motion_cm")
+        smooth = rep.get("smoothness_score")
+        path = rep.get("path_deviation_cm")
+        asym = rep.get("asymmetry_score")
+        tempo = rep.get("tempo", {})
+        concentric = tempo.get("concentric_sec", 0)
+        eccentric = tempo.get("eccentric_sec", 0)
+
+        summary = f"Rep {rep_num}:"
+
+        if feedback_depth == "simple":
+            if stall:
+                summary += " Minor stall detected mid-rep."
+            elif smooth and smooth < 85:
+                summary += " Slightly inconsistent tempo."
+            else:
+                summary += " Solid execution with good control."
+
+        elif feedback_depth == "standard":
+            summary += f" RPE {rpe}, ROM {rom}cm, smoothness {smooth}/100."
+            if stall:
+                summary += " Sticking point mid-concentric."
+            if path and path > 3.0:
+                summary += f" Drifted laterally ({path}cm)."
+            if asym is not None and asym < 85:
+                summary += f" Asymmetry score low ({asym}/100)."
+
+        elif feedback_depth == "advanced":
+            summary += (
+                f" Tempo – Concentric: {concentric:.2f}s, Eccentric: {eccentric:.2f}s. "
+                f"ROM: {rom}cm. Smoothness: {smooth}/100. RPE: {rpe}. "
+            )
+            if stall:
+                summary += "Velocity dipped (possible sticking point). "
+            if path is not None:
+                summary += f"Path deviation: {path}cm. "
+            if asym is not None:
+                summary += f"Asymmetry: {asym}/100."
+
+        summaries.append(summary.strip())
+
+    return summaries
 
 def calculate_tut_and_rpe(rep_data):
     total_tut = sum([rep.get("duration_sec", 0) for rep in rep_data])
     last_rpe = rep_data[-1].get("estimated_RPE", None) if rep_data else None
     return round(total_tut, 2), last_rpe
 
+# ✅ Main GPT feedback generator
 def generate_feedback(video_data, rep_data):
     exercise_name = video_data.get("predicted_exercise", "an exercise")
-    compressed_reps = compress_rep_data(rep_data)
-    rep_data_serialized = json.dumps(compressed_reps, indent=2, default=convert_numpy)
+    feedback_depth = video_data.get("feedback_depth", "standard")
     total_tut, last_rpe = calculate_tut_and_rpe(rep_data)
 
+    # 🔄 Use compression layer
+    rep_summaries = compress_rep_data_for_gpt(rep_data, feedback_depth)
+    summaries_text = "\n".join(rep_summaries)
+
     prompt = f"""
-You are a highly experienced lifting coach. A user has uploaded a video of themselves performing: {exercise_name}.
+You are a professional lifting coach. A user submitted a set of {exercise_name}.
+They've also provided a keyframe image grid (3x5 layout: each row = one rep, left to right).
 
-Here is the data extracted from their reps:
+Here are the summarized rep observations:
+{summaries_text}
 
-{rep_data_serialized}
+Instructions:
+- Identify 1 general form comment about the set
+- Provide 2 specific, actionable coaching tips
+- Return valid JSON (see format below)
+- Use plain, confident language
+- No emojis
 
-Please return your response in the following JSON format — and use only plain text, no emojis or decorative characters:
-
+Respond in this JSON format only:
 {{
   "coaching_feedback": {{
     "form_rating": integer (1–10),
@@ -65,16 +114,9 @@ Please return your response in the following JSON format — and use only plain 
         "tip": "Second coaching tip."
       }}
     ],
-    "summary": "End with a short wrap-up that encourages the user and affirms their efforts."
+    "summary": "Wrap up with encouragement or a focus area."
   }}
 }}
-
-Rules:
-- Do NOT include emojis. We'll handle that in the frontend.
-- Avoid mentioning injury or safety unless critically necessary.
-- Focus on cues that help improve performance and movement quality.
-- Keep language encouraging, human, and efficient.
-- ❌ Only return valid JSON. No markdown or explanation.
 """
 
     try:

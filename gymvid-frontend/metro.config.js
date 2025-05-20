@@ -33,6 +33,7 @@ config.resolver = {
     'stream': path.resolve(__dirname, 'node_modules/stream-browserify/index.js'),
     'buffer': path.resolve(__dirname, 'node_modules/buffer/index.js'),
     'crypto': path.resolve(__dirname, 'node_modules/crypto-browserify/index.js'),
+    'websocket': path.resolve(__dirname, 'node_modules/websocket'),
   },
   assetExts: [...config.resolver.assetExts, 'db', 'sqlite', 'cjs'],
   sourceExts: [...config.resolver.sourceExts, 'mjs'],
