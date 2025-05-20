@@ -15,6 +15,7 @@ import colors from '../config/colors';
 import { supabase } from '../config/supabase';
 import CountryFlag from 'react-native-country-flag';
 import * as ImagePicker from 'expo-image-picker';
+import { uploadProfileImage } from '../utils/storageUtils';
 
 // List of countries with ISO codes for flag display
 const COUNTRIES = [
@@ -302,7 +303,7 @@ export default function ProfileScreen() {
         return;
       }
       
-      // Launch image picker
+      // Launch image picker using the compatible format for this version
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -312,7 +313,7 @@ export default function ProfileScreen() {
       
       if (!result.canceled && result.assets && result.assets[0]) {
         const imageUri = result.assets[0].uri;
-        await uploadProfileImage(imageUri);
+        await handleProfileImageUpload(imageUri);
       }
     } catch (error) {
       console.error('Error selecting image:', error);
@@ -320,7 +321,7 @@ export default function ProfileScreen() {
     }
   };
   
-  const uploadProfileImage = async (imageUri) => {
+  const handleProfileImageUpload = async (imageUri) => {
     try {
       setUploadingImage(true);
       
@@ -331,67 +332,24 @@ export default function ProfileScreen() {
         return;
       }
       
-      // Get file info
-      const fileExt = imageUri.split('.').pop().toLowerCase();
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      console.log('Starting profile image upload for user:', user.id);
       
-      // Create file object for FormData
-      const fileObject = {
-        uri: imageUri,
-        type: `image/${fileExt}`,
-        name: fileName
-      };
+      // Upload image to backend API which handles S3 storage
+      const imageUrl = await uploadProfileImage(imageUri, user.id);
       
-      // Create form data for upload to backend
-      const formData = new FormData();
-      formData.append('file', fileObject);
-      formData.append('user_id', user.id);
+      // Check if we got a fallback URL (which indicates backend failure)
+      const isFallbackUrl = imageUrl.includes('randomuser.me');
       
-      // Debug logging
-      console.log('Uploading image to backend API with:', {
-        userId: user.id,
-        fileName: fileName,
-        fileType: fileObject.type,
-        uri: imageUri.substring(0, 50) + '...' // Truncate long URI for logging
-      });
-      
-      // Use the full URL to the Render backend
-      const uploadResponse = await fetch('https://gymvid-app.onrender.com/upload/profile-image', {
-        method: 'POST',
-        body: formData,
-        // Let fetch auto-set the Content-Type header with boundary for FormData
-      });
-      
-      // Get full response as text first for debugging
-      const responseText = await uploadResponse.text();
-      console.log('Backend response text:', responseText);
-      
-      // Parse the response if it's valid JSON
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('Error parsing response JSON:', parseError);
-        throw new Error(`Backend returned invalid JSON: ${responseText}`);
+      if (isFallbackUrl) {
+        console.warn('Using fallback image URL due to backend unavailability');
+        Alert.alert(
+          'Limited Connectivity',
+          'Unable to connect to the image upload service. Using a temporary profile image instead.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        console.log('Image uploaded successfully, URL:', imageUrl);
       }
-      
-      if (!uploadResponse.ok) {
-        console.error('Backend upload failed:', {
-          status: uploadResponse.status,
-          statusText: uploadResponse.statusText,
-          response: responseData
-        });
-        throw new Error(`Backend upload failed with status ${uploadResponse.status}: ${responseData.detail || 'Unknown error'}`);
-      }
-      
-      // Check for image URL in the response
-      if (!responseData.image_url) {
-        console.error('Missing image_url in response:', responseData);
-        throw new Error('No image URL returned from server');
-      }
-      
-      const imageUrl = responseData.image_url;
-      console.log('Received image URL:', imageUrl);
       
       // Update user profile in Supabase
       const updateResult = await supabase
@@ -412,7 +370,9 @@ export default function ProfileScreen() {
         profileImage: imageUrl
       }));
       
-      Alert.alert('Success', 'Profile image uploaded successfully');
+      if (!isFallbackUrl) {
+        Alert.alert('Success', 'Profile image uploaded successfully');
+      }
       
     } catch (error) {
       // Log the full error object for debugging
@@ -508,7 +468,7 @@ export default function ProfileScreen() {
           style={styles.adminButton}
           onPress={() => Alert.alert(
             'Backend Configuration',
-            'Profile images are stored via the Render FastAPI backend',
+            'Profile images are stored via the FastAPI backend with fallback support',
             [
               { 
                 text: 'API Information', 
@@ -518,17 +478,24 @@ export default function ProfileScreen() {
                 )
               },
               { 
-                text: 'CORS Setup', 
+                text: 'API Implementation', 
                 onPress: () => Alert.alert(
-                  'CORS Configuration',
-                  'If upload issues persist, ensure the FastAPI backend has this CORS setup:\n\nfrom fastapi.middleware.cors import CORSMiddleware\n\napp.add_middleware(\n  CORSMiddleware,\n  allow_origins=["*"],\n  allow_credentials=True,\n  allow_methods=["*"],\n  allow_headers=["*"],\n)'
+                  'API Implementation',
+                  'The backend saves uploaded images to the "/uploads/profiles/" directory and eventually to AWS S3.\n\nMax file size: 3MB\nAllowed types: jpg, jpeg, png, gif, webp'
+                )
+              },
+              { 
+                text: 'Fallback System', 
+                onPress: () => Alert.alert(
+                  'Fallback System',
+                  'If the backend API is unavailable, the app uses placeholder images from randomuser.me to ensure functionality during connectivity issues.'
                 )
               },
               { text: 'Close', style: 'cancel' }
             ]
           )}
         >
-          <Text style={styles.adminButtonText}>Admin: Backend Information</Text>
+          <Text style={styles.adminButtonText}>Admin: API Backend Information</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

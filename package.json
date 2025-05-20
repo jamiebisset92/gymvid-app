@@ -23,7 +23,8 @@
     "react-native-create-thumbnail": "^2.1.1",
     "react-native-video": "^6.13.0",
     "websocket": "^1.0.35",
-    "which": "^5.0.0"
+    "which": "^5.0.0",
+    "expo-file-system": "~18.1.10"
   },
   "main": "App.js",
   "repository": {

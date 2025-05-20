@@ -92,14 +92,45 @@ const PremiumToast = ({
     }
   };
   
-  // Setup animations
+  // Function to hide toast
+  const hideToast = () => {
+    const hideValue = position === 'top' ? -100 : 100;
+    
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: hideValue,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      if (onClose) onClose();
+    });
+  };
+  
+  // Setup animations - using a ref to avoid scheduling updates during render
+  const animationsStarted = useRef(false);
+  
   useEffect(() => {
+    // Only run this effect once
+    if (animationsStarted.current) return;
+    
+    animationsStarted.current = true;
+    
     // Trigger haptic feedback (safely)
-    try {
-      Haptics.notificationAsync(toastConfig.haptic);
-    } catch (error) {
-      console.log('Haptic feedback error:', error);
-    }
+    const triggerHaptic = async () => {
+      try {
+        await Haptics.notificationAsync(toastConfig.haptic);
+      } catch (error) {
+        console.log('Haptic feedback error:', error);
+      }
+    };
+    
+    triggerHaptic();
     
     // Show animation
     Animated.parallel([
@@ -122,26 +153,6 @@ const PremiumToast = ({
     
     return () => clearTimeout(hideTimer);
   }, []);
-  
-  // Function to hide toast
-  const hideToast = () => {
-    const hideValue = position === 'top' ? -100 : 100;
-    
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: hideValue,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      if (onClose) onClose();
-    });
-  };
   
   // Handle press on toast
   const handlePress = () => {

@@ -15,6 +15,7 @@ import re
 from backend.utils.aws_utils import download_file_from_s3
 from backend.utils.save_set_to_supabase import save_set_to_supabase
 from backend.api.manual_log import router as manual_log_router
+from backend.api.upload_profile_image import router as profile_image_router  # ✅ ADDED
 from backend.utils.download_from_s3 import download_video_from_url
 from backend.ai.analyze.video_analysis import analyze_video
 from backend.ai.analyze.rep_detection import run_rep_detection_from_landmark_y
@@ -47,6 +48,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 # ✅ Routers
 app.include_router(manual_log_router)
+app.include_router(profile_image_router)  # ✅ ADDED
 
 # ✅ AI set analysis
 @app.post("/analyze/log_set")
