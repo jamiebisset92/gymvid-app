@@ -64,22 +64,22 @@ def generate_thumbnail_with_rotation_fix(video_path, thumbnail_path):
         print(f"❌ Thumbnail generation failed: {e}")
         return False
 
-# ✅ NEW: Upload in-memory file object (e.g. from FastAPI UploadFile)
+# ✅ Updated: Upload in-memory file object without using ACLs (for ACL-disabled buckets)
 def upload_fileobj_to_s3(file_obj, s3_key, content_type="image/jpeg", public=True):
     """
     Uploads an in-memory file-like object (e.g., UploadFile) to S3.
     """
     try:
+        print(f"🔄 Attempting upload to S3: bucket={S3_BUCKET}, key={s3_key}, content_type={content_type}")
         s3.upload_fileobj(
             Fileobj=file_obj,
             Bucket=S3_BUCKET,
             Key=s3_key,
             ExtraArgs={
-                "ContentType": content_type,
-                "ACL": "public-read" if public else "private"
+                "ContentType": content_type  # ✅ ACL removed for compatibility
             }
         )
-        print(f"✅ Uploaded to s3://{S3_BUCKET}/{s3_key}")
+        print(f"✅ Upload successful: s3://{S3_BUCKET}/{s3_key}")
         return f"https://{S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
     except (BotoCoreError, ClientError) as e:
         print(f"❌ Upload failed: {e}")
