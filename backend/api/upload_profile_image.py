@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
-from utils.aws_utils import upload_fileobj_to_s3
+from backend.utils.aws_utils import upload_fileobj_to_s3
 import uuid
 from datetime import datetime
 
