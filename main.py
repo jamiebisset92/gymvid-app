@@ -49,6 +49,8 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 # ✅ Routers
 app.include_router(manual_log_router)
 app.include_router(profile_image_router)  # ✅ ADDED
+from backend.api.onboarding import router as onboarding_router  # ✅ NEW
+app.include_router(onboarding_router)  # ✅ NEW
 
 # ✅ AI set analysis
 @app.post("/analyze/log_set")

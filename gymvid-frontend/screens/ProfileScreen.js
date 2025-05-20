@@ -16,6 +16,8 @@ import { supabase } from '../config/supabase';
 import CountryFlag from 'react-native-country-flag';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadProfileImage } from '../utils/storageUtils';
+import { useToast } from '../components/ToastProvider';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // List of countries with ISO codes for flag display
 const COUNTRIES = [
@@ -215,40 +217,41 @@ const COUNTRIES = [
   { name: "Zimbabwe", code: "ZW" }
 ];
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ mcp, user_id }) {
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [countryCode, setCountryCode] = useState('US'); // Default to US
   const [userId, setUserId] = useState(null);
+  const [ageCategory, setAgeCategory] = useState('Open'); // Default fallback
+  const [weightClass, setWeightClass] = useState('60kg'); // Default fallback
+  const toast = useToast();
   
-  // Mock stats data (you can replace with real data later)
-  const stats = {
+  // Stats data moved to state
+  const [stats, setStats] = useState({
     workouts: 42,
     videos: 128,
-    followers: 987,
-    ageGroup: 'Open',
-    weightClass: '60kg'
-  };
+    followers: 987
+  });
 
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        // Get current user using the v1 API method
-        const user = supabase.auth.user();
+        // Get current user using the v1 API method or use provided user_id prop
+        const currentUserId = user_id || (supabase.auth.user() ? supabase.auth.user().id : null);
         
-        if (!user) {
+        if (!currentUserId) {
           setLoading(false);
           return;
         }
         
-        setUserId(user.id);
+        setUserId(currentUserId);
         
         // Fetch user profile from 'users' table
         const { data, error } = await supabase
           .from('users')
-          .select('username, name, email, profile_image_url, country')
-          .eq('id', user.id)
+          .select('username, name, email, profile_image_url, country, age_category, weight_class')
+          .eq('id', currentUserId)
           .single();
           
         if (error) {
@@ -276,12 +279,31 @@ export default function ProfileScreen() {
         
         setCountryCode(countryIsoCode);
         
+        // Try to get age category and weight class from Supabase first
+        if (data.age_category) setAgeCategory(data.age_category);
+        if (data.weight_class) setWeightClass(data.weight_class);
+        
+        // If not available in Supabase, try AsyncStorage as fallback
+        try {
+          const storedAgeCategory = await AsyncStorage.getItem('userAgeCategory');
+          const storedWeightClass = await AsyncStorage.getItem('userWeightClass');
+          
+          if (!data.age_category && storedAgeCategory) {
+            setAgeCategory(storedAgeCategory);
+          }
+          
+          if (!data.weight_class && storedWeightClass) {
+            setWeightClass(storedWeightClass);
+          }
+        } catch (storageError) {
+          console.error('Error reading from AsyncStorage:', storageError);
+        }
+        
         // Set user data with username from database
         setUserData({
           name: data.username || data.name || 'User',
           profileImage: data.profile_image_url || 'https://randomuser.me/api/portraits/women/44.jpg',
-          country: data.country || 'United States',
-          ...stats
+          country: data.country || 'United States'
         });
       } catch (error) {
         console.error('Error in profile data fetching:', error);
@@ -291,7 +313,7 @@ export default function ProfileScreen() {
     };
     
     fetchUserProfile();
-  }, []);
+  }, [user_id]);
 
   const handleSelectProfileImage = async () => {
     try {
@@ -325,44 +347,75 @@ export default function ProfileScreen() {
     try {
       setUploadingImage(true);
       
-      // Get current user
-      const user = supabase.auth.user();
-      if (!user) {
-        Alert.alert('Error', 'You need to be logged in to upload a profile image');
+      // Get current user id (from props or auth)
+      const currentUserId = user_id || (supabase.auth.user() ? supabase.auth.user().id : null);
+      
+      if (!currentUserId) {
+        toast.error('You need to be logged in to upload a profile image');
         return;
       }
       
-      console.log('Starting profile image upload for user:', user.id);
+      console.log('Starting profile image upload for user:', currentUserId);
       
-      // Upload image to backend API which handles S3 storage
-      const imageUrl = await uploadProfileImage(imageUri, user.id);
+      // Prepare FormData for the backend
+      const fileExt = imageUri.split('.').pop().toLowerCase();
+      const fileName = `${Date.now()}.${fileExt}`;
       
-      // Check if we got a fallback URL (which indicates backend failure)
-      const isFallbackUrl = imageUrl.includes('randomuser.me');
+      const fileObject = {
+        uri: imageUri,
+        type: `image/${fileExt}`,
+        name: fileName
+      };
       
-      if (isFallbackUrl) {
-        console.warn('Using fallback image URL due to backend unavailability');
-        Alert.alert(
-          'Limited Connectivity',
-          'Unable to connect to the image upload service. Using a temporary profile image instead.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        console.log('Image uploaded successfully, URL:', imageUrl);
+      // Create FormData
+      const formData = new FormData();
+      formData.append('file', fileObject);
+      formData.append('user_id', currentUserId);
+      
+      // Send direct request to backend API
+      const response = await fetch('https://gymvid-app.onrender.com/upload/profile-image', {
+        method: 'POST',
+        body: formData,
+        timeout: 30000,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Backend error:', {
+          status: response.status,
+          text: errorText
+        });
+        throw new Error(`Upload failed: ${response.status}`);
       }
       
-      // Update user profile in Supabase
-      const updateResult = await supabase
+      // Parse backend response
+      const data = await response.json();
+      console.log('Backend response:', data);
+      
+      // Check for success flag and image_url in response
+      if (!data.success || !data.image_url) {
+        throw new Error('Invalid response from server');
+      }
+      
+      const imageUrl = data.image_url;
+      console.log('Image uploaded successfully to S3, URL:', imageUrl);
+      
+      // Use the provided mcp client or fallback to standard supabase client
+      const dbClient = mcp || supabase;
+      
+      // Update user profile in Supabase - overwrite existing image URL
+      const updateResult = await dbClient
         .from('users')
         .update({ profile_image_url: imageUrl })
-        .eq('id', user.id);
+        .eq('id', currentUserId);
       
       if (updateResult.error) {
         console.error('Error updating user profile:', updateResult.error);
-        throw new Error(`Failed to update profile in database: ${updateResult.error.message || 'Unknown error'}`);
+        toast.error('Profile updated in S3 but database update failed');
+        throw new Error(`Failed to update profile in database: ${updateResult.error.message}`);
       }
       
-      console.log('Profile updated successfully in Supabase');
+      console.log('Profile updated successfully in database');
       
       // Update state with new image
       setUserData(prev => ({
@@ -370,28 +423,15 @@ export default function ProfileScreen() {
         profileImage: imageUrl
       }));
       
-      if (!isFallbackUrl) {
-        Alert.alert('Success', 'Profile image uploaded successfully');
-      }
+      // Show success toast without tick emoji
+      toast.success('Profile image updated!');
       
     } catch (error) {
       // Log the full error object for debugging
       console.error('Error uploading image:', error);
       
-      // Create a detailed error message
-      const errorDetails = {
-        message: error.message || 'Unknown error',
-        stack: error.stack,
-        name: error.name,
-        code: error.code
-      };
-      
-      console.error('Error details:', errorDetails);
-      
-      Alert.alert(
-        'Error', 
-        `Failed to upload profile image: ${error.message || 'Unknown error'}`
-      );
+      // Show error toast
+      toast.error(`Failed to update profile image: ${error.message || 'Unknown error'}`);
     } finally {
       setUploadingImage(false);
     }
@@ -414,17 +454,19 @@ export default function ProfileScreen() {
             activeOpacity={0.8}
             onPress={handleSelectProfileImage}
             style={styles.profileImageContainer}
+            className="relative rounded-full overflow-hidden shadow-md border-2 border-gray-100"
           >
             <Image 
               source={{ uri: userData?.profileImage || 'https://randomuser.me/api/portraits/women/44.jpg' }} 
               style={styles.profileImage} 
+              className="w-20 h-20 rounded-full bg-gray-100"
             />
             {uploadingImage ? (
-              <View style={styles.uploadingOverlay}>
+              <View style={styles.uploadingOverlay} className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-full">
                 <ActivityIndicator size="small" color="#fff" />
               </View>
             ) : (
-              <View style={styles.editIconContainer}>
+              <View style={styles.editIconContainer} className="absolute bottom-0 right-0 bg-gray-800 w-7 h-7 rounded-full flex items-center justify-center border-2 border-white">
                 <Ionicons name="camera" size={18} color="#fff" />
               </View>
             )}
@@ -454,11 +496,11 @@ export default function ProfileScreen() {
             <CountryFlag isoCode={countryCode} size={20} />
           </View>
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>{userData?.ageGroup || 'Open'}</Text>
+            <Text style={styles.badgeText}>{ageCategory}</Text>
             <Text style={[styles.badgeIcon, styles.trophyIcon]}>🏆</Text>
           </View>
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>{userData?.weightClass || '60kg'}</Text>
+            <Text style={styles.badgeText}>{weightClass}</Text>
             <Text style={[styles.badgeIcon, styles.flexIcon]}>💪</Text>
           </View>
         </View>

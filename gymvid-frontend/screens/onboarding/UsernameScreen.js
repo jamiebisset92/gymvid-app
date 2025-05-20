@@ -17,12 +17,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../config/supabase';
 import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Create a debug logging function that only logs in development
 const debugLog = (...args) => {
   if (__DEV__) {
     console.log(...args);
   }
+};
+
+// Log directly to Expo Go console (easier to see than debugLog)
+const logToConsole = (...args) => {
+  console.log('[ONBOARDING]', ...args);
 };
 
 export default function UsernameScreen({ navigation, route }) {
@@ -267,6 +273,115 @@ export default function UsernameScreen({ navigation, route }) {
         return;
       }
       
+      // Get current user from Supabase
+      let currentUserId = userId; // Default to the userId we already have
+      
+      try {
+        // Try v2 API format first (getUser)
+        const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+        if (user && user.id) {
+          currentUserId = user.id;
+          logToConsole('Using Supabase v2 user ID:', currentUserId);
+        } else {
+          // Try v1 API format (direct user method)
+          const v1User = supabase.auth.user();
+          if (v1User && v1User.id) {
+            currentUserId = v1User.id;
+            logToConsole('Using Supabase v1 user ID:', currentUserId);
+          } else {
+            // Fallback to route param
+            logToConsole('Using route param user ID:', currentUserId);
+          }
+        }
+      } catch (userError) {
+        logToConsole('Error getting user ID, using fallback:', currentUserId);
+        console.error('Error getting user ID:', userError);
+      }
+      
+      logToConsole('Final user ID for onboarding:', currentUserId);
+      
+      // Collect onboarding data from AsyncStorage
+      const onboardingData = {
+        date_of_birth: '',
+        gender: '',
+        country: '',
+        bodyweight: 0,
+        unit_pref: 'kg'
+      };
+      
+      try {
+        // Retrieve stored onboarding data
+        const storedDateOfBirth = await AsyncStorage.getItem('userDateOfBirth');
+        const storedGender = await AsyncStorage.getItem('userGender');
+        const storedCountry = await AsyncStorage.getItem('userCountry');
+        const storedBodyweight = await AsyncStorage.getItem('userBodyweight');
+        const storedUnitPref = await AsyncStorage.getItem('userUnitPreference');
+        
+        if (storedDateOfBirth) onboardingData.date_of_birth = storedDateOfBirth;
+        if (storedGender) onboardingData.gender = storedGender;
+        if (storedCountry) onboardingData.country = storedCountry;
+        if (storedBodyweight) onboardingData.bodyweight = parseFloat(storedBodyweight);
+        if (storedUnitPref) onboardingData.unit_pref = storedUnitPref;
+        
+        logToConsole('Retrieved onboarding data:', onboardingData);
+        
+        // Send onboarding data to backend
+        const onboardingPayload = {
+          user_id: currentUserId,
+          ...onboardingData
+        };
+        
+        // Log before submitting
+        logToConsole('⭐ Onboarding submitted ⭐');
+        logToConsole('Payload:', onboardingPayload);
+        
+        // Configure the API base URL
+        // For production, we use the Render backend
+        const API_BASE_URL = 'https://gymvid-app.onrender.com';
+        const apiUrl = `${API_BASE_URL}/onboard`;
+        
+        logToConsole('Making POST request to:', apiUrl);
+        
+        // Make POST request to backend
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(onboardingPayload),
+          timeout: 10000, // 10-second timeout
+        });
+        
+        logToConsole('Fetch request completed, status:', response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          logToConsole('Backend onboarding request failed:', errorText);
+          console.error('Backend onboarding request failed:', errorText);
+          // Continue with the flow even if backend fails - we'll sync data later
+        } else {
+          const responseData = await response.json();
+          logToConsole('Backend onboarding response:', responseData);
+          
+          // If the backend returns age_category and weight_class, store them
+          if (responseData.data && Array.isArray(responseData.data) && responseData.data.length > 0) {
+            const userData = responseData.data[0];
+            if (userData.age_category) {
+              await AsyncStorage.setItem('userAgeCategory', userData.age_category);
+              logToConsole('Stored age category:', userData.age_category);
+            }
+            if (userData.weight_class) {
+              await AsyncStorage.setItem('userWeightClass', userData.weight_class);
+              logToConsole('Stored weight class:', userData.weight_class);
+            }
+          }
+        }
+      } catch (err) {
+        logToConsole('Error with onboarding API request:', err.message);
+        console.error('Error with onboarding API request:', err);
+        // Continue with the flow - backend sync can happen later
+      }
+      
       // Show success message
       debugLog('Onboarding completed successfully!');
       
@@ -307,6 +422,7 @@ export default function UsernameScreen({ navigation, route }) {
         });
       });
     } catch (err) {
+      logToConsole('Unexpected error in handleContinue:', err.message);
       console.error('Unexpected error in handleContinue:', err);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
       setLoading(false);
