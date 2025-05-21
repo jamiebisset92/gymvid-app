@@ -140,7 +140,10 @@ export const useAuth = () => {
       
       // Check for errors
       if (response.error) {
-        console.error('Error during signup:', response.error);
+        // Hide "User already registered" errors from console
+        if (response.error.message !== 'User already registered') {
+          console.error('Error during signup:', response.error);
+        }
         throw response.error;
       }
       
@@ -215,7 +218,10 @@ export const useAuth = () => {
       console.log('Signup successful, returning user with ID:', userId);
       return { data, error: null };
     } catch (error) {
-      console.error('Signup error:', error);
+      // Hide "User already registered" errors from console
+      if (error && error.message !== 'User already registered') {
+        console.error('Signup error:', error);
+      }
       let errorMsg = 'An error occurred. Please try again.';
       if (error && typeof error.message === 'string') {
         errorMsg = error.message;

@@ -225,6 +225,14 @@ export const SCREEN_TRANSITION_SPECS = {
       easing: Easing.bezier(0.42, 0.0, 0.58, 1.0), // Improved easing curve
     },
   },
+  // Add specific back transition specs for better backward navigation
+  back: {
+    animation: 'timing',
+    config: {
+      duration: 250,
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1.0), // Smoother curve for back navigation
+    },
+  },
 };
 
 // Toast notification styling
@@ -299,53 +307,52 @@ export const runWorldClassEntranceAnimation = ({
   elementsAnim = [], 
   onComplete = null 
 }) => {
-  // Reset all animations first
+  // Reset all animations first to prevent any double bouncing
   fadeAnim.setValue(0);
-  titleAnim?.setValue(20);
-  slideAnim?.setValue(30);
+  titleAnim?.setValue(0); // Start at 0 position and animate opacity instead
+  slideAnim?.setValue(0); // Start at 0 position and animate opacity instead
   elementsAnim.forEach(anim => anim.setValue(0));
   
-  // Sequential animation approach - controlled and predictable
-  // First, fade in the entire screen with improved timing
+  // Staggered sequential animation approach for flawless entry
+  
+  // First, fade in the entire container - quick and clean
   Animated.timing(fadeAnim, {
     toValue: 1,
-    duration: ANIMATION_CONFIG.screenTransition.fadeIn.duration,
-    delay: ANIMATION_CONFIG.screenTransition.fadeIn.delay,
-    easing: ANIMATION_CONFIG.screenTransition.fadeIn.easing,
+    duration: 250,
+    delay: 10, // Minimal delay for stability
+    easing: Easing.bezier(0.33, 0, 0.67, 1), // Cubic easing in/out - balanced
     useNativeDriver: true,
-  }).start(() => {
-    // After screen is fully visible, animate the title if provided
+  }).start();
+  
+  // Sequence the elements with perfectly tuned timing
+  setTimeout(() => {
+    // Animate all content with precise timing
+    
+    // Title animation without vertical movement (prevents double bouncing)
     if (titleAnim) {
-      Animated.spring(titleAnim, {
-        toValue: 0,
-        tension: 65, // Slightly reduced tension for smoother motion
-        friction: 7.5, // Slightly increased friction to prevent oscillation
+      Animated.timing(titleAnim, {
+        toValue: 1,
+        duration: 400,
+        easing: Easing.bezier(0.33, 0, 0.67, 1), // Cubic easing in/out
         useNativeDriver: true,
       }).start();
     }
     
-    // Then animate the main content with a slight delay
-    if (slideAnim) {
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 60,
-        friction: 7,
-        useNativeDriver: true,
-      }).start();
-    }
-    
-    // Finally, animate any additional elements in sequence
+    // Content animations
     if (elementsAnim.length > 0) {
-      Animated.stagger(50, elementsAnim.map(anim => 
-        Animated.timing(anim, {
-          toValue: 1,
-          duration: 200,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1.0),
-          useNativeDriver: true,
-        })
-      )).start(onComplete);
+      // Stagger elements with short delays between each
+      elementsAnim.forEach((anim, index) => {
+        setTimeout(() => {
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 300,
+            easing: Easing.bezier(0.16, 1, 0.3, 1), // Exponential out - premium feel
+            useNativeDriver: true,
+          }).start(index === elementsAnim.length - 1 ? onComplete : undefined);
+        }, 70 * (index + 1)); // Stagger by 70ms per element
+      });
     } else if (onComplete) {
-      onComplete();
+      setTimeout(onComplete, 400);
     }
-  });
+  }, 100);
 }; 

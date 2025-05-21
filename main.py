@@ -22,6 +22,7 @@ from backend.ai.analyze.rep_detection import run_rep_detection_from_landmark_y
 from backend.ai.analyze.keyframe_exporter import export_keyframes
 from backend.ai.analyze.coaching_feedback import generate_feedback
 from backend.ai.analyze import analyze_set
+from backend.api.check_username import router as check_username_router  # ✅ ADDED for username checking
 
 # ✅ Load env
 load_dotenv()
@@ -51,6 +52,7 @@ app.include_router(manual_log_router)
 app.include_router(profile_image_router)  # ✅ ADDED
 from backend.api.onboarding import router as onboarding_router  # ✅ NEW
 app.include_router(onboarding_router)  # ✅ NEW
+app.include_router(check_username_router)  # ✅ ADDED for username checking
 
 # ✅ AI set analysis
 @app.post("/analyze/log_set")

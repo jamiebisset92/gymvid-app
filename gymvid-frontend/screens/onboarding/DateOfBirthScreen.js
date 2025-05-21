@@ -7,7 +7,7 @@ import { supabase } from '../../config/supabase';
 import { ProgressContext } from '../../navigation/AuthStack';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useIsFocused } from '@react-navigation/native';
-import { Animated } from 'react-native';
+import { Animated, Easing } from 'react-native';
 import { runWorldClassEntranceAnimation, ANIMATION_CONFIG } from '../../utils/animationUtils';
 
 // Create a debug logging function that only logs in development
@@ -39,7 +39,7 @@ export default function DateOfBirthScreen({ navigation, route }) {
   }, [route.params]);
   
   // Get progress context
-  const { progress, setProgress } = useContext(ProgressContext);
+  const { progress, setProgress, updateProgress } = useContext(ProgressContext);
   
   const isFocused = useIsFocused();
   // Entrance animation values
@@ -98,6 +98,14 @@ export default function DateOfBirthScreen({ navigation, route }) {
     setDateOfBirth(currentDate);
   };
 
+  // Update progress tracking when screen comes into focus
+  useEffect(() => {
+    if (isFocused) {
+      // Update progress context with current screen name
+      updateProgress('DateOfBirth');
+    }
+  }, [isFocused, updateProgress]);
+
   const handleContinue = async () => {
     // Calculate if the user is at least 16 years old
     if (age < 16) {
@@ -150,19 +158,12 @@ export default function DateOfBirthScreen({ navigation, route }) {
       
       if (error) {
         console.error('Error updating profile:', error);
-        Alert.alert('Error', 'Failed to save your data. Please try again.');
+        Alert.alert('Error', error.message || 'Could not save your date of birth. Please try again.');
         setLoading(false);
         return;
       }
       
-      // After database is updated successfully, update progress
-      debugLog('Profile updated successfully, preparing navigation...');
-      setLoading(false);
-      
-      // Update progress for next screen
-      setProgress({ ...progress, current: 3 });
-      
-      // Fade out this screen completely before navigation
+      // Completely fade out this screen before navigation
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: ANIMATION_CONFIG.screenTransition.fadeOut.duration,
@@ -185,18 +186,15 @@ export default function DateOfBirthScreen({ navigation, route }) {
   };
 
   const handleBack = () => {
-    // Update progress for previous screen first
-    setProgress({ ...progress, current: 1 });
-    
-    // Animate out before navigating back
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: ANIMATION_CONFIG.screenTransition.fadeOut.duration,
-      easing: ANIMATION_CONFIG.screenTransition.fadeOut.easing,
-      useNativeDriver: true
-    }).start(() => {
-      // Navigate back only after screen is no longer visible
-      navigation.goBack();
+    // Log navigation attempt
+    console.log('DateOfBirth: handleBack called, navigating to Gender screen');
+
+    // Instead of animating, simply navigate and let the Navigator handle the transition
+    // This prevents timing issues and double animations
+    navigation.navigate('Gender', { 
+      userId,
+      email: userEmail,
+      fromSignUp
     });
   };
 
@@ -240,27 +238,41 @@ export default function DateOfBirthScreen({ navigation, route }) {
   }, [isFocused]);
 
   return (
-    <Animated.View style={[styles.container, { 
-      opacity: fadeAnim,
-      backgroundColor: '#FFFFFF' 
-    }]}>
+    <Animated.View 
+      style={[
+        styles.container, 
+        { 
+          opacity: fadeAnim,
+          backgroundColor: '#FFFFFF' 
+        }
+      ]}
+    >
       <SafeAreaView style={styles.safeContainer}>
-        {/* Progress bar - remains static during transitions */}
-        <View style={styles.header}>
-          <View style={styles.progressWrapper}>
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressBarFilled, { flex: progressPercentage || 0.5 }]} />
-              <View style={[styles.progressBarEmpty, { flex: 1 - (progressPercentage || 0.5) }]} />
-            </View>
-          </View>
-        </View>
-
+        {/* Header spacer - to account for the global progress bar */}
+        <View style={styles.header} />
+        
         <View style={styles.contentContainer}>
-          <Animated.Text style={[styles.titleText, { transform: [{ translateY: titleAnim }] }]}>
+          <Animated.Text
+            style={[
+              styles.titleText,
+              { 
+                opacity: titleAnim,
+                transform: [
+                  { 
+                    scale: titleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.98, 1],
+                      extrapolate: 'clamp'
+                    })
+                  }
+                ] 
+              }
+            ]}
+          >
             When were you born?
           </Animated.Text>
           
-          <Animated.View style={[styles.formContainer, { transform: [{ translateX: slideAnim }] }]}>
+          <Animated.View style={[styles.formContainer, { opacity: fadeAnim }]}>
             <View style={styles.dateContainer}>
               <Text style={styles.dateText}>{formatDate(dateOfBirth)}</Text>
               <View style={styles.dateIconContainer}>
@@ -331,32 +343,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    height: 60,
+    height: 60, // Keep the same height for spacing
     paddingTop: 15,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    position: 'relative',
-    zIndex: 10, // Ensure progress bar is above animations
-  },
-  progressWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressContainer: {
-    width: '50%',
-    flexDirection: 'row',
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#F0F0F0',
-    overflow: 'hidden',
-  },
-  progressBarFilled: {
-    backgroundColor: '#007BFF',
-  },
-  progressBarEmpty: {
-    backgroundColor: '#F0F0F0',
   },
   contentContainer: {
     flex: 1,
@@ -456,9 +447,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+    backdropFilter: 'blur(10px)',
   },
   backButtonBottom: {
     height: 56,
@@ -486,9 +483,9 @@ const styles = StyleSheet.create({
     flex: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   nextButtonDisabled: {
     backgroundColor: '#AACEF5',

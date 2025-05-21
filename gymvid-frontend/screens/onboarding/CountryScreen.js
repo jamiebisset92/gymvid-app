@@ -9,7 +9,8 @@ import {
   Animated,
   TextInput,
   FlatList,
-  Keyboard
+  Keyboard,
+  Easing
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
@@ -17,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../config/supabase';
 import { ProgressContext } from '../../navigation/AuthStack';
 import CountryFlag from 'react-native-country-flag';
+import { useIsFocused } from '@react-navigation/native';
+import { runWorldClassEntranceAnimation, ANIMATION_CONFIG } from '../../utils/animationUtils';
 
 // Create a debug logging function that only logs in development
 const debugLog = (...args) => {
@@ -250,79 +253,93 @@ export default function CountryScreen({ navigation, route }) {
   }, [route.params]);
   
   // Get progress context
-  const { progress, setProgress } = useContext(ProgressContext);
+  const { progress, setProgress, updateProgress } = useContext(ProgressContext);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-  const titleAnim = useRef(new Animated.Value(20)).current;
+  const titleAnim = useRef(new Animated.Value(0)).current;
   const inputAnim = useRef(new Animated.Value(0)).current;
   const dropdownAnim = useRef(new Animated.Value(0)).current;
 
-  // Run entrance animations
+  // Add isFocused hook
+  const isFocused = useIsFocused();
+
+  // Update progress tracking when screen comes into focus
   useEffect(() => {
-    const animationSequence = Animated.stagger(80, [
-      // Fade in the entire view first
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      
-      // Slide in the title from top
-      Animated.spring(titleAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      
-      // Slide in content from right
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      
-      // Fade in input
-      Animated.timing(inputAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]);
-    
-    animationSequence.start(() => {
-      // Focus the input after animations complete
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    });
-    
-    // Set up a focus listener for when returning to this screen
-    const unsubFocus = navigation.addListener('focus', () => {
-      // Reset animations
+    if (isFocused) {
+      // Update progress context with current screen name
+      updateProgress('Country');
+      console.log('[COUNTRY] Screen focused, updating progress to Country');
+    }
+  }, [isFocused, updateProgress]); // Keep dependencies minimal
+
+  // Run entrance animations only when focused
+  useEffect(() => {
+    let timer;
+    if (isFocused) {
+      console.log('[COUNTRY] Running entrance animations');
+      // Reset animations when the component focuses
       fadeAnim.setValue(0);
       slideAnim.setValue(30);
-      titleAnim.setValue(20);
+      titleAnim.setValue(0);
       inputAnim.setValue(0);
       dropdownAnim.setValue(0);
       
-      // Restart the animation sequence
-      animationSequence.start(() => {
-        // Focus the input after animations complete
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
-      });
-    });
+      // Wait for the navigator transition to be fully complete
+      timer = setTimeout(() => {
+        const animationSequence = Animated.stagger(80, [
+          // Fade in the entire view first
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          
+          // Slide in the title from top - use opacity only, no translation
+          Animated.timing(titleAnim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          
+          // Slide in content from right
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            tension: 50,
+            friction: 7,
+            useNativeDriver: true,
+          }),
+          
+          // Fade in input
+          Animated.timing(inputAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]);
+        
+        animationSequence.start(() => {
+          // Focus the input after animations complete
+          if (inputRef.current) {
+            inputRef.current.focus();
+          }
+        });
+      }, 100);
+    }
     
+    // Cleanup function - very important!
     return () => {
-      unsubFocus();
+      clearTimeout(timer);
+      // Reset animations when component unmounts
+      fadeAnim.stopAnimation();
+      slideAnim.stopAnimation();
+      titleAnim.stopAnimation();
+      inputAnim.stopAnimation();
+      dropdownAnim.stopAnimation();
     };
-  }, [navigation]);
-  
+  }, [isFocused]); // Only re-run when focused state changes
+
   // Load existing country if available
   useEffect(() => {
     const loadUserCountry = async () => {
@@ -504,7 +521,7 @@ export default function CountryScreen({ navigation, route }) {
       
       if (error) {
         console.error('Error updating profile:', error);
-        Alert.alert('Error', 'Failed to save your country. Please try again.');
+        Alert.alert('Error', error.message || 'Could not save your country. Please try again.');
         setLoading(false);
         return;
       }
@@ -513,22 +530,12 @@ export default function CountryScreen({ navigation, route }) {
       debugLog('Profile updated, navigating to Username screen...');
       setLoading(false);
       
-      // Run elegant exit animation with smooth transition
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true
-        }),
-        Animated.timing(slideAnim, {
-          toValue: -30,
-          duration: 400,
-          useNativeDriver: true
-        })
-      ]).start(() => {
-        // Update progress for next screen
-        setProgress({ ...progress, current: 6 });
-        
+      // Completely fade out this screen before navigation
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true
+      }).start(() => {
         // Navigate to the Username screen with all necessary data
         navigation.navigate('Username', { 
           userId,
@@ -544,23 +551,15 @@ export default function CountryScreen({ navigation, route }) {
   };
 
   const handleBack = () => {
-    // Animate out before navigating back
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0.5,
-        duration: 200,
-        useNativeDriver: true
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 100, // Slide out to the right
-        duration: 250,
-        useNativeDriver: true
-      })
-    ]).start(() => {
-      // Update progress for previous screen
-      setProgress({ ...progress, current: 4 });
-      // Navigate back to the BodyWeight screen
-      navigation.goBack();
+    // Log navigation attempt
+    console.log('CountryScreen: handleBack called, navigating to BodyWeight screen');
+
+    // Instead of animating, simply navigate and let the Navigator handle the transition
+    // This prevents timing issues and double animations
+    navigation.navigate('BodyWeight', { 
+      userId,
+      email: userEmail,
+      fromSignUp
     });
   };
 
@@ -589,25 +588,30 @@ export default function CountryScreen({ navigation, route }) {
         styles.container, 
         { 
           opacity: fadeAnim,
+          backgroundColor: '#FFFFFF' 
         }
       ]}
     >
       <SafeAreaView style={styles.safeContainer}>
-        {/* Progress bar */}
-        <View style={styles.header}>
-          <View style={styles.progressWrapper}>
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressBarFilled, { flex: progressPercentage || 0.5 }]} />
-              <View style={[styles.progressBarEmpty, { flex: 1 - (progressPercentage || 0.5) }]} />
-            </View>
-          </View>
-        </View>
-
+        {/* Header spacer - to account for the global progress bar */}
+        <View style={styles.header} />
+        
         <View style={styles.contentContainer}>
           <Animated.Text
             style={[
               styles.titleText,
-              { transform: [{ translateY: titleAnim }] }
+              { 
+                opacity: titleAnim,
+                transform: [
+                  { 
+                    scale: titleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.95, 1],
+                      extrapolate: 'clamp'
+                    })
+                  }
+                ] 
+              }
             ]}
           >
             Where do you live?
@@ -616,8 +620,7 @@ export default function CountryScreen({ navigation, route }) {
           <Animated.View 
             style={{ 
               width: '100%', 
-              transform: [{ translateX: slideAnim }],
-              opacity: fadeAnim,
+              opacity: fadeAnim
             }}
           >
             <View style={styles.formContainer}>
@@ -734,44 +737,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    height: 60,
+    height: 60, // Keep the same height for spacing
     paddingTop: 15,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    position: 'relative',
-    zIndex: 10, // Ensure progress bar is above animations
-  },
-  progressWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressContainer: {
-    width: '50%',
-    flexDirection: 'row',
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#F0F0F0',
-    overflow: 'hidden',
-  },
-  progressBarFilled: {
-    backgroundColor: '#007BFF',
-  },
-  progressBarEmpty: {
-    backgroundColor: '#F0F0F0',
   },
   contentContainer: {
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 40,
+    paddingTop: 40, // Reduced from 80 to move content higher
     paddingBottom: 20,
   },
   titleText: {
     fontSize: 32,
     fontWeight: '700',
-    marginBottom: 40,
+    marginBottom: 20, // Reduced from 40 to tighten spacing
     textAlign: 'center',
     letterSpacing: -0.5,
     color: '#1A1A1A',
@@ -789,7 +771,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 30,
+    marginTop: 15,
     borderWidth: 1,
     borderColor: colors.lightGray,
     shadowColor: '#000',
@@ -867,9 +849,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+    // Premium glass effect
+    backdropFilter: 'blur(10px)', // Will only work on iOS with newer versions
   },
   backButtonBottom: {
     height: 56,
@@ -897,9 +886,9 @@ const styles = StyleSheet.create({
     flex: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.15, // Increased for more premium feel
+    shadowRadius: 6, // Increased for softer shadow spread
+    elevation: 3,
   },
   nextButtonDisabled: {
     backgroundColor: '#AACEF5',
@@ -910,5 +899,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginRight: 8,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+    position: 'absolute',
+    left: 20,
+    top: 15,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
 }); 

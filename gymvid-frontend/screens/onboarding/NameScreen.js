@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, TextInput, Keyboard } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
@@ -12,302 +12,324 @@ import { runWorldClassEntranceAnimation, ANIMATION_CONFIG } from '../../utils/an
 // Create a debug logging function that only logs in development
 const debugLog = (...args) => {
   if (__DEV__) {
-    console.log(...args);
+    console.log('[NAME]', ...args);
   }
 };
 
 export default function NameScreen({ navigation, route }) {
-  const [name, setName] = useState('');
-  const { updateProfile, loading } = useAuth();
+  console.log("📱 NameScreen mounted - route params:", JSON.stringify(route.params || {}, null, 2));
   
-  // Get the userId and email passed from SignUpScreen
-  const userId = route.params?.userId;
-  const userEmail = route.params?.email;
-  
-  // Log parameters immediately when component mounts
-  useEffect(() => {
-    console.log('NameScreen mounted with route params:', route.params);
+  try {
+    const [name, setName] = useState('');
+    const { updateProfile, loading } = useAuth();
     
-    if (userId) {
-      console.log('NameScreen received userId:', userId);
-    } else {
-      console.error('NO USER ID PROVIDED TO NAMESCREEEN');
-      
-      // Show alert for debugging
-      Alert.alert(
-        'Debug Info',
-        'No userId provided to NameScreen. Route params: ' + JSON.stringify(route.params),
-        [{ text: 'OK' }]
-      );
-    }
-  }, []);
-  
-  // Log parameters whenever they change 
-  useEffect(() => {
-    console.log('NameScreen - Route params changed:', route.params);
-    if (userId !== route.params?.userId) {
-      console.log('userId changed from', userId, 'to', route.params?.userId);
-    }
-  }, [route.params]);
-  
-  // Get progress context
-  const { progress, setProgress } = useContext(ProgressContext);
-  
-  // Animations
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const titleAnim = useRef(new Animated.Value(20)).current;
-  const inputAnim = useRef(new Animated.Value(0)).current;
-  
-  const isFocused = useIsFocused();
-  const inputRef = useRef(null);
-
-  // Run entrance animation only after navigator transition is complete
-  useEffect(() => {
-    let timer;
-    if (isFocused) {
-      // Reset all animations immediately when the component mounts/focuses
-      fadeAnim.setValue(0);
-      slideAnim.setValue(30);
-      titleAnim.setValue(20);
-      inputAnim.setValue(0);
-      
-      // Wait for the navigator transition to be fully complete
-      timer = setTimeout(() => {
-        // Use the world-class animation utility for consistent, premium feel
-        runWorldClassEntranceAnimation({
-          fadeAnim,
-          titleAnim,
-          slideAnim,
-          elementsAnim: [inputAnim]
-        });
-        
-        // Focus the input after animations
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
-      }, 100);
-    }
+    // Get the userId and email passed from SignUpScreen
+    const userId = route.params?.userId;
+    const userEmail = route.params?.email;
     
-    // Cleanup function - very important!
-    return () => {
-      clearTimeout(timer);
-      // Reset animations when component unmounts
-      fadeAnim.stopAnimation();
-      slideAnim.stopAnimation();
-      titleAnim.stopAnimation();
-      inputAnim.stopAnimation();
-    };
-  }, [isFocused]);
-  
-  // Load existing name when the screen is focused
-  useEffect(() => {
-    const loadUserName = async () => {
-      try {
-        // First try to get user from route params (from signup flow)
-        let userIdToUse = userId;
-        
-        // If not available, try to get from auth
-        if (!userIdToUse) {
-          const user = supabase.auth.user();
-          if (user) {
-            userIdToUse = user.id;
-          }
-        }
-        
-        if (!userIdToUse) {
-          console.error('No user ID available for fetching profile');
-          return;
-        }
-
-        debugLog('Loading profile data for user ID:', userIdToUse);
-
-        // Try to fetch existing profile using available ID
-        const { data: profile, error } = await supabase
-          .from('users')
-          .select('name')
-          .eq('id', userIdToUse)
-          .single();
-
-        // If we have name data, set it in the state
-        if (!error && profile && profile.name) {
-          debugLog('Loaded existing name:', profile.name);
-          setName(profile.name);
-        } else if (error) {
-          debugLog('Error loading profile:', error);
-        }
-      } catch (err) {
-        console.error('Error loading user name:', err);
+    // Log parameters immediately when component mounts
+    useEffect(() => {
+      console.log('📱 NameScreen initial render with userId:', userId);
+      
+      if (!userId) {
+        console.warn('⚠️ NO USER ID PROVIDED TO NAMESCREEN');
       }
+    }, []);
+    
+    // Get progress context
+    const { updateProgress } = useContext(ProgressContext);
+    
+    // Animations
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(30)).current;
+    const titleAnim = useRef(new Animated.Value(20)).current;
+    const inputAnim = useRef(new Animated.Value(0)).current;
+    
+    const isFocused = useIsFocused();
+    const inputRef = useRef(null);
+
+    // Update progress tracking when screen comes into focus
+    useEffect(() => {
+      console.log('📱 Focused state changed:', isFocused);
+      if (isFocused) {
+        console.log('📱 Updating progress for Name screen');
+        updateProgress('Name');
+      }
+    }, [isFocused]); // keep dependency array minimal to prevent loops
+
+    // Run entrance animation only after navigator transition is complete
+    useEffect(() => {
+      let timer;
+      if (isFocused) {
+        console.log('📱 Running entrance animation');
+        // Reset all animations immediately when the component mounts/focuses
+        fadeAnim.setValue(0);
+        slideAnim.setValue(30);
+        titleAnim.setValue(20);
+        inputAnim.setValue(0);
+        
+        // Wait for the navigator transition to be fully complete
+        timer = setTimeout(() => {
+          // Use the world-class animation utility for consistent, premium feel
+          runWorldClassEntranceAnimation({
+            fadeAnim,
+            titleAnim,
+            slideAnim,
+            elementsAnim: [inputAnim]
+          });
+          
+          // Focus the input after animations
+          if (inputRef.current) {
+            inputRef.current.focus();
+          }
+        }, 100);
+      }
+      
+      // Cleanup function - very important!
+      return () => {
+        clearTimeout(timer);
+        // Reset animations when component unmounts
+        fadeAnim.stopAnimation();
+        slideAnim.stopAnimation();
+        titleAnim.stopAnimation();
+        inputAnim.stopAnimation();
+      };
+    }, [isFocused]);
+    
+    // Load existing name when the screen is focused
+    useEffect(() => {
+      const loadUserName = async () => {
+        try {
+          console.log('📱 Loading user name for userId:', userId);
+          // First try to get user from route params (from signup flow)
+          let userIdToUse = userId;
+          
+          // If not available, try to get from auth
+          if (!userIdToUse) {
+            console.log('📱 No userId from params, checking current session');
+            const user = supabase.auth.user();
+            if (user) {
+              userIdToUse = user.id;
+              console.log('📱 Found userId from session:', userIdToUse);
+            }
+          }
+          
+          if (!userIdToUse) {
+            console.error('📱 No user ID available for fetching profile');
+            return;
+          }
+
+          // Try to fetch existing profile using available ID
+          const { data: profile, error } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', userIdToUse)
+            .single();
+
+          // If we have name data, set it in the state
+          if (!error && profile && profile.name) {
+            console.log('📱 Loaded existing name:', profile.name);
+            setName(profile.name);
+          } else if (error) {
+            console.warn('📱 Error loading profile:', error.message);
+          } else {
+            console.log('📱 No existing name found for user');
+          }
+        } catch (err) {
+          console.error('📱 Error loading user name:', err);
+        }
+      };
+
+      if (isFocused) {
+        loadUserName();
+      }
+    }, [userId, isFocused]);
+
+    const handleNameChange = (text) => {
+      setName(text);
     };
 
-    loadUserName();
-  }, [userId]);
-
-  const handleNameChange = (text) => {
-    setName(text);
-  };
-
-  const handleContinue = async () => {
-    if (!name.trim()) {
-      Alert.alert('Error', 'Please enter your name');
-      return;
-    }
-    
-    // Close keyboard if open
-    Keyboard.dismiss();
-    
-    // Update database first - before any animations
-    debugLog('Updating user profile with name:', name);
-    debugLog('Using userId:', userId);
-    
-    let error = null;
-    try {
-      // Always try direct database update first if we have userId
-      if (userId) {
-        debugLog('Using direct database update with userId:', userId);
-        const { error: directError } = await supabase
-          .from('users')
-          .upsert({
-            id: userId,
+    const handleContinue = async () => {
+      if (!name.trim()) {
+        Alert.alert('Error', 'Please enter your name');
+        return;
+      }
+      
+      // Close keyboard if open
+      Keyboard.dismiss();
+      
+      // Update database first - before any animations
+      console.log('📱 Updating user profile with name:', name);
+      console.log('📱 Using userId:', userId);
+      
+      let error = null;
+      try {
+        // Always try direct database update first if we have userId
+        if (userId) {
+          console.log('📱 Using direct database update with userId:', userId);
+          const { error: directError } = await supabase
+            .from('users')
+            .upsert({
+              id: userId,
+              name: name.trim(),
+              email: userEmail,
+              onboarding_complete: false
+            });
+            
+          if (directError) {
+            console.error('📱 Error in direct update:', directError);
+            error = directError;
+          } else {
+            console.log('📱 Name saved successfully via direct update');
+          }
+        } else {
+          // Fallback to updateProfile if we don't have userId
+          console.log('📱 No userId available, trying updateProfile method');
+          const result = await updateProfile({
             name: name.trim(),
-            email: userEmail,
             onboarding_complete: false
           });
           
-        if (directError) {
-          console.error('Error in direct update:', directError);
-          error = directError;
-        } else {
-          debugLog('Name saved successfully via direct update');
+          error = result?.error;
         }
-      } else {
-        // Fallback to updateProfile if we don't have userId
-        debugLog('No userId available, trying updateProfile method');
-        const result = await updateProfile({
-          name: name.trim(),
-          onboarding_complete: false
-        });
-        
-        error = result?.error;
+      } catch (err) {
+        console.error('📱 Error in update operation:', err);
+        error = err;
       }
-    } catch (err) {
-      console.error('Error in update operation:', err);
-      error = err;
-    }
-    
-    if (error) {
-      console.error('Error updating profile:', error);
-      Alert.alert('Error', error.message || 'Could not save your name. Please try again.');
-      return;
-    }
-    
-    // Update progress for next screen
-    setProgress({ ...progress, current: 1 });
-    
-    // Completely fade out this screen before navigation
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: ANIMATION_CONFIG.screenTransition.fadeOut.duration,
-      easing: ANIMATION_CONFIG.screenTransition.fadeOut.easing,
-      useNativeDriver: true
-    }).start(() => {
-      // Only navigate after animation is complete and screen is no longer visible
-      debugLog('Profile updated, navigating to Gender screen with userId:', userId);
       
-      // Pass all relevant data to the next screen
-      navigation.navigate('Gender', { 
-        userId,
-        email: userEmail,
-        fromSignUp: route.params?.fromSignUp
+      if (error) {
+        console.error('📱 Error updating profile:', error);
+        Alert.alert('Error', error.message || 'Could not save your name. Please try again.');
+        return;
+      }
+      
+      // Let the next screen handle its own progress update
+      
+      // Completely fade out this screen before navigation
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: ANIMATION_CONFIG.screenTransition.fadeOut.duration,
+        easing: ANIMATION_CONFIG.screenTransition.fadeOut.easing,
+        useNativeDriver: true
+      }).start(() => {
+        // Only navigate after animation is complete and screen is no longer visible
+        console.log('📱 Profile updated, navigating to Gender screen with userId:', userId);
+        
+        // Pass all relevant data to the next screen
+        navigation.navigate('Gender', { 
+          userId,
+          email: userEmail,
+          fromSignUp: route.params?.fromSignUp
+        });
       });
-    });
-  };
+    };
 
-  // Calculate progress percentage
-  const progressPercentage = progress.current / progress.total;
+    // Handle back button press
+    const handleBack = () => {
+      // Since Name is the first screen, we can simply go to Login if back is pressed
+      console.log('📱 Going back to Login from Name screen');
+      
+      // Fade out completely before navigation
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: ANIMATION_CONFIG.screenTransition.fadeOut.duration,
+        easing: ANIMATION_CONFIG.screenTransition.fadeOut.easing,
+        useNativeDriver: true
+      }).start(() => {
+        navigation.navigate('Login');
+      });
+    };
 
-  return (
-    <Animated.View 
-      style={[
-        styles.container, 
-        { 
-          opacity: fadeAnim,
-          backgroundColor: '#FFFFFF' 
-        }
-      ]}
-    >
-      <SafeAreaView style={styles.safeContainer}>
-        {/* Progress bar - remains static during transitions */}
-        <View style={styles.header}>
-          <View style={styles.progressWrapper}>
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressBarFilled, { flex: progressPercentage || 0.5 }]} />
-              <View style={[styles.progressBarEmpty, { flex: 1 - (progressPercentage || 0.5) }]} />
-            </View>
-          </View>
-        </View>
-        <View style={styles.contentContainer}>
-          <Animated.Text
-            style={[
-              styles.titleText,
-              { transform: [{ translateY: titleAnim }] }
-            ]}
-          >
-            What's your name?
-          </Animated.Text>
-          <Animated.View 
-            style={{ 
-              width: '100%', 
-              transform: [{ translateX: slideAnim }],
-              opacity: fadeAnim
-            }}
-          >
-            <View style={styles.formContainer}>
-              <Animated.View 
-                style={{ 
-                  opacity: inputAnim
-                }}
-              >
-                <View style={styles.nameInputContainer}>
-                  <View style={styles.inputWrapper}>
-                    <TextInput
-                      ref={inputRef}
-                      style={styles.nameInput}
-                      value={name}
-                      onChangeText={handleNameChange}
-                      placeholder="Enter your name"
-                      placeholderTextColor="#AAAAAA"
-                      autoCapitalize="words"
-                      autoCorrect={false}
-                      textAlign="center"
-                      returnKeyType="done"
-                      onSubmitEditing={handleContinue}
-                    />
-                    <TouchableOpacity 
-                      style={styles.nextButton}
-                      onPress={handleContinue}
-                      disabled={loading || !name.trim()}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons 
-                        name="arrow-forward" 
-                        size={24} 
-                        color={!name.trim() ? colors.lightGray : colors.primary} 
+    return (
+      <Animated.View 
+        style={[
+          styles.container, 
+          { 
+            opacity: fadeAnim,
+            backgroundColor: '#FFFFFF' 
+          }
+        ]}
+      >
+        <SafeAreaView style={styles.safeContainer}>
+          {/* Header spacer - to account for the global progress bar */}
+          <View style={styles.header} />
+          
+          <View style={styles.contentContainer}>
+            <Animated.Text
+              style={[
+                styles.titleText,
+                { transform: [{ translateY: titleAnim }] }
+              ]}
+            >
+              What's your name?
+            </Animated.Text>
+            <Animated.View 
+              style={{ 
+                width: '100%', 
+                transform: [{ translateX: slideAnim }],
+                opacity: fadeAnim
+              }}
+            >
+              <View style={styles.formContainer}>
+                <Animated.View 
+                  style={{ 
+                    opacity: inputAnim
+                  }}
+                >
+                  <View style={styles.nameInputContainer}>
+                    <View style={styles.inputWrapper}>
+                      <TextInput
+                        ref={inputRef}
+                        style={styles.nameInput}
+                        value={name}
+                        onChangeText={handleNameChange}
+                        placeholder="Enter your name"
+                        placeholderTextColor="#AAAAAA"
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                        textAlign="center"
+                        returnKeyType="done"
+                        onSubmitEditing={handleContinue}
                       />
-                    </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.nextButton}
+                        onPress={handleContinue}
+                        disabled={loading || !name.trim()}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons 
+                          name="arrow-forward" 
+                          size={24} 
+                          color={!name.trim() ? colors.lightGray : colors.primary} 
+                        />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-                <Text style={styles.nameHelper}>
-                  This is how we'll address you in the app
-                </Text>
-              </Animated.View>
-            </View>
-          </Animated.View>
-        </View>
+                  <Text style={styles.nameHelper}>
+                    This is how we'll address you in the app
+                  </Text>
+                </Animated.View>
+              </View>
+            </Animated.View>
+          </View>
+        </SafeAreaView>
+      </Animated.View>
+    );
+  } catch (error) {
+    // Error boundary to prevent the app from crashing
+    console.error("📱 ERROR rendering NameScreen:", error);
+    return (
+      <SafeAreaView style={[styles.safeContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text>Something went wrong. Please try again.</Text>
+        <TouchableOpacity
+          style={{ marginTop: 20, padding: 10, backgroundColor: colors.primary, borderRadius: 8 }}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={{ color: 'white' }}>Go Back</Text>
+        </TouchableOpacity>
       </SafeAreaView>
-    </Animated.View>
-  );
+    );
+  }
 }
 
 const styles = StyleSheet.create({
@@ -324,38 +346,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    height: 60,
-    paddingTop: 15,
+    height: 60, // Reverted to original value
+    paddingTop: 15, // Reverted to original value
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    position: 'relative',
-    zIndex: 10, // Ensure progress bar is above animations
-  },
-  progressWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressContainer: {
-    width: '50%',
-    flexDirection: 'row',
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#F0F0F0',
-    overflow: 'hidden',
-  },
-  progressBarFilled: {
-    backgroundColor: '#007BFF',
-  },
-  progressBarEmpty: {
-    backgroundColor: '#F0F0F0',
   },
   contentContainer: {
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 40,
+    paddingTop: 40, // Reverted to original value
     paddingBottom: 20,
   },
   formContainer: {
@@ -411,5 +412,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'absolute',
     right: 20,
-  },
+  }
 }); 

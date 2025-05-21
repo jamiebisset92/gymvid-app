@@ -179,13 +179,11 @@ export default function SignUpScreen({ navigation }) {
       const { data, error } = await signUp(email, password);
       
       if (error) {
-        console.log('Error signing up:', error);
-        let errorMsg = typeof error === 'string' ? error : (error && error.message) ? error.message : 'An error occurred. Please try again.';
-        if (errorMsg === 'User already registered') {
-          toast.error('This email is already registered!');
-        } else {
-          toast.error(errorMsg);
+        // Hide "User already registered" errors from console
+        if (!error || !error.message || error.message !== 'User already registered') {
+          console.error('Error signing up:', error);
         }
+        toast.error(error.message || 'An error occurred. Please try again.');
         return;
       }
       
@@ -212,7 +210,7 @@ export default function SignUpScreen({ navigation }) {
       console.log('Starting onboarding with userId:', userId);
       
       // Show success toast
-      toast.success('Account created! Setting up your profile...');
+      toast.success('Account created! Setting up your profile...', { position: 'top' });
       
       // Ensure we're not in a loading state before navigating
       setTimeout(() => {
@@ -230,7 +228,10 @@ export default function SignUpScreen({ navigation }) {
         });
       }, 500);
     } catch (err) {
-      console.error('Unexpected error during signup:', err);
+      // Hide "User already registered" errors from console
+      if (!err || !err.message || err.message !== 'User already registered') {
+        console.error('Unexpected error during signup:', err);
+      }
       toast.error('An unexpected error occurred. Please try again.');
     }
   };

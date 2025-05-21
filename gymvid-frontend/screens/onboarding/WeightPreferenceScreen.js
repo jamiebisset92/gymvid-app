@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../config/supabase';
 import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
-import { Animated } from 'react-native';
+import { Animated, Easing } from 'react-native';
 import { runWorldClassEntranceAnimation, ANIMATION_CONFIG } from '../../utils/animationUtils';
 
 // Create a debug logging function that only logs in development
@@ -36,7 +36,7 @@ export default function WeightPreferenceScreen({ navigation, route }) {
   }, [route.params]);
   
   // Get progress context
-  const { progress, setProgress } = useContext(ProgressContext);
+  const { progress, setProgress, updateProgress } = useContext(ProgressContext);
   
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -132,6 +132,14 @@ export default function WeightPreferenceScreen({ navigation, route }) {
     loadUserWeightPreference();
   }, []);
 
+  // Update progress tracking when screen comes into focus
+  useEffect(() => {
+    if (isFocused) {
+      // Update progress context with current screen name
+      updateProgress('WeightPreference');
+    }
+  }, [isFocused, updateProgress]);
+
   const handleSelectWeightPreference = (selectedPreference) => {
     setWeightPreference(selectedPreference);
     
@@ -195,9 +203,6 @@ export default function WeightPreferenceScreen({ navigation, route }) {
       return;
     }
     
-    // Update progress for next screen
-    setProgress({ ...progress, current: 4 });
-    
     // Completely fade out this screen before navigation
     Animated.timing(fadeAnim, {
       toValue: 0,
@@ -218,23 +223,17 @@ export default function WeightPreferenceScreen({ navigation, route }) {
   };
 
   const handleBack = () => {
-    // Update progress for previous screen first
-    setProgress({ ...progress, current: 2 });
-    
-    // Animate out before navigating back
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: ANIMATION_CONFIG.screenTransition.fadeOut.duration,
-      easing: ANIMATION_CONFIG.screenTransition.fadeOut.easing,
-      useNativeDriver: true
-    }).start(() => {
-      // Navigate back only after screen is no longer visible
-      navigation.goBack();
+    // Log navigation attempt
+    console.log('WeightPreferenceScreen: handleBack called, navigating to DateOfBirth screen');
+
+    // Instead of animating, simply navigate and let the Navigator handle the transition
+    // This prevents timing issues and double animations
+    navigation.navigate('DateOfBirth', { 
+      userId,
+      email: userEmail,
+      fromSignUp
     });
   };
-
-  // Calculate progress percentage
-  const progressPercentage = progress.current / progress.total;
 
   return (
     <Animated.View 
@@ -247,20 +246,25 @@ export default function WeightPreferenceScreen({ navigation, route }) {
       ]}
     >
       <SafeAreaView style={styles.safeContainer}>
-        {/* Progress bar - remains static during transitions */}
-        <View style={styles.header}>
-          <View style={styles.progressWrapper}>
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressBarFilled, { flex: progressPercentage || 0.5 }]} />
-              <View style={[styles.progressBarEmpty, { flex: 1 - (progressPercentage || 0.5) }]} />
-            </View>
-          </View>
-        </View>
+        {/* Header spacer - to account for the global progress bar */}
+        <View style={styles.header} />
+        
         <View style={styles.contentContainer}>
           <Animated.Text
             style={[
               styles.titleText,
-              { transform: [{ translateY: titleAnim }] }
+              { 
+                opacity: titleAnim,
+                transform: [
+                  { 
+                    scale: titleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.98, 1],
+                      extrapolate: 'clamp'
+                    })
+                  }
+                ] 
+              }
             ]}
           >
             How do you measure your weights?
@@ -268,7 +272,6 @@ export default function WeightPreferenceScreen({ navigation, route }) {
           <Animated.View 
             style={{ 
               width: '100%', 
-              transform: [{ translateX: slideAnim }],
               opacity: fadeAnim
             }}
           >
@@ -353,27 +356,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    position: 'relative',
-    zIndex: 10, // Ensure progress bar is above animations
-  },
-  progressWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressContainer: {
-    width: '50%',
-    flexDirection: 'row',
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#F0F0F0',
-    overflow: 'hidden',
-  },
-  progressBarFilled: {
-    backgroundColor: '#007BFF',
-  },
-  progressBarEmpty: {
-    backgroundColor: '#F0F0F0',
   },
   contentContainer: {
     flex: 1,

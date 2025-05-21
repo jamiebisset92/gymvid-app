@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Animated, Easing } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,7 +35,7 @@ export default function GenderScreen({ navigation, route }) {
   }, [route.params]);
   
   // Get progress context
-  const { progress, setProgress } = useContext(ProgressContext);
+  const { progress, setProgress, updateProgress } = useContext(ProgressContext);
   
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -48,6 +48,14 @@ export default function GenderScreen({ navigation, route }) {
   const maleOpacity = useRef(new Animated.Value(0)).current;
   const femaleOpacity = useRef(new Animated.Value(0)).current;
   const isFocused = useIsFocused();
+
+  // Update progress tracking when screen comes into focus
+  useEffect(() => {
+    if (isFocused) {
+      // Update progress context with current screen name
+      updateProgress('Gender');
+    }
+  }, [isFocused, updateProgress]);
 
   // Run entrance animation only after navigator transition is complete
   useEffect(() => {
@@ -210,16 +218,23 @@ export default function GenderScreen({ navigation, route }) {
       return;
     }
     
-    // Update progress for next screen
-    setProgress({ ...progress, current: 2 });
+    // Let the next screen handle its own progress update
     
     // Completely fade out this screen before navigation
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: ANIMATION_CONFIG.screenTransition.fadeOut.duration,
-      easing: ANIMATION_CONFIG.screenTransition.fadeOut.easing,
-      useNativeDriver: true
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: ANIMATION_CONFIG.screenTransition.fadeOut.duration,
+        easing: ANIMATION_CONFIG.screenTransition.fadeOut.easing,
+        useNativeDriver: true
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 30, // Positive value to slide to the right (forward navigation)
+        duration: 250,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1.0),
+        useNativeDriver: true
+      })
+    ]).start(() => {
       // Only navigate after animation is complete and screen is no longer visible
       debugLog('Profile updated, navigating to DateOfBirth with userId:', userId);
       
@@ -233,23 +248,17 @@ export default function GenderScreen({ navigation, route }) {
   };
 
   const handleBack = () => {
-    // Update progress for previous screen first
-    setProgress({ ...progress, current: 0 });
+    // Log the navigation attempt
+    console.log('GenderScreen: handleBack called, navigating to Name screen');
     
-    // Animate out before navigating back
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: ANIMATION_CONFIG.screenTransition.fadeOut.duration,
-      easing: ANIMATION_CONFIG.screenTransition.fadeOut.easing,
-      useNativeDriver: true
-    }).start(() => {
-      // Navigate back only after screen is no longer visible
-      navigation.goBack();
+    // Instead of animating, simply navigate and let the Navigator handle the transition
+    // This prevents timing issues and double animations
+    navigation.navigate('Name', { 
+      userId,
+      email: userEmail,
+      fromSignUp
     });
   };
-
-  // Calculate progress percentage
-  const progressPercentage = progress.current / progress.total;
 
   return (
     <Animated.View 
@@ -262,20 +271,25 @@ export default function GenderScreen({ navigation, route }) {
       ]}
     >
       <SafeAreaView style={styles.safeContainer}>
-        {/* Progress bar - remains static during transitions */}
-        <View style={styles.header}>
-          <View style={styles.progressWrapper}>
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressBarFilled, { flex: progressPercentage || 0.5 }]} />
-              <View style={[styles.progressBarEmpty, { flex: 1 - (progressPercentage || 0.5) }]} />
-            </View>
-          </View>
-        </View>
+        {/* Header spacer - to account for the global progress bar */}
+        <View style={styles.header} />
+        
         <View style={styles.contentContainer}>
           <Animated.Text
             style={[
               styles.titleText,
-              { transform: [{ translateY: titleAnim }] }
+              { 
+                opacity: titleAnim,
+                transform: [
+                  { 
+                    scale: titleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.98, 1],
+                      extrapolate: 'clamp'
+                    })
+                  }
+                ] 
+              }
             ]}
           >
             What's your gender?
@@ -283,7 +297,6 @@ export default function GenderScreen({ navigation, route }) {
           <Animated.View 
             style={{ 
               width: '100%', 
-              transform: [{ translateX: slideAnim }],
               opacity: fadeAnim,
             }}
           >
@@ -380,27 +393,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    position: 'relative',
-    zIndex: 10, // Ensure progress bar is above animations
-  },
-  progressWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressContainer: {
-    width: '50%',
-    flexDirection: 'row',
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#F0F0F0',
-    overflow: 'hidden',
-  },
-  progressBarFilled: {
-    backgroundColor: '#007BFF',
-  },
-  progressBarEmpty: {
-    backgroundColor: '#F0F0F0',
   },
   contentContainer: {
     flex: 1,
@@ -463,9 +455,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.98)', // Slightly transparent background
+    backgroundColor: 'rgba(255, 255, 255, 0.92)', // Slightly more transparent for blur effect
     borderTopWidth: 1, // Add a subtle top border
     borderTopColor: 'rgba(0, 0, 0, 0.05)', // Very subtle border color
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+    // Premium glass effect
+    backdropFilter: 'blur(10px)', // Will only work on iOS with newer versions
   },
   backButtonBottom: {
     height: 56,
@@ -493,9 +492,9 @@ const styles = StyleSheet.create({
     flex: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.15, // Increased for more premium feel
+    shadowRadius: 6, // Increased for softer shadow spread
+    elevation: 3,
   },
   nextButtonDisabled: {
     backgroundColor: '#AACEF5', // Lighter color when disabled

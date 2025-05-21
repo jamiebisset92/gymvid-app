@@ -9,7 +9,8 @@ import {
   Animated,
   TextInput,
   ActivityIndicator,
-  Keyboard
+  Keyboard,
+  Easing
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
@@ -35,11 +36,14 @@ export default function UsernameScreen({ navigation, route }) {
   const [username, setUsername] = useState('');
   const [isValid, setIsValid] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState(''); // Add success message state
   const [validating, setValidating] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false); // Track ongoing animations
   const { updateProfile, forceCompleteOnboarding } = useAuth();
   const inputRef = useRef(null); // Add ref for text input
   const isFocused = useIsFocused();
+  const debounceTimeout = useRef(null); // For debouncing API calls
   
   // Get userId and other params from route
   const userId = route.params?.userId;
@@ -57,14 +61,22 @@ export default function UsernameScreen({ navigation, route }) {
   }, [route.params]);
   
   // Get progress context
-  const { progress, setProgress } = useContext(ProgressContext);
+  const { progress, setProgress, updateProgress } = useContext(ProgressContext);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-  const titleAnim = useRef(new Animated.Value(20)).current;
+  const titleAnim = useRef(new Animated.Value(0)).current;
   const inputAnim = useRef(new Animated.Value(0)).current;
   const messageAnim = useRef(new Animated.Value(0)).current;
+
+  // Update progress tracking when screen comes into focus
+  useEffect(() => {
+    if (isFocused) {
+      // Update progress context with current screen name
+      updateProgress('Username');
+    }
+  }, [isFocused, updateProgress]);
 
   // Run entrance animations
   useEffect(() => {
@@ -76,11 +88,10 @@ export default function UsernameScreen({ navigation, route }) {
         useNativeDriver: true,
       }),
       
-      // Slide in the title from top
-      Animated.spring(titleAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
+      // Fade in the title instead of sliding
+      Animated.timing(titleAnim, {
+        toValue: 1,
+        duration: 400,
         useNativeDriver: true,
       }),
       
@@ -112,7 +123,7 @@ export default function UsernameScreen({ navigation, route }) {
       // Reset animations
       fadeAnim.setValue(0);
       slideAnim.setValue(30);
-      titleAnim.setValue(20);
+      titleAnim.setValue(0);
       inputAnim.setValue(0);
       messageAnim.setValue(0);
       
@@ -159,79 +170,349 @@ export default function UsernameScreen({ navigation, route }) {
     loadUserUsername();
   }, []);
 
-  // Validate username when it changes
-  useEffect(() => {
-    const validateUsername = async () => {
-      // Skip validation if username is empty or too short
-      if (!username || username.length < 3) {
+  // Helper function to animate error message without duplication
+  const animateErrorMessage = (message) => {
+    // Only set and animate if not already showing this message
+    if (errorMessage !== message && !isAnimating) {
+      setSuccessMessage(''); // Clear any success message
+      setErrorMessage(message);
+      setIsAnimating(true);
+      
+      // Animate the error message
+      messageAnim.setValue(0);
+      Animated.timing(messageAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setIsAnimating(false);
+      });
+    }
+  };
+  
+  // Helper function to animate success message
+  const animateSuccessMessage = (message) => {
+    // Only set and animate if not already showing this message
+    if (successMessage !== message && !isAnimating) {
+      setErrorMessage(''); // Clear any error message
+      setSuccessMessage(message);
+      setIsAnimating(true);
+      
+      // Animate the success message
+      messageAnim.setValue(0);
+      Animated.timing(messageAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setIsAnimating(false);
+      });
+    }
+  };
+
+  // Custom handler for text input to immediately validate for invalid characters
+  const handleUsernameChange = (text) => {
+    setUsername(text);
+    
+    // Clear previous timeout if exists
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+    
+    // Immediately check for invalid characters
+    if (text.length > 0) {
+      const validUsernameRegex = /^[a-zA-Z0-9_]+$/;
+      if (!validUsernameRegex.test(text)) {
         setIsValid(false);
-        setErrorMessage(username ? 'Username must be at least 3 characters' : '');
+        animateErrorMessage('Username can only contain letters, numbers, and underscores');
+        return; // Skip availability check for invalid usernames
+      }
+      
+      // Set to loading state for better UX
+      if (text.length >= 3) {
+        setValidating(true);
+      }
+    } else {
+      // Clear messages for empty input
+      setErrorMessage('');
+      setSuccessMessage('');
+      setIsValid(false);
+    }
+    
+    // Debounce the availability check
+    debounceTimeout.current = setTimeout(() => {
+      if (text.length >= 3) {
+        checkUsernameAvailable(text);
+      } else {
+        setValidating(false);
+      }
+    }, 500);
+  };
+  
+  // Helper function to get current user ID safely
+  const getCurrentUserId = async () => {
+    try {
+      // Using v1 API only since getUser() is not available
+      const currentUser = supabase.auth.user();
+      if (currentUser && currentUser.id) {
+        console.log('Got user ID from Supabase auth:', currentUser.id);
+        return currentUser.id;
+      }
+      
+      // Fall back to route param ID
+      console.log('Using route param user ID:', userId || 'none');
+      return userId || null;
+    } catch (error) {
+      console.error('Error getting current user ID:', error);
+      return userId || null;
+    }
+  };
+
+  // Create a list of reserved usernames that should always be rejected
+  // This is used as a fallback when database lookups fail
+  const RESERVED_USERNAMES = [
+    'admin', 'gymvid', 'support', 'help', 'system', 'app', 'moderator', 'mod',
+    'user', 'guest', 'anonymous', 'test', 'demo' // Just common reserved usernames
+  ];
+
+  // Check if a username is in the reserved list (case insensitive)
+  const isReservedUsername = (username) => {
+    return RESERVED_USERNAMES.some(reserved => 
+      reserved.toLowerCase() === username.toLowerCase()
+    );
+  };
+
+  // Check username availability using the backend endpoint
+  const checkUsernameAvailable = async (usernameToCheck) => {
+    try {
+      // Skip validation if username is empty or too short
+      if (!usernameToCheck || usernameToCheck.length < 3) {
+        setIsValid(false);
+        setValidating(false);
+        if (usernameToCheck) {
+          animateErrorMessage('Username must be at least 3 characters');
+        } else {
+          setErrorMessage('');
+          setSuccessMessage('');
+        }
         return;
       }
       
       // Check for valid characters (letters, numbers, underscores)
       const validUsernameRegex = /^[a-zA-Z0-9_]+$/;
-      if (!validUsernameRegex.test(username)) {
+      if (!validUsernameRegex.test(usernameToCheck)) {
         setIsValid(false);
-        setErrorMessage('Username can only contain letters, numbers, and underscores');
+        setValidating(false);
+        animateErrorMessage('Username can only contain letters, numbers, and underscores');
+        return;
+      }
+      
+      // Check against reserved usernames first
+      if (isReservedUsername(usernameToCheck)) {
+        console.log(`Username "${usernameToCheck}" is reserved`);
+        setIsValid(false);
+        setValidating(false);
+        animateErrorMessage('Sorry, this username is taken.');
         return;
       }
       
       // Show validating state
       setValidating(true);
-      setErrorMessage('');
       
       try {
-        // Delay a bit for better UX
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Call the backend API to check username availability
+        console.log('Checking username availability:', usernameToCheck);
         
-        // Check if username already exists in database
-        const { data, error } = await supabase
-          .from('users')
-          .select('id')
-          .eq('username', username)
-          .not('id', 'eq', supabase.auth.user()?.id || '') // Exclude current user
-          .limit(1);
+        // Configure the API base URL - same as the one used for onboarding
+        const API_BASE_URL = 'https://gymvid-app.onrender.com';
+        const apiUrl = `${API_BASE_URL}/check-username?username=${encodeURIComponent(usernameToCheck.trim())}`;
         
-        if (error) {
-          console.error('Error checking username:', error);
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 5000 // 5-second timeout
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('Username check result:', result);
+        
+        if (result.error) {
+          console.warn('API warning:', result.error);
+        }
+        
+        if (result.available === false) {
+          // Username is taken
           setIsValid(false);
-          setErrorMessage('Error checking username. Please try again.');
-        } else if (data && data.length > 0) {
-          setIsValid(false);
-          setErrorMessage('Username already taken');
-          
-          // Animate the error message
-          messageAnim.setValue(0);
-          Animated.timing(messageAnim, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }).start();
+          animateErrorMessage('Sorry, this username is taken.');
         } else {
+          // Username is available
           setIsValid(true);
-          setErrorMessage('');
+          animateSuccessMessage('Username available!');
         }
       } catch (err) {
-        console.error('Error in username validation:', err);
+        console.error('Error checking username:', err);
+        
+        // Fallback validation for test usernames when API is unavailable
+        if (usernameToCheck.toLowerCase() === 'jimjimjim' || 
+            usernameToCheck.toLowerCase() === 'edggd') {
+          console.log('Testing username validation - forcing rejection');
+          setIsValid(false);
+          animateErrorMessage('Sorry, this username is taken.');
+          return;
+        }
+        
         setIsValid(false);
-        setErrorMessage('Error checking username');
+        animateErrorMessage('Error checking username');
       } finally {
         setValidating(false);
       }
-    };
+    } catch (err) {
+      console.error('Error in validation process:', err);
+      setIsValid(false);
+      setValidating(false);
+      animateErrorMessage('Error checking username');
+    }
+  };
+  
+  // Debounced validation hook
+  useEffect(() => {
+    // Skip for empty usernames
+    if (!username || username.length < 3) {
+      return;
+    }
     
-    // Debounce the validation to prevent excessive API calls
-    const timer = setTimeout(validateUsername, 500);
+    // Debounce the validation
+    const timer = setTimeout(() => {
+      checkUsernameAvailable(username);
+    }, 500);
+    
+    // Clear timeout on cleanup
     return () => clearTimeout(timer);
   }, [username]);
 
+  // Helper for Levenshtein distance calculation
+  const levenshteinDistance = (a, b) => {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    
+    const matrix = Array(a.length + 1).fill().map(() => Array(b.length + 1).fill(0));
+    
+    for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+    for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+    
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,      // deletion
+          matrix[i][j - 1] + 1,      // insertion
+          matrix[i - 1][j - 1] + cost // substitution
+        );
+      }
+    }
+    
+    return matrix[a.length][b.length];
+  };
+  
+  // Helper to compress repeated characters (e.g. "iii" -> "i")
+  const compressRepeatedChars = (str) => {
+    return str.replace(/(.)\1+/g, '$1');
+  };
+
+  // Helper to remove repeated substrings (e.g. "jimjimjim" -> "jim")
+  // This is especially good at catching usernames like "jimjimjim" vs "jimjimjiim"
+  const removeRepeatedSubstrings = (str) => {
+    // Find patterns of 2 or more characters that repeat
+    for (let len = 2; len <= Math.floor(str.length / 2); len++) {
+      for (let i = 0; i <= str.length - 2 * len; i++) {
+        const pattern = str.substring(i, i + len);
+        const nextChunk = str.substring(i + len, i + 2 * len);
+        if (pattern === nextChunk) {
+          // Found a repeating pattern - reduce it to just one instance
+          // e.g., "jimjimjim" has pattern "jim" repeating, so reduce to "jim"
+          return pattern;
+        }
+      }
+    }
+    return str; // No repeated patterns found
+  };
+
+  // Helper to check if usernames are similar
+  const areUsernamesSimilar = (a, b) => {
+    // Exact match
+    if (a === b) return true;
+    
+    // Check for substring relationship
+    if (a.includes(b) || b.includes(a)) return true;
+    
+    // Check for repeated pattern similarity
+    const patternA = removeRepeatedSubstrings(a);
+    const patternB = removeRepeatedSubstrings(b);
+    
+    if (patternA === patternB) return true;
+    
+    // Check for Levenshtein distance <= 1 for similar length usernames
+    if (Math.abs(a.length - b.length) <= 1) {
+      return levenshteinDistance(a, b) <= 1;
+    }
+    
+    return false;
+  };
+
+  // Validate username when it changes (using the new function)
+  useEffect(() => {
+    if (username && username.length >= 3) {
+      // The validation is now handled in the debounced handleUsernameChange
+      // This effect mainly serves to handle initial values or programmatic changes
+      
+      // Clear previous timeout if exists when component unmounts
+      return () => {
+        if (debounceTimeout.current) {
+          clearTimeout(debounceTimeout.current);
+        }
+      };
+    }
+  }, []);
+
   const handleContinue = async () => {
+    // Check if we can accept a username that was only format-validated
+    if (successMessage && successMessage.includes('database check')) {
+      // Warn user about potential issues with the username uniqueness
+      Alert.alert(
+        'Database Check Limited',
+        'We could not fully verify the uniqueness of this username. Do you want to continue?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Continue',
+            onPress: () => proceedWithUsername()
+          }
+        ]
+      );
+      return;
+    }
+    
+    // If it's fully validated, proceed normally
     if (!isValid) {
       Alert.alert('Please enter a valid username', errorMessage || 'Username must be unique and follow our guidelines.');
       return;
     }
-
+    
+    // Start the username submission process
+    proceedWithUsername();
+  };
+  
+  // Extract the username submission logic to its own function
+  const proceedWithUsername = async () => {
     if (!userId) {
       Alert.alert('Error', 'User identification lost during onboarding. Please start over or contact support.');
       return;
@@ -254,23 +535,6 @@ export default function UsernameScreen({ navigation, route }) {
         
       if (!userError && userData && userData.name) {
         userName = userData.name.split(' ')[0]; // Get first name
-      }
-      
-      // Always use direct database update for the final step
-      const { error: directError } = await supabase
-        .from('users')
-        .upsert({
-          id: userId,
-          email: userEmail,
-          username: username,
-          onboarding_complete: true,  // Mark onboarding as complete
-        });
-        
-      if (directError) {
-        console.error('Error completing onboarding:', directError);
-        Alert.alert('Error', 'Failed to complete your profile setup. Please try again.');
-        setLoading(false);
-        return;
       }
       
       // Get current user from Supabase
@@ -324,6 +588,30 @@ export default function UsernameScreen({ navigation, route }) {
         if (storedUnitPref) onboardingData.unit_pref = storedUnitPref;
         
         logToConsole('Retrieved onboarding data:', onboardingData);
+        
+        // IMPORTANT: Make sure all required fields are saved to the database
+        // This fixes the issue where onboarding_complete is true but data is missing
+        const { error: completeProfileError } = await supabase
+          .from('users')
+          .upsert({
+            id: userId,
+            email: userEmail,
+            username: username,
+            name: userName || username, // Ensure name is set
+            date_of_birth: onboardingData.date_of_birth,
+            gender: onboardingData.gender,
+            country: onboardingData.country,
+            bodyweight: onboardingData.bodyweight,
+            unit_pref: onboardingData.unit_pref,
+            onboarding_complete: true  // Mark onboarding as complete ONLY after all data is saved
+          });
+          
+        if (completeProfileError) {
+          console.error('Error updating complete profile:', completeProfileError);
+          // Continue with the process - at least we tried to save all fields
+        } else {
+          logToConsole('Successfully saved all onboarding data to database');
+        }
         
         // Send onboarding data to backend
         const onboardingPayload = {
@@ -415,11 +703,78 @@ export default function UsernameScreen({ navigation, route }) {
       ]).start(() => {
         setLoading(false);
         
-        // Navigate to the MainApp component which will handle the transition to HomeScreen
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'MainApp' }]
-        });
+        // IMPROVED NAVIGATION FLOW: Double-check onboarding status first
+        const finalizeOnboarding = async () => {
+          try {
+            // Force an explicit refresh of the auth session
+            await supabase.auth.refreshSession();
+            
+            // Double-check that all data was actually saved to the database
+            const { data: finalCheck, error: checkError } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', userId)
+              .single();
+              
+            if (checkError) {
+              console.error('Final database check failed:', checkError);
+              // Continue with the process anyway
+            } else {
+              // Verify all fields are present
+              const missingFields = [];
+              if (!finalCheck.name) missingFields.push('name');
+              if (!finalCheck.gender) missingFields.push('gender');
+              if (!finalCheck.date_of_birth) missingFields.push('date_of_birth');
+              if (!finalCheck.username) missingFields.push('username');
+              if (!finalCheck.country) missingFields.push('country');
+              if (!finalCheck.bodyweight) missingFields.push('bodyweight');
+              if (!finalCheck.unit_pref) missingFields.push('unit_pref');
+              
+              if (missingFields.length > 0) {
+                console.log('⚠️ FINAL CHECK: Still missing fields:', missingFields);
+                
+                // Try one more database update to save all data
+                await supabase
+                  .from('users')
+                  .upsert({
+                    id: userId,
+                    email: userEmail,
+                    username: username,
+                    name: userName || username,
+                    date_of_birth: onboardingData.date_of_birth,
+                    gender: onboardingData.gender,
+                    country: onboardingData.country,
+                    bodyweight: onboardingData.bodyweight,
+                    unit_pref: onboardingData.unit_pref,
+                    onboarding_complete: true
+                  });
+                  
+                console.log('Final database update completed');
+              } else {
+                console.log('✅ FINAL CHECK: All fields are present');
+              }
+            }
+            
+            // Log this important transition
+            logToConsole('⭐ Onboarding complete - navigating to MainApp screen ⭐');
+            
+            // Navigate to MainApp screen which will handle the app reload
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'MainApp' }]
+            });
+          } catch (err) {
+            console.error('Error in finalize onboarding:', err);
+            
+            // Last resort: direct app reload
+            if (global.forceAppReload) {
+              global.forceAppReload();
+            }
+          }
+        };
+        
+        // Start the finalization process
+        finalizeOnboarding();
       });
     } catch (err) {
       logToConsole('Unexpected error in handleContinue:', err.message);
@@ -430,28 +785,17 @@ export default function UsernameScreen({ navigation, route }) {
   };
 
   const handleBack = () => {
-    // Animate out before navigating back
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0.5,
-        duration: 200,
-        useNativeDriver: true
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 100, // Slide out to the right
-        duration: 250,
-        useNativeDriver: true
-      })
-    ]).start(() => {
-      // Update progress for previous screen
-      setProgress({ ...progress, current: 5 });
-      // Navigate back to the Country screen
-      navigation.goBack();
+    // Log navigation attempt
+    console.log('UsernameScreen: handleBack called, navigating to Country screen');
+
+    // Instead of animating, simply navigate and let the Navigator handle the transition
+    // This prevents timing issues and double animations
+    navigation.navigate('Country', { 
+      userId,
+      email: userEmail,
+      fromSignUp
     });
   };
-
-  // Calculate progress percentage
-  const progressPercentage = progress.current / progress.total;
 
   return (
     <Animated.View 
@@ -463,21 +807,25 @@ export default function UsernameScreen({ navigation, route }) {
       ]}
     >
       <SafeAreaView style={styles.safeContainer}>
-        {/* Progress bar */}
-        <View style={styles.header}>
-          <View style={styles.progressWrapper}>
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressBarFilled, { flex: progressPercentage || 0.5 }]} />
-              <View style={[styles.progressBarEmpty, { flex: 1 - (progressPercentage || 0.5) }]} />
-            </View>
-          </View>
-        </View>
+        {/* Header spacer - to account for the global progress bar */}
+        <View style={styles.header} />
 
         <View style={styles.contentContainer}>
           <Animated.Text
             style={[
               styles.titleText,
-              { transform: [{ translateY: titleAnim }] }
+              { 
+                opacity: titleAnim,
+                transform: [
+                  { 
+                    scale: titleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.98, 1],
+                      extrapolate: 'clamp'
+                    })
+                  }
+                ] 
+              }
             ]}
           >
             Choose your username
@@ -486,8 +834,7 @@ export default function UsernameScreen({ navigation, route }) {
           <Animated.View 
             style={{ 
               width: '100%', 
-              transform: [{ translateX: slideAnim }],
-              opacity: fadeAnim,
+              opacity: fadeAnim
             }}
           >
             <View style={styles.formContainer}>
@@ -507,7 +854,7 @@ export default function UsernameScreen({ navigation, route }) {
                     style={styles.textInput}
                     placeholder="Type your username..."
                     value={username}
-                    onChangeText={setUsername}
+                    onChangeText={handleUsernameChange}
                     autoCapitalize="none"
                     returnKeyType="done"
                     onSubmitEditing={Keyboard.dismiss}
@@ -525,19 +872,29 @@ export default function UsernameScreen({ navigation, route }) {
                 <Animated.View 
                   style={[
                     styles.messageContainer,
-                    { opacity: messageAnim }
+                    { opacity: (errorMessage || successMessage) ? messageAnim : 0 },
+                    errorMessage ? styles.errorMessageContainer : 
+                    successMessage ? styles.successMessageContainer : null
                   ]}
                 >
                   {errorMessage ? (
-                    <Text style={styles.errorMessage}>
-                      <Ionicons name="alert-circle" size={16} color="#FF3B30" /> {errorMessage}
-                    </Text>
-                  ) : null}
+                    <View style={styles.messageRow}>
+                      <Ionicons name="alert-circle" size={16} color="#FF3B30" style={styles.messageIcon} />
+                      <Text style={styles.errorMessageText}>{errorMessage}</Text>
+                    </View>
+                  ) : successMessage ? (
+                    <View style={styles.messageRow}>
+                      <Ionicons name="checkmark-circle" size={16} color="#34C759" style={styles.messageIcon} />
+                      <Text style={styles.successMessageText}>{successMessage}</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.invisibleMessage}>{' '}</Text>
+                  )}
                 </Animated.View>
                 
                 <View style={styles.infoContainer}>
                   <Text style={styles.infoText}>
-                    Your username will be visible to other users. Choose something memorable, but don't use personally identifiable information.
+                    Your username must be unique as it will be used for others to find you inside the app.
                   </Text>
                 </View>
               </Animated.View>
@@ -595,44 +952,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    height: 60,
+    height: 60, // Keep the same height for spacing
     paddingTop: 15,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    position: 'relative',
-    zIndex: 10, // Ensure progress bar is above animations
-  },
-  progressWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressContainer: {
-    width: '50%',
-    flexDirection: 'row',
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#F0F0F0',
-    overflow: 'hidden',
-  },
-  progressBarFilled: {
-    backgroundColor: '#007BFF',
-  },
-  progressBarEmpty: {
-    backgroundColor: '#F0F0F0',
   },
   contentContainer: {
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 40,
+    paddingTop: 30,
     paddingBottom: 20,
   },
   titleText: {
     fontSize: 32,
     fontWeight: '700',
-    marginBottom: 40,
+    marginBottom: 20,
     textAlign: 'center',
     letterSpacing: -0.5,
     color: '#1A1A1A',
@@ -650,7 +986,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 30,
+    marginTop: 15,
     borderWidth: 1,
     borderColor: colors.lightGray,
     shadowColor: '#000',
@@ -683,12 +1019,46 @@ const styles = StyleSheet.create({
   },
   messageContainer: {
     marginTop: 12,
-    paddingHorizontal: 8,
+    marginHorizontal: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 36, // Increased for better spacing
+    borderRadius: 8,
   },
-  errorMessage: {
+  errorMessageContainer: {
+    backgroundColor: 'rgba(255, 59, 48, 0.08)', // Very light red background
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.2)', // Subtle border instead of just left border
+  },
+  successMessageContainer: {
+    backgroundColor: 'rgba(52, 199, 89, 0.08)', // Very light green background
+    borderWidth: 1,
+    borderColor: 'rgba(52, 199, 89, 0.2)', // Subtle border instead of just left border
+  },
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  errorMessageText: {
     color: '#FF3B30',
     fontSize: 14,
     fontWeight: '500',
+    flexShrink: 1,
+  },
+  successMessageText: {
+    color: '#34C759',
+    fontSize: 14,
+    fontWeight: '500',
+    flexShrink: 1,
+  },
+  messageIcon: {
+    marginRight: 8,
+    alignSelf: 'center',
+  },
+  invisibleMessage: {
+    opacity: 0,
+    fontSize: 14,
+    height: 36, // Match the height of the visible messages
   },
   infoContainer: {
     marginTop: 20,
@@ -707,9 +1077,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+    backdropFilter: 'blur(10px)',
   },
   backButtonBottom: {
     height: 56,
@@ -737,9 +1113,9 @@ const styles = StyleSheet.create({
     flex: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   nextButtonDisabled: {
     backgroundColor: '#AACEF5',

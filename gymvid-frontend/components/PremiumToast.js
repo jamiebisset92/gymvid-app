@@ -36,6 +36,11 @@ export const TOAST_TYPES = {
     textColor: '#1A1A1A',
     haptic: Haptics.NotificationFeedbackType.Warning,
   },
+  NEUTRAL: {
+    backgroundColor: '#8E8E93', // iOS gray color
+    icon: 'ellipsis-horizontal-circle',
+    haptic: Haptics.NotificationFeedbackType.Success,
+  },
 };
 
 const PremiumToast = ({ 

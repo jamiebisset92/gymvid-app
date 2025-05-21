@@ -88,6 +88,7 @@ export const ToastProvider = ({ children }) => {
     error: (message, options = {}) => showToast(message, { ...options, type: 'ERROR', position: 'keyboard-aware' }),
     info: (message, options = {}) => showToast(message, { ...options, type: 'INFO' }),
     warning: (message, options = {}) => showToast(message, { ...options, type: 'WARNING' }),
+    neutral: (message, options = {}) => showToast(message, { ...options, type: 'NEUTRAL' }),
   };
 
   return (

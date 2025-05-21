@@ -8,7 +8,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RootSiblingParent } from 'react-native-root-siblings';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 
 import { supabase } from './config/supabase';
 import HomeScreen from './screens/HomeScreen';
@@ -23,8 +23,13 @@ import LogWorkoutScreen from './screens/LogWorkoutScreen';
 // Create a debug logging function that only logs in development
 const debugLog = (...args) => {
   if (__DEV__) {
-    console.log(...args);
+    console.log('[DEBUG]', ...args);
   }
+};
+
+// Add a global function that can be called to force app reload
+global.forceAppReload = () => {
+  console.log("Force app reload requested - waiting for App component to mount");
 };
 
 SplashScreen.preventAutoHideAsync();
@@ -33,46 +38,128 @@ const Tab = createBottomTabNavigator();
 export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);
   const [session, setSession] = useState(null);
-  const [profileLoading, setProfileLoading] = useState(true); // Start as true to prevent flicker
+  const [profileLoading, setProfileLoading] = useState(true);
   const [onboardingState, setOnboardingState] = useState({
     needsOnboarding: false,
-    profileLoaded: false
+    profileLoaded: false,
+    startScreen: "Name"
   });
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // When navigating from onboarding to main app, there might be multiple state updates
-  // This ref helps us debounce these updates to avoid flickering
-  const isTransitioning = useRef(false);
-  
+  // Define the force reload function
+  global.forceAppReload = useCallback(() => {
+    console.log("🔄 Forcing app reload");
+    setReloadKey(prev => prev + 1);
+    setOnboardingState({
+      needsOnboarding: false,
+      profileLoaded: false,
+      startScreen: "Name"
+    });
+    setProfileLoading(true);
+    
+    // Small delay before we check onboarding again
+    setTimeout(() => {
+      checkOnboarding();
+    }, 300);
+  }, []);
+
   // Add a safe session setter to handle session changes safely
   const safeSetSession = useCallback((newSession) => {
-    try {
-      // If session is changed, make sure we're not already in transition
-      if (isTransitioning.current) {
-        debugLog("Ignoring session update during transition");
-        return;
-      }
-      
-      isTransitioning.current = true;
-      debugLog("Setting session:", newSession ? "Session provided" : "Null session");
-      
-      // Use a slight delay to let UI transitions complete
-      setTimeout(() => {
-        setSession(newSession);
-        
-        // Reset transition flag after another delay to prevent rapid changes
-        setTimeout(() => {
-          isTransitioning.current = false;
-        }, 1000);
-      }, 300);
-    } catch (error) {
-      console.error("Error setting session:", error);
-      isTransitioning.current = false;
-    }
+    console.log("Setting session:", newSession ? "Session provided" : "No session");
+    setSession(newSession);
   }, []);
   
+  // Define checkOnboarding as a function that can be called directly
+  const checkOnboarding = useCallback(async () => {
+    console.log("⚙️ Checking onboarding status");
+    
+    if (!session || !session.user) {
+      console.log("⚙️ No session found");
+      setOnboardingState({
+        needsOnboarding: false,
+        profileLoaded: true,
+        startScreen: "Login"
+      });
+      setProfileLoading(false);
+      return;
+    }
+
+    try {
+      console.log("⚙️ Fetching profile for user:", session.user.id);
+      // Simple database query to get user profile
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+      
+      if (error) {
+        console.error("⚠️ Error fetching profile:", error);
+        setOnboardingState({
+          needsOnboarding: true,
+          profileLoaded: true,
+          startScreen: "Name"
+        });
+      } else {
+        console.log("⚙️ Profile loaded:", JSON.stringify(profile, null, 2));
+        // Check if any required fields are missing
+        const needsOnboarding = 
+          !profile.onboarding_complete === true || 
+          !profile.name || 
+          !profile.gender || 
+          !profile.date_of_birth ||
+          !profile.username ||
+          !profile.country ||
+          !profile.bodyweight ||
+          !profile.unit_pref;
+          
+        // Determine appropriate starting screen if needed
+        let startScreen = "Name";
+        if (profile.name) {
+          startScreen = "Gender";
+          if (profile.gender) {
+            startScreen = "DateOfBirth";
+            if (profile.date_of_birth) {
+              startScreen = "WeightPreference";
+              if (profile.unit_pref) {
+                startScreen = "BodyWeight";
+                if (profile.bodyweight) {
+                  startScreen = "Country";
+                  if (profile.country) {
+                    startScreen = "Username";
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        console.log("⚙️ Onboarding needed:", needsOnboarding);
+        console.log("⚙️ Starting screen:", startScreen);
+        
+        setOnboardingState({
+          needsOnboarding: needsOnboarding,
+          profileLoaded: true,
+          startScreen: startScreen
+        });
+      }
+    } catch (err) {
+      console.error("⚠️ Error checking onboarding:", err);
+      setOnboardingState({
+        needsOnboarding: true,
+        profileLoaded: true,
+        startScreen: "Name"
+      });
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [session]);
+  
+  // Load fonts and set up auth listener
   useEffect(() => {
-    const prepare = async () => {
+    async function prepare() {
       try {
+        // Load fonts
         await Font.loadAsync({
           'DMSans-Regular': require('./assets/fonts/DMSans-Regular.ttf'),
           'DMSans-Bold': require('./assets/fonts/DMSans-Bold.ttf'),
@@ -84,256 +171,192 @@ export default function App() {
         const currentSession = supabase.auth.session();
         debugLog("Initial session:", currentSession ? "Found" : "None");
         
-        // Use the safe setter for initial session
-        setTimeout(() => {
-          setSession(currentSession);
-        }, 300);
+        // Set initial session
+        setSession(currentSession);
 
-        // Set up auth listener
-        const { data: listener } = supabase.auth.onAuthStateChange(
-          (event, newSession) => {
-            debugLog("Auth state change:", event, newSession ? "New session" : "No session");
-            
-            // Use safe setter for auth state changes
-            safeSetSession(newSession);
-          }
-        );
-
-        return () => {
-          listener.subscription?.unsubscribe();
-        };
+        setAppIsReady(true);
       } catch (e) {
         console.warn('App load error:', e);
-      } finally {
-        setAppIsReady(true);
-        await SplashScreen.hideAsync();
       }
-    };
+    }
+
+    // Set up auth listener (separate from prepare to avoid race conditions)
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, newSession) => {
+        console.log("Auth state change:", event, newSession ? "New session" : "No session");
+        safeSetSession(newSession);
+      }
+    );
 
     prepare();
+    
+    return () => {
+      listener?.subscription?.unsubscribe();
+    };
   }, [safeSetSession]);
 
-  // Effect to process session changes
+  // Check onboarding status when session changes
   useEffect(() => {
-    const checkOnboarding = async () => {
-      // If we're already processing a transition, don't start a new one
-      if (isTransitioning.current) return;
-      
-      if (!session || !session.user) {
-        debugLog("No session, clearing onboarding state");
-        setOnboardingState({
-          needsOnboarding: false,
-          profileLoaded: true
-        });
-        setProfileLoading(false);
-        return;
-      }
-
-      // Mark that we're beginning a transition
-      isTransitioning.current = true;
-      setProfileLoading(true);
-      
-      debugLog("Checking onboarding for user:", session.user.id);
-      
-      try {
-        // First try to get the profile from the users table
-        const { data: profile, error } = await supabase
-          .from('users')
-          .select('name, gender, date_of_birth, onboarding_complete')
-          .eq('id', session.user.id)
-          .single();
-        
-        if (error) {
-          // If there's an error accessing the profile, try a fallback approach
-          debugLog("Error fetching profile:", error);
-          
-          // Try to create a user record as a backup approach
-          try {
-            const { error: upsertError } = await supabase
-              .from('users')
-              .upsert({
-                id: session.user.id,
-                email: session.user.email,
-                onboarding_complete: false
-              });
-              
-            if (upsertError) {
-              console.error("Error creating user record:", upsertError);
-            } else {
-              debugLog("Created initial user record");
-            }
-          } catch (err) {
-            console.error("Error in backup user creation:", err);
-          }
-          
-          setOnboardingState({
-            needsOnboarding: true,
-            profileLoaded: true
-          });
-        } else {
-          debugLog("Profile data:", profile);
-          
-          // Check if we have a name, gender, and date of birth, or if onboarding_complete is explicitly true
-          const isOnboardingComplete = profile.onboarding_complete === true;
-          const hasAllRequiredFields = profile.name && profile.gender && profile.date_of_birth;
-          
-          // If any of the required fields are missing, or onboarding isn't explicitly complete, direct to onboarding
-          const needsOnboarding = !isOnboardingComplete || !hasAllRequiredFields;
-          
-          debugLog("Needs onboarding:", needsOnboarding, 
-                   "onboarding_complete:", profile.onboarding_complete,
-                   "name:", !!profile.name,
-                   "gender:", !!profile.gender,
-                   "date_of_birth:", !!profile.date_of_birth);
-          
-          setOnboardingState({
-            needsOnboarding: needsOnboarding,
-            profileLoaded: true
-          });
-        }
-      } catch (err) {
-        console.error("Unexpected error checking onboarding:", err);
-        setOnboardingState({
-          needsOnboarding: true,
-          profileLoaded: true
-        });
-      }
-      
+    if (session && appIsReady) {
+      console.log("⚙️ Session available, checking onboarding");
+      checkOnboarding();
+    } else if (!session && appIsReady) {
+      console.log("⚙️ No session, resetting onboarding state");
+      setOnboardingState({
+        needsOnboarding: false,
+        profileLoaded: true,
+        startScreen: "Login"
+      });
       setProfileLoading(false);
-      
-      // After a short delay, mark the transition as complete
-      setTimeout(() => {
-        isTransitioning.current = false;
-      }, 1000);
-    };
-    
-    checkOnboarding();
-  }, [session]);
+    }
+  }, [session, appIsReady, checkOnboarding]);
 
+  // Handle layout for splash screen
   const onLayoutRootView = useCallback(async () => {
     if (appIsReady) {
       await SplashScreen.hideAsync();
     }
   }, [appIsReady]);
 
-  // Don't render until fonts are loaded and profile check is done
-  if (!appIsReady || profileLoading) {
-    debugLog("App not ready yet:", !appIsReady ? "Fonts loading" : "Profile loading");
+  // Don't render until app is ready and profile check is done
+  if (!appIsReady) {
+    console.log("⏳ App not ready yet: Fonts loading");
+    return null;
+  }
+  
+  if (profileLoading) {
+    console.log("⏳ App not ready yet: Profile loading");
     return null;
   }
 
-  // Determine what to render based on session and onboarding state
-  debugLog("Rendering app with session:", session ? "Yes" : "No", 
-    "needs onboarding:", onboardingState.needsOnboarding);
+  console.log("🚀 Rendering app - Session:", session ? "Yes" : "No", 
+    "Needs onboarding:", onboardingState.needsOnboarding,
+    "Start screen:", onboardingState.startScreen);
 
-  // Use a key on the NavigationContainer to prevent transition glitches
-  const navKey = session ? 
-    (onboardingState.needsOnboarding ? 'onboarding' : 'main') : 
-    'auth';
+  // Simple navigation key that changes only on forced reload
+  const navigationKey = `nav-${reloadKey}`;
+
+  // Determine which component to render based on auth and onboarding state
+  let ComponentToRender;
+  
+  if (!session) {
+    // No session - show auth screens
+    ComponentToRender = (
+      <AuthStack 
+        setSession={safeSetSession} 
+        initialRouteName="Login" 
+      />
+    );
+  } else if (onboardingState.needsOnboarding) {
+    // Session exists but onboarding incomplete - show onboarding in auth stack
+    console.log("👤 Rendering onboarding flow starting at:", onboardingState.startScreen);
+    ComponentToRender = (
+      <AuthStack 
+        setSession={safeSetSession} 
+        initialRouteName={onboardingState.startScreen} 
+      />
+    );
+  } else {
+    // Session exists and onboarding complete - show main app
+    ComponentToRender = (
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          tabBarIcon: ({ color, size, focused }) => {
+            if (route.name === 'Feed') {
+              return <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />;
+            }
+            if (route.name === 'Progress') {
+              return <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={size} color={color} />;
+            }
+            if (route.name === 'Settings') {
+              return <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />;
+            }
+            if (route.name === 'Workout') {
+              return null; // We'll handle this separately
+            }
+          },
+          tabBarStyle: {
+            backgroundColor: colors.white,
+            borderTopWidth: 1,
+            borderTopColor: '#EEEEEE',
+            elevation: 0,
+            shadowOpacity: 0,
+            height: 90, // Increased height for more padding
+            paddingBottom: 24, // More bottom padding for iPhone swipe bar
+            paddingTop: 0,
+          },
+          tabBarActiveTintColor: 'black',
+          tabBarInactiveTintColor: '#CCCCCC',
+          tabBarLabelStyle: {
+            fontFamily: 'DMSans-Medium',
+            fontSize: 12,
+            marginBottom: 5,
+          },
+        })}
+      >
+        <Tab.Screen 
+          name="Profile" 
+          component={ProfileScreen}
+          options={{
+            tabBarLabel: 'Profile',
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Feed" 
+          component={FeedScreen} 
+          options={{
+            tabBarLabel: 'Feed',
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Workout" 
+          component={WorkoutStack} 
+          options={{
+            tabBarLabel: () => null,
+            tabBarIcon: ({ focused, color, size }) => (
+              <View style={styles.tabBarWorkoutButtonPremium}>
+                <Ionicons name="barbell" size={32} color="#fff" />
+              </View>
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Progress" 
+          component={HomeScreen}
+          options={{
+            tabBarLabel: 'Progress',
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Settings" 
+          component={ProfileScreen}
+          options={{
+            tabBarLabel: 'Settings',
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+    );
+  }
 
   return (
     <SafeAreaProvider>
       <ToastProvider>
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <NavigationContainer key={navKey} onReady={onLayoutRootView}>
-            {!session ? (
-              // No session - show auth screens
-              <AuthStack setSession={safeSetSession} />
-            ) : onboardingState.needsOnboarding ? (
-              // Session exists but onboarding incomplete - show onboarding in auth stack
-              <AuthStack setSession={safeSetSession} initialRouteName="Name" />
-            ) : (
-              // Session exists and onboarding complete - show main app
-              <Tab.Navigator
-                screenOptions={({ route }) => ({
-                  headerShown: false,
-                  tabBarIcon: ({ color, size, focused }) => {
-                    if (route.name === 'Feed') {
-                      return <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />;
-                    }
-                    if (route.name === 'Progress') {
-                      return <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={size} color={color} />;
-                    }
-                    if (route.name === 'Settings') {
-                      return <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />;
-                    }
-                    if (route.name === 'Workout') {
-                      return null; // We'll handle this separately
-                    }
-                  },
-                  tabBarStyle: {
-                    backgroundColor: colors.white,
-                    borderTopWidth: 1,
-                    borderTopColor: '#EEEEEE',
-                    elevation: 0,
-                    shadowOpacity: 0,
-                    height: 90, // Increased height for more padding
-                    paddingBottom: 24, // More bottom padding for iPhone swipe bar
-                    paddingTop: 0,
-                  },
-                  tabBarActiveTintColor: 'black',
-                  tabBarInactiveTintColor: '#CCCCCC',
-                  tabBarLabelStyle: {
-                    fontFamily: 'DMSans-Medium',
-                    fontSize: 12,
-                    marginBottom: 5,
-                  },
-                })}
-              >
-                <Tab.Screen 
-                  name="Profile" 
-                  component={ProfileScreen}
-                  options={{
-                    tabBarLabel: 'Profile',
-                    tabBarIcon: ({ focused, color, size }) => (
-                      <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
-                    ),
-                  }}
-                />
-                <Tab.Screen 
-                  name="Feed" 
-                  component={FeedScreen} 
-                  options={{
-                    tabBarLabel: 'Feed',
-                    tabBarIcon: ({ focused, color, size }) => (
-                      <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />
-                    ),
-                  }}
-                />
-                <Tab.Screen 
-                  name="Workout" 
-                  component={WorkoutStack} 
-                  options={{
-                    tabBarLabel: () => null,
-                    tabBarIcon: ({ focused, color, size }) => (
-                      <View style={styles.tabBarWorkoutButtonPremium}>
-                        <Ionicons name="barbell" size={32} color="#fff" />
-                      </View>
-                    ),
-                  }}
-                />
-                <Tab.Screen 
-                  name="Progress" 
-                  component={HomeScreen}
-                  options={{
-                    tabBarLabel: 'Progress',
-                    tabBarIcon: ({ focused, color, size }) => (
-                      <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={size} color={color} />
-                    ),
-                  }}
-                />
-                <Tab.Screen 
-                  name="Settings" 
-                  component={ProfileScreen}
-                  options={{
-                    tabBarLabel: 'Settings',
-                    tabBarIcon: ({ focused, color, size }) => (
-                      <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />
-                    ),
-                  }}
-                />
-              </Tab.Navigator>
-            )}
+          <NavigationContainer key={navigationKey} onReady={onLayoutRootView}>
+            {ComponentToRender}
           </NavigationContainer>
         </GestureHandlerRootView>
       </ToastProvider>

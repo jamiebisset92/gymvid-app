@@ -30,6 +30,7 @@ import {
   resetAnimations,
   ANIMATION_CONFIG
 } from '../../utils/animationUtils';
+import { supabase } from '../../config/supabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -199,6 +200,35 @@ export default function LoginScreen({ navigation, setSession, route }) {
     outputRange: ['0deg', '360deg']
   });
 
+  // Function to check if user needs to complete onboarding
+  const checkNeedsOnboarding = async (userId) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('onboarding_complete, name, gender, date_of_birth, username, country, bodyweight, unit_pref')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        console.error("Error checking onboarding status:", error);
+        return false;
+      }
+      
+      // Check if any required fields are missing or onboarding is not explicitly marked complete
+      return !profile.onboarding_complete || 
+        !profile.name || 
+        !profile.gender || 
+        !profile.date_of_birth ||
+        !profile.username ||
+        !profile.country ||
+        !profile.bodyweight ||
+        !profile.unit_pref;
+    } catch (err) {
+      console.error("Error in checking onboarding status:", err);
+      return false;
+    }
+  };
+
   const handleLogin = async (useBiometric = false) => {
     console.log('Login button pressed', { email, password, useBiometric });
     if (!useBiometric && (!email || !password)) {
@@ -219,8 +249,18 @@ export default function LoginScreen({ navigation, setSession, route }) {
           toast.error(errorMsg);
         }
       } else if (result?.session) {
-        // Show success toast before session change
-        toast.success('Login successful!');
+        // Check if the user needs to complete onboarding
+        const needsOnboarding = await checkNeedsOnboarding(result.session.user.id);
+        
+        if (needsOnboarding) {
+          // Show neutral toast at the top for users who need to complete onboarding
+          toast.neutral("Please finish onboarding process", { 
+            position: 'top'
+          });
+        } else {
+          // Show normal success toast for users with complete profiles
+          toast.success('Login successful!');
+        }
         
         // Use a timeout to ensure session update happens after animation completes
         setTimeout(() => {
