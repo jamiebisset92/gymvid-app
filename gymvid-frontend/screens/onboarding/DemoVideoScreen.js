@@ -152,6 +152,18 @@ export default function DemoVideoScreen({ navigation, route }) {
     });
   };
 
+  const handleContinue = () => {
+    // Navigate to Paywall screen
+    navigation.navigate('Paywall', {
+      exerciseLogged: {
+        exercise: 'Bench Press',
+        weight: '225 lbs',
+        reps: 8,
+        date: new Date().toDateString()
+      }
+    });
+  };
+
   return (
     <Animated.View 
       style={[
@@ -167,12 +179,11 @@ export default function DemoVideoScreen({ navigation, route }) {
           <TouchableOpacity 
             style={styles.backButton} 
             onPress={() => navigation.goBack()}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <Ionicons name="chevron-back" size={24} color={colors.gray} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Sample Video</Text>
-          <View style={styles.headerSpacer} />
         </View>
 
         <View style={styles.contentContainer}>
@@ -305,29 +316,32 @@ const styles = StyleSheet.create({
     paddingTop: 15,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 20,
+    position: 'relative',
   },
   headerTitle: {
     fontSize: 17,
     fontWeight: '600',
     color: colors.darkGray,
-  },
-  headerSpacer: {
-    width: 40, // Same width as back button for alignment
+    textAlign: 'center',
   },
   backButton: {
-    height: 40,
     width: 40,
+    height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.lightGray,
+    position: 'absolute',
+    left: 20,
+    top: 15,
+    zIndex: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 1,
   },

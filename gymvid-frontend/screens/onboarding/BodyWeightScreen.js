@@ -18,6 +18,7 @@ import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
 import { Animated, Easing } from 'react-native';
 import { runWorldClassEntranceAnimation, ANIMATION_CONFIG } from '../../utils/animationUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Create a debug logging function that only logs in development
 const debugLog = (...args) => {
@@ -179,6 +180,10 @@ export default function BodyWeightScreen({ navigation, route }) {
     
     let error = null;
     try {
+      // Save to AsyncStorage for future use
+      await AsyncStorage.setItem('userBodyweight', numWeight.toString());
+      debugLog('Saved body weight to AsyncStorage:', numWeight.toString());
+      
       // Always try direct database update if we have userId
       if (userId) {
         debugLog('Using direct database update with userId:', userId);

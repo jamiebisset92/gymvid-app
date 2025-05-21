@@ -55,8 +55,55 @@ export default function UsernameScreen({ navigation, route }) {
     debugLog('UsernameScreen - Received params:', route.params);
     if (userId) {
       debugLog('UsernameScreen - Got userId:', userId);
+      
+      // Store userId in AsyncStorage as soon as we get it from route params
+      // This will help with persistence across navigation
+      const persistUserId = async () => {
+        try {
+          await AsyncStorage.setItem('userId', userId);
+          debugLog('Stored userId in AsyncStorage:', userId);
+        } catch (error) {
+          console.error('Failed to store userId in AsyncStorage:', error);
+        }
+      };
+      
+      persistUserId();
     } else {
-      console.warn('UsernameScreen - No userId provided!');
+      console.warn('UsernameScreen - No userId provided in route params!');
+      
+      // Try to retrieve userId from AsyncStorage if not in route params
+      const retrieveUserId = async () => {
+        try {
+          // First check AsyncStorage
+          const storedUserId = await AsyncStorage.getItem('userId');
+          if (storedUserId) {
+            debugLog('Retrieved userId from AsyncStorage:', storedUserId);
+            return;
+          }
+          
+          // Then try Supabase v1 auth
+          const user = supabase.auth.user();
+          if (user && user.id) {
+            await AsyncStorage.setItem('userId', user.id);
+            debugLog('Retrieved and stored userId from Supabase auth:', user.id);
+            return;
+          }
+          
+          // Try Supabase session as a fallback
+          const session = supabase.auth.session();
+          if (session && session.user && session.user.id) {
+            await AsyncStorage.setItem('userId', session.user.id);
+            debugLog('Retrieved and stored userId from Supabase session:', session.user.id);
+            return;
+          }
+          
+          console.warn('Could not find a valid userId from any source');
+        } catch (error) {
+          console.error('Failed to retrieve userId:', error);
+        }
+      };
+      
+      retrieveUserId();
     }
   }, [route.params]);
   
@@ -513,15 +560,57 @@ export default function UsernameScreen({ navigation, route }) {
   
   // Extract the username submission logic to its own function
   const proceedWithUsername = async () => {
-    if (!userId) {
-      Alert.alert('Error', 'User identification lost during onboarding. Please start over or contact support.');
-      return;
-    }
-
     try {
       setLoading(true);
       
-      debugLog('Completing onboarding with userId:', userId);
+      // Get current user ID through multiple fallback methods
+      let currentUserId = null;
+      
+      // Supabase v1 API is the one that's working based on logs
+      try {
+        const user = supabase.auth.user();
+        if (user && user.id) {
+          currentUserId = user.id;
+          logToConsole('Using Supabase v1 user ID:', currentUserId);
+        }
+      } catch (error) {
+        console.error('Error getting Supabase v1 user:', error);
+      }
+      
+      // If that fails, try route params
+      if (!currentUserId && userId) {
+        currentUserId = userId;
+        logToConsole('Using route param user ID:', currentUserId);
+      }
+      
+      // If still no user ID, try AsyncStorage
+      if (!currentUserId) {
+        try {
+          const storedUserId = await AsyncStorage.getItem('userId');
+          if (storedUserId) {
+            currentUserId = storedUserId;
+            logToConsole('Using stored user ID:', currentUserId);
+          }
+        } catch (error) {
+          console.error('Error getting stored user ID:', error);
+        }
+      }
+      
+      // Final check - if we still don't have a user ID, show error
+      if (!currentUserId) {
+        Alert.alert('Error', 'User identification lost during onboarding. Please start over or contact support.');
+        setLoading(false);
+        return;
+      }
+      
+      // Store user ID for future use
+      try {
+        await AsyncStorage.setItem('userId', currentUserId);
+      } catch (error) {
+        console.error('Error storing user ID:', error);
+      }
+      
+      debugLog('Completing onboarding with userId:', currentUserId);
       debugLog('Email:', userEmail);
       debugLog('Username:', username);
       
@@ -530,43 +619,16 @@ export default function UsernameScreen({ navigation, route }) {
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('name')
-        .eq('id', userId)
+        .eq('id', currentUserId)
         .single();
         
       if (!userError && userData && userData.name) {
         userName = userData.name.split(' ')[0]; // Get first name
       }
       
-      // Get current user from Supabase
-      let currentUserId = userId; // Default to the userId we already have
-      
-      try {
-        // Try v2 API format first (getUser)
-        const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
-        if (user && user.id) {
-          currentUserId = user.id;
-          logToConsole('Using Supabase v2 user ID:', currentUserId);
-        } else {
-          // Try v1 API format (direct user method)
-          const v1User = supabase.auth.user();
-          if (v1User && v1User.id) {
-            currentUserId = v1User.id;
-            logToConsole('Using Supabase v1 user ID:', currentUserId);
-          } else {
-            // Fallback to route param
-            logToConsole('Using route param user ID:', currentUserId);
-          }
-        }
-      } catch (userError) {
-        logToConsole('Error getting user ID, using fallback:', currentUserId);
-        console.error('Error getting user ID:', userError);
-      }
-      
-      logToConsole('Final user ID for onboarding:', currentUserId);
-      
       // Collect onboarding data from AsyncStorage
       const onboardingData = {
-        date_of_birth: '',
+        date_of_birth: null,
         gender: '',
         country: '',
         bodyweight: 0,
@@ -574,35 +636,101 @@ export default function UsernameScreen({ navigation, route }) {
       };
       
       try {
-        // Retrieve stored onboarding data
-        const storedDateOfBirth = await AsyncStorage.getItem('userDateOfBirth');
-        const storedGender = await AsyncStorage.getItem('userGender');
-        const storedCountry = await AsyncStorage.getItem('userCountry');
-        const storedBodyweight = await AsyncStorage.getItem('userBodyweight');
-        const storedUnitPref = await AsyncStorage.getItem('userUnitPreference');
+        // Retrieve stored onboarding data - with improved fetching and fallbacks
+        let storedDateOfBirth = await AsyncStorage.getItem('userDateOfBirth');
+        let storedGender = await AsyncStorage.getItem('userGender');
+        let storedCountry = await AsyncStorage.getItem('userCountry');
+        let storedBodyweight = await AsyncStorage.getItem('userBodyweight');
+        let storedUnitPref = await AsyncStorage.getItem('userUnitPreference');
         
-        if (storedDateOfBirth) onboardingData.date_of_birth = storedDateOfBirth;
-        if (storedGender) onboardingData.gender = storedGender;
-        if (storedCountry) onboardingData.country = storedCountry;
-        if (storedBodyweight) onboardingData.bodyweight = parseFloat(storedBodyweight);
-        if (storedUnitPref) onboardingData.unit_pref = storedUnitPref;
+        // If we don't have values in AsyncStorage, try to get them from Supabase directly
+        if (!storedGender || !storedCountry || !storedDateOfBirth || !storedBodyweight || !storedUnitPref) {
+          logToConsole('Some data missing from AsyncStorage, trying to fetch from Supabase...');
+          
+          try {
+            const { data: dbProfile, error } = await supabase
+              .from('users')
+              .select('gender, country, date_of_birth, bodyweight, unit_pref')
+              .eq('id', currentUserId)
+              .single();
+              
+            if (!error && dbProfile) {
+              logToConsole('Retrieved data from Supabase:', dbProfile);
+              
+              // Save to AsyncStorage for future use
+              if (dbProfile.gender && !storedGender) {
+                storedGender = dbProfile.gender;
+                await AsyncStorage.setItem('userGender', dbProfile.gender);
+              }
+              
+              if (dbProfile.country && !storedCountry) {
+                storedCountry = dbProfile.country;
+                await AsyncStorage.setItem('userCountry', dbProfile.country);
+              }
+              
+              if (dbProfile.date_of_birth && !storedDateOfBirth) {
+                storedDateOfBirth = dbProfile.date_of_birth;
+                await AsyncStorage.setItem('userDateOfBirth', dbProfile.date_of_birth);
+              }
+              
+              if (dbProfile.bodyweight && !storedBodyweight) {
+                storedBodyweight = dbProfile.bodyweight.toString();
+                await AsyncStorage.setItem('userBodyweight', dbProfile.bodyweight.toString());
+              }
+              
+              if (dbProfile.unit_pref && !storedUnitPref) {
+                storedUnitPref = dbProfile.unit_pref;
+                await AsyncStorage.setItem('userUnitPreference', dbProfile.unit_pref);
+              }
+            }
+          } catch (dbError) {
+            console.error('Error fetching profile from Supabase:', dbError);
+          }
+        }
         
-        logToConsole('Retrieved onboarding data:', onboardingData);
+        // Ensure date of birth is valid for database
+        if (storedDateOfBirth && storedDateOfBirth.trim() !== '') {
+          onboardingData.date_of_birth = storedDateOfBirth;
+        }
+        
+        // Set values with proper validation
+        if (storedGender) {
+          onboardingData.gender = storedGender;
+        }
+        
+        if (storedCountry) {
+          onboardingData.country = storedCountry;
+        }
+        
+        if (storedBodyweight) {
+          // Parse and validate the bodyweight
+          const parsedWeight = parseFloat(storedBodyweight);
+          if (!isNaN(parsedWeight) && parsedWeight > 0) {
+            onboardingData.bodyweight = parsedWeight;
+          }
+        }
+        
+        if (storedUnitPref) {
+          onboardingData.unit_pref = storedUnitPref;
+        }
+        
+        logToConsole('Final onboarding data from storage:', onboardingData);
         
         // IMPORTANT: Make sure all required fields are saved to the database
         // This fixes the issue where onboarding_complete is true but data is missing
         const { error: completeProfileError } = await supabase
           .from('users')
           .upsert({
-            id: userId,
+            id: currentUserId,
             email: userEmail,
             username: username,
             name: userName || username, // Ensure name is set
-            date_of_birth: onboardingData.date_of_birth,
-            gender: onboardingData.gender,
-            country: onboardingData.country,
-            bodyweight: onboardingData.bodyweight,
-            unit_pref: onboardingData.unit_pref,
+            // Only include date_of_birth if it's a valid value
+            ...(onboardingData.date_of_birth ? { date_of_birth: onboardingData.date_of_birth } : {}),
+            gender: onboardingData.gender || 'Prefer not to say',
+            country: onboardingData.country || 'Unknown',
+            bodyweight: onboardingData.bodyweight || 0,
+            unit_pref: onboardingData.unit_pref || 'kg',
             onboarding_complete: true  // Mark onboarding as complete ONLY after all data is saved
           });
           
@@ -613,15 +741,19 @@ export default function UsernameScreen({ navigation, route }) {
           logToConsole('Successfully saved all onboarding data to database');
         }
         
-        // Send onboarding data to backend
+        // Send onboarding data to backend with detailed logging
         const onboardingPayload = {
           user_id: currentUserId,
-          ...onboardingData
+          date_of_birth: onboardingData.date_of_birth || '2000-01-01', // Use a default date if missing
+          gender: onboardingData.gender || 'Prefer not to say',
+          country: onboardingData.country || 'Unknown',
+          bodyweight: onboardingData.bodyweight || 0,
+          unit_pref: onboardingData.unit_pref || 'kg'
         };
         
-        // Log before submitting
-        logToConsole('⭐ Onboarding submitted ⭐');
-        logToConsole('Payload:', onboardingPayload);
+        // Log full payload details before submitting
+        logToConsole('[ONBOARDING] Final payload before POST:', onboardingPayload);
+        console.log('[ONBOARDING] Final payload before POST:', onboardingPayload);
         
         // Configure the API base URL
         // For production, we use the Render backend
@@ -713,7 +845,7 @@ export default function UsernameScreen({ navigation, route }) {
             const { data: finalCheck, error: checkError } = await supabase
               .from('users')
               .select('*')
-              .eq('id', userId)
+              .eq('id', currentUserId)
               .single();
               
             if (checkError) {
@@ -724,28 +856,38 @@ export default function UsernameScreen({ navigation, route }) {
               const missingFields = [];
               if (!finalCheck.name) missingFields.push('name');
               if (!finalCheck.gender) missingFields.push('gender');
-              if (!finalCheck.date_of_birth) missingFields.push('date_of_birth');
               if (!finalCheck.username) missingFields.push('username');
               if (!finalCheck.country) missingFields.push('country');
-              if (!finalCheck.bodyweight) missingFields.push('bodyweight');
+              if (finalCheck.bodyweight === null || finalCheck.bodyweight === undefined) missingFields.push('bodyweight');
               if (!finalCheck.unit_pref) missingFields.push('unit_pref');
               
               if (missingFields.length > 0) {
                 console.log('⚠️ FINAL CHECK: Still missing fields:', missingFields);
                 
+                // Generate a valid date string (fallback to today if needed)
+                const formatValidDate = () => {
+                  try {
+                    if (onboardingData.date_of_birth) return onboardingData.date_of_birth;
+                    // Default to a placeholder date if nothing is available
+                    return '2000-01-01';
+                  } catch (err) {
+                    return '2000-01-01'; // Safe fallback
+                  }
+                };
+                
                 // Try one more database update to save all data
                 await supabase
                   .from('users')
                   .upsert({
-                    id: userId,
-                    email: userEmail,
+                    id: currentUserId,
+                    email: userEmail || finalCheck.email,
                     username: username,
-                    name: userName || username,
-                    date_of_birth: onboardingData.date_of_birth,
-                    gender: onboardingData.gender,
-                    country: onboardingData.country,
-                    bodyweight: onboardingData.bodyweight,
-                    unit_pref: onboardingData.unit_pref,
+                    name: userName || username || finalCheck.name || 'User',
+                    date_of_birth: formatValidDate(),
+                    gender: onboardingData.gender || finalCheck.gender || 'Prefer not to say',
+                    country: onboardingData.country || finalCheck.country || 'Unknown',
+                    bodyweight: onboardingData.bodyweight || finalCheck.bodyweight || 0,
+                    unit_pref: onboardingData.unit_pref || finalCheck.unit_pref || 'kg',
                     onboarding_complete: true
                   });
                   
@@ -760,7 +902,7 @@ export default function UsernameScreen({ navigation, route }) {
             
             // Navigate to OnboardingSummary which will handle the extended onboarding flow
             navigation.navigate('OnboardingSummary', {
-              userId,
+              userId: currentUserId,
               email: userEmail,
               fromSignUp
             });

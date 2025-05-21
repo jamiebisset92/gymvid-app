@@ -7,6 +7,7 @@ import { supabase } from '../../config/supabase';
 import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
 import { runWorldClassEntranceAnimation, ANIMATION_CONFIG } from '../../utils/animationUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Create a debug logging function that only logs in development
 const debugLog = (...args) => {
@@ -178,6 +179,10 @@ export default function GenderScreen({ navigation, route }) {
     
     let error = null;
     try {
+      // Save to AsyncStorage for future use
+      await AsyncStorage.setItem('userGender', gender);
+      debugLog('Saved gender to AsyncStorage:', gender);
+      
       // Always try direct database update if we have userId
       if (userId) {
         debugLog('Using direct database update with userId:', userId);

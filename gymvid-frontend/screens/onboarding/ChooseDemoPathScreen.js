@@ -96,12 +96,12 @@ export default function ChooseDemoPathScreen({ navigation, route }) {
 
   // Handler for sample video button
   const handleShowSampleVideo = () => {
-    navigation.navigate('DemoVideoScreen');
+    navigation.navigate('DemoVideo');
   };
   
   // Handler for manual log button
   const handleManualLog = () => {
-    navigation.navigate('ManualDemoScreen');
+    navigation.navigate('ManualDemo');
   };
 
   return (
@@ -119,7 +119,7 @@ export default function ChooseDemoPathScreen({ navigation, route }) {
           <TouchableOpacity 
             style={styles.backButton} 
             onPress={() => navigation.goBack()}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <Ionicons name="chevron-back" size={24} color={colors.gray} />
           </TouchableOpacity>
@@ -207,17 +207,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   backButton: {
-    height: 40,
     width: 40,
+    height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.lightGray,
+    position: 'absolute',
+    left: 20,
+    top: 15,
+    zIndex: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 1,
   },

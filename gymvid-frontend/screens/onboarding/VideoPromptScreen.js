@@ -149,6 +149,11 @@ export default function VideoPromptScreen({ navigation, route }) {
   const handleNoVideos = () => {
     navigation.navigate('ChooseDemoPath');
   };
+  
+  const handleBack = () => {
+    // Navigate back to OnboardingSummary screen
+    navigation.navigate('OnboardingSummary');
+  };
 
   return (
     <Animated.View 
@@ -161,7 +166,16 @@ export default function VideoPromptScreen({ navigation, route }) {
     >
       <SafeAreaView style={styles.safeContainer}>
         {/* Header spacer */}
-        <View style={styles.header} />
+        <View style={styles.header}>
+          {/* Back button in top left corner */}
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={handleBack}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.gray} />
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.contentContainer}>
           <Animated.Text
@@ -313,5 +327,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+    position: 'absolute',
+    left: 20,
+    top: 15,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
 }); 

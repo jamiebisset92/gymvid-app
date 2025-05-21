@@ -20,6 +20,7 @@ import { ProgressContext } from '../../navigation/AuthStack';
 import CountryFlag from 'react-native-country-flag';
 import { useIsFocused } from '@react-navigation/native';
 import { runWorldClassEntranceAnimation, ANIMATION_CONFIG } from '../../utils/animationUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Create a debug logging function that only logs in development
 const debugLog = (...args) => {
@@ -478,6 +479,10 @@ export default function CountryScreen({ navigation, route }) {
 
     try {
       setLoading(true);
+      
+      // Save to AsyncStorage for future use
+      await AsyncStorage.setItem('userCountry', selectedCountry.name);
+      debugLog('Saved country to AsyncStorage:', selectedCountry.name);
       
       // Update database with country
       debugLog('Updating profile with country:', selectedCountry.name);

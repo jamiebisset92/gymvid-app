@@ -13,6 +13,13 @@ import ProfileScreen from './screens/ProfileScreen';
 import AuthStack from './navigation/AuthStack';
 import colors from './config/colors';
 
+// Debug logging function
+const debugLog = (...args) => {
+  if (__DEV__) {
+    console.log('[DEBUG]', ...args);
+  }
+};
+
 SplashScreen.preventAutoHideAsync();
 const Tab = createBottomTabNavigator();
 
@@ -29,19 +36,34 @@ export default function App() {
           'DMSans-Medium': require('./assets/fonts/DMSans-Medium.ttf'),
         });
 
-        const { data: { session } } = await supabase.auth.session();
-        setSession(session);
-
-        const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+        debugLog('Fonts loaded, getting session');
+        
+        try {
+          const { data: { session } } = await supabase.auth.session();
+          debugLog('Session loaded:', session ? 'Valid session' : 'No session');
           setSession(session);
-        });
+        } catch (sessionError) {
+          console.error('Error loading session:', sessionError);
+        }
 
-        return () => {
-          listener.subscription?.unsubscribe();
-        };
+        try {
+          debugLog('Setting up auth listener');
+          const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+            debugLog('Auth state changed:', event, session ? 'Has session' : 'No session');
+            setSession(session);
+          });
+          
+          return () => {
+            debugLog('Cleaning up auth listener');
+            listener.subscription?.unsubscribe();
+          };
+        } catch (listenerError) {
+          console.error('Error setting up auth listener:', listenerError);
+        }
       } catch (e) {
         console.warn('App load error:', e);
       } finally {
+        debugLog('App ready');
         setAppIsReady(true);
         await SplashScreen.hideAsync();
       }

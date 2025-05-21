@@ -301,7 +301,11 @@ const backScreenOptions = {
 };
 
 // Shared element context for progress bar continuity
-export const ProgressContext = React.createContext(null);
+export const ProgressContext = React.createContext({
+  progress: { current: 0, total: 9, isOnboarding: false, currentScreen: '' },
+  setProgress: () => {},
+  updateProgress: () => {}
+});
 
 const Tab = createBottomTabNavigator();
 

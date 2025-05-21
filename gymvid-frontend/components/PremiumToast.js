@@ -63,7 +63,7 @@ const PremiumToast = ({
   const opacityAnim = useRef(new Animated.Value(0)).current;
   
   // Get toast configuration
-  const toastConfig = TOAST_TYPES[type];
+  const toastConfig = TOAST_TYPES[type] || TOAST_TYPES.INFO;
   
   // Calculate position based on keyboard visibility and position preference
   const getToastPosition = () => {
@@ -120,21 +120,34 @@ const PremiumToast = ({
   // Setup animations - using a ref to avoid scheduling updates during render
   const animationsStarted = useRef(false);
   
+  // Trigger haptic feedback safely
+  const triggerHaptic = () => {
+    if (Platform.OS === 'web') {
+      // Skip haptics on web platform
+      return;
+    }
+
+    // Make sure Haptics is available and the toastConfig exists with a haptic property
+    if (Haptics && toastConfig && toastConfig.haptic) {
+      try {
+        // Use Promise.catch pattern to safely handle any errors
+        Promise.resolve(Haptics.notificationAsync(toastConfig.haptic))
+          .catch(err => {
+            console.log('Haptic feedback error:', err);
+          });
+      } catch (error) {
+        console.log('Haptic feedback error:', error);
+      }
+    }
+  };
+  
   useEffect(() => {
     // Only run this effect once
     if (animationsStarted.current) return;
     
     animationsStarted.current = true;
     
-    // Trigger haptic feedback (safely)
-    const triggerHaptic = async () => {
-      try {
-        await Haptics.notificationAsync(toastConfig.haptic);
-      } catch (error) {
-        console.log('Haptic feedback error:', error);
-      }
-    };
-    
+    // Trigger haptic feedback
     triggerHaptic();
     
     // Show animation

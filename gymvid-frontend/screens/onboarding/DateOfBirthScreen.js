@@ -9,6 +9,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useIsFocused } from '@react-navigation/native';
 import { Animated, Easing } from 'react-native';
 import { runWorldClassEntranceAnimation, ANIMATION_CONFIG } from '../../utils/animationUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Create a debug logging function that only logs in development
 const debugLog = (...args) => {
@@ -127,6 +128,10 @@ export default function DateOfBirthScreen({ navigation, route }) {
       };
       debugLog('Updating profile with date of birth');
       debugLog('Using userId:', userId);
+      
+      // Save to AsyncStorage for future use
+      await AsyncStorage.setItem('userDateOfBirth', dateOfBirth.toISOString());
+      debugLog('Saved date of birth to AsyncStorage:', dateOfBirth.toISOString());
       
       let error = null;
       
