@@ -7,7 +7,7 @@ router = APIRouter()
 
 # Initialize Supabase client
 supabase_url = os.environ.get("SUPABASE_URL") or "https://xwxtsyhlobiyomqlxwti.supabase.co"
-supabase_key = os.environ.get("SUPABASE_SERVICE_KEY")  # Should be set in production environment
+supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")  # Should be set in production environment
 
 # Create a single Supabase client to reuse
 supabase: Optional[Client] = None
