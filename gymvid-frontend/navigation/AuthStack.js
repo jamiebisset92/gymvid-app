@@ -11,6 +11,13 @@ import WeightPreferenceScreen from '../screens/onboarding/WeightPreferenceScreen
 import BodyWeightScreen from '../screens/onboarding/BodyWeightScreen';
 import CountryScreen from '../screens/onboarding/CountryScreen';
 import UsernameScreen from '../screens/onboarding/UsernameScreen';
+import OnboardingSummaryScreen from '../screens/onboarding/OnboardingSummaryScreen';
+import VideoPromptScreen from '../screens/onboarding/VideoPromptScreen';
+import ChooseDemoPathScreen from '../screens/onboarding/ChooseDemoPathScreen';
+import DemoVideoScreen from '../screens/onboarding/DemoVideoScreen';
+import ManualDemoScreen from '../screens/onboarding/ManualDemoScreen';
+import VideoReviewScreen from '../screens/onboarding/VideoReviewScreen';
+import PaywallScreen from '../screens/onboarding/PaywallScreen';
 import { supabase } from '../config/supabase';
 import colors from '../config/colors';
 import { SCREEN_TRANSITION_SPECS } from '../utils/animationUtils';
@@ -43,9 +50,16 @@ const ONBOARDING_SCREENS = {
   BodyWeight: 4,
   Country: 5,
   Username: 6,
+  OnboardingSummary: 7,
+  VideoPrompt: 8,
+  ChooseDemoPath: 9,
+  DemoVideo: 10,
+  ManualDemo: 10, // Same level as DemoVideo (alternative paths)
+  VideoReview: 11,
+  Paywall: 12
 };
 
-const TOTAL_ONBOARDING_STEPS = Object.keys(ONBOARDING_SCREENS).length;
+const TOTAL_ONBOARDING_STEPS = Object.keys(ONBOARDING_SCREENS).length - 5; // Subtract the extended flow screens from total
 
 // Premium stack navigator configuration to prevent screen overlapping
 const screenOptions = {
@@ -418,6 +432,13 @@ export default function AuthStack({ setSession, initialRouteName = 'Login' }) {
             />
             <Stack.Screen name="Country" component={CountryScreen} />
             <Stack.Screen name="Username" component={UsernameScreen} />
+            <Stack.Screen name="OnboardingSummary" component={OnboardingSummaryScreen} />
+            <Stack.Screen name="VideoPrompt" component={VideoPromptScreen} />
+            <Stack.Screen name="ChooseDemoPath" component={ChooseDemoPathScreen} />
+            <Stack.Screen name="DemoVideo" component={DemoVideoScreen} />
+            <Stack.Screen name="ManualDemo" component={ManualDemoScreen} />
+            <Stack.Screen name="VideoReview" component={VideoReviewScreen} />
+            <Stack.Screen name="Paywall" component={PaywallScreen} />
             <Stack.Screen 
               name="MainApp" 
               component={EmptyScreen}

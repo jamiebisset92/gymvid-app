@@ -756,12 +756,13 @@ export default function UsernameScreen({ navigation, route }) {
             }
             
             // Log this important transition
-            logToConsole('⭐ Onboarding complete - navigating to MainApp screen ⭐');
+            logToConsole('⭐ Onboarding complete - navigating to OnboardingSummary ⭐');
             
-            // Navigate to MainApp screen which will handle the app reload
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'MainApp' }]
+            // Navigate to OnboardingSummary which will handle the extended onboarding flow
+            navigation.navigate('OnboardingSummary', {
+              userId,
+              email: userEmail,
+              fromSignUp
             });
           } catch (err) {
             console.error('Error in finalize onboarding:', err);
