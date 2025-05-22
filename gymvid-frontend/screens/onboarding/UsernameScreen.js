@@ -174,6 +174,13 @@ export default function UsernameScreen({ navigation, route }) {
       inputAnim.setValue(0);
       messageAnim.setValue(0);
       
+      // Reset validation state when returning to screen to ensure proper revalidation
+      if (username.length >= 3) {
+        setValidating(true);
+        // Revalidate the username since we're coming back to this screen
+        checkUsernameAvailable(username);
+      }
+      
       // Restart the animation sequence
       animationSequence.start(() => {
         // Focus the input after animations complete
@@ -183,8 +190,25 @@ export default function UsernameScreen({ navigation, route }) {
       });
     });
     
+    // Set up a blur listener for when leaving this screen
+    const unsubBlur = navigation.addListener('blur', () => {
+      // Clear validation state when leaving screen
+      setValidating(false);
+      
+      // Clear any pending debounce
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+      }
+    });
+    
     return () => {
       unsubFocus();
+      unsubBlur();
+      
+      // Clear any pending debounce
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+      }
     };
   }, [navigation]);
   
@@ -363,6 +387,15 @@ export default function UsernameScreen({ navigation, route }) {
         return;
       }
       
+      // Fetch current user ID for potential updates to Supabase
+      let currentUserId = null;
+      try {
+        currentUserId = await getCurrentUserId();
+      } catch (err) {
+        console.error('Error getting current user ID:', err);
+        // Continue without user ID, we'll just skip Supabase updates
+      }
+      
       // Show validating state
       setValidating(true);
       
@@ -383,24 +416,125 @@ export default function UsernameScreen({ navigation, route }) {
         });
         
         if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        console.log('Username check result:', result);
-        
-        if (result.error) {
-          console.warn('API warning:', result.error);
-        }
-        
-        if (result.available === false) {
-          // Username is taken
-          setIsValid(false);
-          animateErrorMessage('Sorry, this username is taken.');
+          // Get the raw error text first without trying to access properties
+          const rawErrorText = await response.text();
+          
+          // Log the raw error text directly - this is the most reliable approach
+          console.error(`Backend username check failed: ${rawErrorText}`);
+          logToConsole('Backend username check failed - raw response:', rawErrorText);
+          
+          // Try fallback endpoint if we see the APIResponse error
+          if (rawErrorText.includes("APIResponse") && rawErrorText.includes("error")) {
+            // Log the detection of this specific error
+            logToConsole('Detected APIResponse error in username check');
+            
+            // For username check, we can fall back to local validation
+            // Just check for reserved usernames and some simple rules
+            if (isReservedUsername(usernameToCheck)) {
+              setIsValid(false);
+              animateErrorMessage('Sorry, this username is reserved.');
+              return;
+            }
+            
+            // Simple format validation as fallback
+            if (usernameToCheck.length < 3) {
+              setIsValid(false);
+              animateErrorMessage('Username must be at least 3 characters');
+              return;
+            }
+            
+            // If no issues found, treat as valid
+            setIsValid(true);
+            animateSuccessMessage('Username looks good! Limited validation only.');
+          } else {
+            // Parse the error as JSON if possible
+            try {
+              if (rawErrorText.trim().startsWith('{') || rawErrorText.trim().startsWith('[')) {
+                const parsedError = JSON.parse(rawErrorText);
+                logToConsole('Parsed error response:', parsedError);
+                
+                // Check if it contains a specific error message
+                if (parsedError.error && typeof parsedError.error === 'string') {
+                  setIsValid(false);
+                  animateErrorMessage(parsedError.error);
+                  return;
+                }
+              }
+            } catch (parseError) {
+              // Ignore parsing errors
+              logToConsole('Error parsing response:', parseError.message);
+            }
+            
+            // Default error message
+            setIsValid(false);
+            animateErrorMessage('Error checking username');
+          }
         } else {
-          // Username is available
-          setIsValid(true);
-          animateSuccessMessage('Username available!');
+          // Handle successful response
+          try {
+            const responseText = await response.text();
+            logToConsole('Raw successful response:', responseText);
+            
+            let responseData;
+            try {
+              // Only try to parse if there's actual content
+              if (responseText.trim()) {
+                responseData = JSON.parse(responseText);
+                logToConsole('Backend onboarding response:', responseData);
+              } else {
+                logToConsole('Empty response body - treating as success with no data');
+                responseData = {}; // Use empty object as fallback
+              }
+            } catch (jsonError) {
+              console.error('Error parsing JSON response:', jsonError);
+              logToConsole('Error parsing JSON response:', jsonError.message);
+              logToConsole('Raw response was:', responseText);
+              responseData = {}; // Use empty object as fallback
+            }
+            
+            // Extract any useful data from the response
+            if (responseData) {
+              // Log the data we got back
+              logToConsole('Extracted onboarding response data:', responseData);
+              
+              // Check username availability based on the response
+              if (responseData.available === true || responseData.exists === false) {
+                // Username is available
+                setIsValid(true);
+                animateSuccessMessage('Username is available!');
+              } else if (responseData.available === false || responseData.exists === true) {
+                // Username is already taken
+                setIsValid(false);
+                animateErrorMessage('Sorry, this username is already taken.');
+              } else {
+                // No clear availability indicators but response was successful - assume valid
+                setIsValid(true);
+                animateSuccessMessage('Username format is valid.');
+              }
+              
+              // Check if we have any data to save (unrelated to username validation)
+              if (responseData.data) {
+                const dataToSave = responseData.data;
+                
+                if (dataToSave.age_category) {
+                  await AsyncStorage.setItem('userAgeCategory', dataToSave.age_category);
+                  logToConsole('Stored age category:', dataToSave.age_category);
+                }
+                
+                if (dataToSave.weight_class) {
+                  await AsyncStorage.setItem('userWeightClass', dataToSave.weight_class);
+                  logToConsole('Stored weight class:', dataToSave.weight_class);
+                }
+              }
+            } else {
+              // No response data but request was successful - default to valid
+              setIsValid(true);
+              animateSuccessMessage('Username format looks good.');
+            }
+          } catch (responseError) {
+            console.error('Error handling onboarding response:', responseError);
+            logToConsole('Error handling onboarding response:', responseError.message);
+          }
         }
       } catch (err) {
         console.error('Error checking username:', err);
@@ -409,7 +543,7 @@ export default function UsernameScreen({ navigation, route }) {
         if (usernameToCheck.toLowerCase() === 'jimjimjim' || 
             usernameToCheck.toLowerCase() === 'edggd') {
           console.log('Testing username validation - forcing rejection');
-          setIsValid(false);
+        setIsValid(false);
           animateErrorMessage('Sorry, this username is taken.');
           return;
         }
@@ -553,7 +687,7 @@ export default function UsernameScreen({ navigation, route }) {
       Alert.alert('Please enter a valid username', errorMessage || 'Username must be unique and follow our guidelines.');
       return;
     }
-    
+
     // Start the username submission process
     proceedWithUsername();
   };
@@ -598,13 +732,13 @@ export default function UsernameScreen({ navigation, route }) {
       
       // Final check - if we still don't have a user ID, show error
       if (!currentUserId) {
-        Alert.alert('Error', 'User identification lost during onboarding. Please start over or contact support.');
+      Alert.alert('Error', 'User identification lost during onboarding. Please start over or contact support.');
         setLoading(false);
-        return;
-      }
-      
+      return;
+    }
+
       // Store user ID for future use
-      try {
+    try {
         await AsyncStorage.setItem('userId', currentUserId);
       } catch (error) {
         console.error('Error storing user ID:', error);
@@ -719,11 +853,11 @@ export default function UsernameScreen({ navigation, route }) {
         // IMPORTANT: Make sure all required fields are saved to the database
         // This fixes the issue where onboarding_complete is true but data is missing
         const { error: completeProfileError } = await supabase
-          .from('users')
-          .upsert({
+        .from('users')
+        .upsert({
             id: currentUserId,
-            email: userEmail,
-            username: username,
+          email: userEmail,
+          username: username,
             name: userName || username, // Ensure name is set
             // Only include date_of_birth if it's a valid value
             ...(onboardingData.date_of_birth ? { date_of_birth: onboardingData.date_of_birth } : {}),
@@ -731,7 +865,7 @@ export default function UsernameScreen({ navigation, route }) {
             country: onboardingData.country || 'Unknown',
             bodyweight: onboardingData.bodyweight || 0,
             unit_pref: onboardingData.unit_pref || 'kg',
-            onboarding_complete: true  // Mark onboarding as complete ONLY after all data is saved
+            onboarding_complete: false  // Keep this as false until the complete flow is finished
           });
           
         if (completeProfileError) {
@@ -751,6 +885,14 @@ export default function UsernameScreen({ navigation, route }) {
           unit_pref: onboardingData.unit_pref || 'kg'
         };
         
+        // Sanitize the date_of_birth field to ensure it's in the format YYYY-MM-DD
+        if (onboardingPayload.date_of_birth) {
+          onboardingPayload.date_of_birth = new Date(onboardingPayload.date_of_birth)
+            .toISOString()
+            .split("T")[0];
+          console.log("[ONBOARDING] Cleaned date_of_birth:", onboardingPayload.date_of_birth);
+        }
+        
         // Log full payload details before submitting
         logToConsole('[ONBOARDING] Final payload before POST:', onboardingPayload);
         console.log('[ONBOARDING] Final payload before POST:', onboardingPayload);
@@ -763,162 +905,277 @@ export default function UsernameScreen({ navigation, route }) {
         logToConsole('Making POST request to:', apiUrl);
         
         // Make POST request to backend
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(onboardingPayload),
-          timeout: 10000, // 10-second timeout
-        });
-        
-        logToConsole('Fetch request completed, status:', response.status);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          logToConsole('Backend onboarding request failed:', errorText);
-          console.error('Backend onboarding request failed:', errorText);
-          // Continue with the flow even if backend fails - we'll sync data later
-        } else {
-          const responseData = await response.json();
-          logToConsole('Backend onboarding response:', responseData);
+        try {
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(onboardingPayload),
+            timeout: 10000, // 10-second timeout
+          });
           
-          // If the backend returns age_category and weight_class, store them
-          if (responseData.data && Array.isArray(responseData.data) && responseData.data.length > 0) {
-            const userData = responseData.data[0];
-            if (userData.age_category) {
-              await AsyncStorage.setItem('userAgeCategory', userData.age_category);
-              logToConsole('Stored age category:', userData.age_category);
-            }
-            if (userData.weight_class) {
-              await AsyncStorage.setItem('userWeightClass', userData.weight_class);
-              logToConsole('Stored weight class:', userData.weight_class);
-            }
-          }
-        }
-      } catch (err) {
-        logToConsole('Error with onboarding API request:', err.message);
-        console.error('Error with onboarding API request:', err);
-        // Continue with the flow - backend sync can happen later
-      }
-      
-      // Show success message
-      debugLog('Onboarding completed successfully!');
-      
-      // Store welcome info for HomeScreen
-      try {
-        // Set a flag in AsyncStorage that HomeScreen will check
-        const currentSession = supabase.auth.session();
-        if (currentSession) {
-          // Use global.welcomeInfo to pass data between screens
-          global.welcomeInfo = {
-            showWelcomeToast: true,
-            userName: userName || 'there'
-          };
-        }
-      } catch (err) {
-        console.error('Error storing welcome info:', err);
-      }
-      
-      // Run elegant exit animation with smooth transition
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true
-        }),
-        Animated.timing(slideAnim, {
-          toValue: -30,
-          duration: 400,
-          useNativeDriver: true
-        })
-      ]).start(() => {
-        setLoading(false);
-        
-        // IMPROVED NAVIGATION FLOW: Double-check onboarding status first
-        const finalizeOnboarding = async () => {
-          try {
-            // Force an explicit refresh of the auth session
-            await supabase.auth.refreshSession();
+          logToConsole('Fetch request completed, status:', response.status);
+          
+          if (!response.ok) {
+            // Get the raw error text first without trying to access properties
+            const rawErrorText = await response.text();
             
-            // Double-check that all data was actually saved to the database
-            const { data: finalCheck, error: checkError } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', currentUserId)
-              .single();
+            // Log the raw error text directly - this is the most reliable approach
+            console.error(`Backend onboarding request failed: ${rawErrorText}`);
+            logToConsole('Backend onboarding request failed - raw response:', rawErrorText);
+            
+            // Try fallback endpoint if we see the APIResponse error
+            if (rawErrorText.includes("APIResponse") && rawErrorText.includes("error")) {
+              // Log the detection of this specific error
+              logToConsole('Detected APIResponse error, will try fallback endpoint');
               
-            if (checkError) {
-              console.error('Final database check failed:', checkError);
-              // Continue with the process anyway
-            } else {
-              // Verify all fields are present
-              const missingFields = [];
-              if (!finalCheck.name) missingFields.push('name');
-              if (!finalCheck.gender) missingFields.push('gender');
-              if (!finalCheck.username) missingFields.push('username');
-              if (!finalCheck.country) missingFields.push('country');
-              if (finalCheck.bodyweight === null || finalCheck.bodyweight === undefined) missingFields.push('bodyweight');
-              if (!finalCheck.unit_pref) missingFields.push('unit_pref');
-              
-              if (missingFields.length > 0) {
-                console.log('⚠️ FINAL CHECK: Still missing fields:', missingFields);
+              try {
+                // Call the fallback endpoint
+                const fallbackApiUrl = `${API_BASE_URL}/onboard-fallback`;
+                logToConsole('Calling fallback endpoint:', fallbackApiUrl);
                 
-                // Generate a valid date string (fallback to today if needed)
-                const formatValidDate = () => {
-                  try {
-                    if (onboardingData.date_of_birth) return onboardingData.date_of_birth;
-                    // Default to a placeholder date if nothing is available
-                    return '2000-01-01';
-                  } catch (err) {
-                    return '2000-01-01'; // Safe fallback
-                  }
-                };
+                const fallbackResponse = await fetch(fallbackApiUrl, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(onboardingPayload),
+                });
                 
-                // Try one more database update to save all data
-                await supabase
-                  .from('users')
-                  .upsert({
-                    id: currentUserId,
-                    email: userEmail || finalCheck.email,
-                    username: username,
-                    name: userName || username || finalCheck.name || 'User',
-                    date_of_birth: formatValidDate(),
-                    gender: onboardingData.gender || finalCheck.gender || 'Prefer not to say',
-                    country: onboardingData.country || finalCheck.country || 'Unknown',
-                    bodyweight: onboardingData.bodyweight || finalCheck.bodyweight || 0,
-                    unit_pref: onboardingData.unit_pref || finalCheck.unit_pref || 'kg',
-                    onboarding_complete: true
-                  });
+                if (fallbackResponse.ok) {
+                  const fallbackData = await fallbackResponse.json();
+                  logToConsole('Fallback endpoint success:', fallbackData);
                   
-                console.log('Final database update completed');
-              } else {
-                console.log('✅ FINAL CHECK: All fields are present');
+                  // If we have data from fallback, use it
+                  if (fallbackData && fallbackData.data) {
+                    if (fallbackData.data.age_category) {
+                      await AsyncStorage.setItem('userAgeCategory', fallbackData.data.age_category);
+                      logToConsole('Saved age category from fallback:', fallbackData.data.age_category);
+                      
+                      // Update Supabase with the fallback data
+                      await supabase
+                        .from('users')
+                        .update({ age_category: fallbackData.data.age_category })
+                        .eq('id', currentUserId);
+                    }
+                    
+                    if (fallbackData.data.weight_class) {
+                      await AsyncStorage.setItem('userWeightClass', fallbackData.data.weight_class);
+                      logToConsole('Saved weight class from fallback:', fallbackData.data.weight_class);
+                      
+                      // Update Supabase with the fallback data
+                      await supabase
+                        .from('users')
+                        .update({ weight_class: fallbackData.data.weight_class })
+                        .eq('id', currentUserId);
+                    }
+                  }
+                } else {
+                  logToConsole('Fallback endpoint also failed:', await fallbackResponse.text());
+                }
+              } catch (fallbackError) {
+                logToConsole('Error calling fallback endpoint:', fallbackError.message);
               }
             }
             
-            // Log this important transition
-            logToConsole('⭐ Onboarding complete - navigating to OnboardingSummary ⭐');
+            // Try to parse the error response to see if there's useful information
+            try {
+              if (rawErrorText.trim().startsWith('{') || rawErrorText.trim().startsWith('[')) {
+                const parsedError = JSON.parse(rawErrorText);
+                logToConsole('Parsed error response:', parsedError);
+              }
+            } catch (parseError) {
+              // Ignore parsing errors
+              logToConsole('Error parsing response:', parseError.message);
+            }
             
-            // Navigate to OnboardingSummary which will handle the extended onboarding flow
-            navigation.navigate('OnboardingSummary', {
-              userId: currentUserId,
-              email: userEmail,
-              fromSignUp
-            });
-          } catch (err) {
-            console.error('Error in finalize onboarding:', err);
-            
-            // Last resort: direct app reload
-            if (global.forceAppReload) {
-              global.forceAppReload();
+            // Force onboarding_complete to false on error
+            try {
+              await supabase
+                .from('users')
+                .update({ onboarding_complete: false })
+                .eq('id', currentUserId);
+              logToConsole('Forced onboarding_complete to false after API error');
+              
+              // Also clear any AsyncStorage flags related to onboarding
+              await AsyncStorage.setItem('onboardingInProgress', 'true');
+              await AsyncStorage.removeItem('onboardingComplete');
+            } catch (updateError) {
+              console.error('Error updating onboarding state after API error:', updateError);
+            }
+          } else {
+            // Handle successful response
+            try {
+              const responseText = await response.text();
+              logToConsole('Raw successful response:', responseText);
+              
+              let responseData;
+              try {
+                // Only try to parse if there's actual content
+                if (responseText.trim()) {
+                  responseData = JSON.parse(responseText);
+                  logToConsole('Backend onboarding response:', responseData);
+                } else {
+                  logToConsole('Empty response body - treating as success with no data');
+                  responseData = {}; // Use empty object as fallback
+                }
+              } catch (jsonError) {
+                console.error('Error parsing JSON response:', jsonError);
+                logToConsole('Error parsing JSON response:', jsonError.message);
+                logToConsole('Raw response was:', responseText);
+                responseData = {}; // Use empty object as fallback
+              }
+              
+              // Extract any useful data from the response
+              if (responseData) {
+                // Log the data we got back
+                logToConsole('Extracted onboarding response data:', responseData);
+                
+                // Check username availability based on the response
+                if (responseData.available === true || responseData.exists === false) {
+                  // Username is available
+                  setIsValid(true);
+                  animateSuccessMessage('Username is available!');
+                } else if (responseData.available === false || responseData.exists === true) {
+                  // Username is already taken
+                  setIsValid(false);
+                  animateErrorMessage('Sorry, this username is already taken.');
+                } else {
+                  // No clear availability indicators but response was successful - assume valid
+                  setIsValid(true);
+                  animateSuccessMessage('Username format is valid.');
+                }
+                
+                // Check if we have any data to save (unrelated to username validation)
+                if (responseData.data) {
+                  const dataToSave = responseData.data;
+                  
+                  if (dataToSave.age_category) {
+                    await AsyncStorage.setItem('userAgeCategory', dataToSave.age_category);
+                    logToConsole('Stored age category:', dataToSave.age_category);
+                  }
+                  
+                  if (dataToSave.weight_class) {
+                    await AsyncStorage.setItem('userWeightClass', dataToSave.weight_class);
+                    logToConsole('Stored weight class:', dataToSave.weight_class);
+                  }
+                }
+              } else {
+                // No response data but request was successful - default to valid
+                setIsValid(true);
+                animateSuccessMessage('Username format looks good.');
+              }
+            } catch (responseError) {
+              console.error('Error handling onboarding response:', responseError);
+              logToConsole('Error handling onboarding response:', responseError.message);
             }
           }
-        };
+        } catch (fetchError) {
+          console.error('Network error with /onboard request:', fetchError);
+          logToConsole('Network error with /onboard request:', fetchError.message);
+          // Continue with the onboarding flow even if the network request completely fails
+        }
         
-        // Start the finalization process
-        finalizeOnboarding();
-      });
+        // Show success message
+        debugLog('Onboarding completed successfully!');
+        
+        // Store welcome info for HomeScreen
+        try {
+          // Set a flag in AsyncStorage that HomeScreen will check
+          const currentSession = supabase.auth.session();
+          if (currentSession) {
+            // Use global.welcomeInfo to pass data between screens
+            global.welcomeInfo = {
+              showWelcomeToast: true,
+              userName: userName || 'there'
+            };
+          }
+        } catch (err) {
+          console.error('Error storing welcome info:', err);
+        }
+        
+        // Run elegant exit animation with smooth transition
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true
+          }),
+          Animated.timing(slideAnim, {
+            toValue: -30,
+            duration: 400,
+            useNativeDriver: true
+          })
+        ]).start(() => {
+          setLoading(false);
+          
+            // IMPROVED NAVIGATION FLOW: Wrap in async function to allow await
+            const finalizeOnboarding = async () => {
+              // Log this important transition
+              logToConsole('⭐ Onboarding complete - navigating to OnboardingSummary ⭐');
+              
+              // CRITICAL FIX: Force onboarding_complete to false before continuing
+              const finalUserId = currentUserId || await AsyncStorage.getItem('userId') || await getCurrentUserId();
+              
+              // Force onboarding to be incomplete
+              if (finalUserId) {
+                try {
+                  await supabase
+                    .from('users')
+                    .update({ onboarding_complete: false })
+                    .eq('id', finalUserId);
+                  logToConsole('✅ Force-set onboarding_complete=false before navigation');
+                  
+                  // Also clear any local completion flags
+                  await AsyncStorage.setItem('onboardingInProgress', 'true');
+                  await AsyncStorage.removeItem('onboardingComplete');
+                } catch (error) {
+                  console.error('Error setting onboarding status:', error);
+                }
+              }
+              
+              if (!finalUserId) {
+                console.error('‼️ CRITICAL ERROR: No user ID available before navigation');
+                // Try one more time to get from session
+                const session = supabase.auth.session();
+                const sessionUserId = session?.user?.id;
+                
+                if (sessionUserId) {
+                  logToConsole('Recovered user ID from session at last moment:', sessionUserId);
+                  
+                  // Navigate with the recovered ID
+                  navigation.navigate('OnboardingSummary', {
+                    userId: sessionUserId,
+                    email: userEmail,
+                    fromSignUp,
+                    continueOnboarding: true,
+                    forceFlow: true
+                  });
+                  return;
+                }
+                
+                // Last resort - try to proceed without ID
+                // This is bad but better than getting stuck
+                logToConsole('⚠️ PROCEEDING WITHOUT USER ID - EMERGENCY FALLBACK');
+              }
+              
+              // Navigate to OnboardingSummary which will handle the extended onboarding flow
+              navigation.navigate('OnboardingSummary', {
+                userId: finalUserId,
+                email: userEmail,
+                fromSignUp,
+                continueOnboarding: true,
+                forceFlow: true
+              });
+            };
+            
+            // Execute the async function
+            finalizeOnboarding();
+        });
+      } catch (err) {
+          logToConsole('Error with onboarding API request:', err.message);
+          console.error('Error with onboarding API request:', err);
+          // Continue with the flow - backend sync can happen later
+        }
     } catch (err) {
       logToConsole('Unexpected error in handleContinue:', err.message);
       console.error('Unexpected error in handleContinue:', err);
@@ -1009,6 +1266,8 @@ export default function UsernameScreen({ navigation, route }) {
                     <ActivityIndicator size="small" color={colors.primary} style={styles.indicator} />
                   ) : isValid && username.length > 0 ? (
                     <Ionicons name="checkmark-circle" size={24} color="green" style={styles.validIcon} />
+                  ) : errorMessage ? (
+                    <Ionicons name="close-circle" size={24} color="#FF3B30" style={styles.validIcon} />
                   ) : null}
                 </View>
                 

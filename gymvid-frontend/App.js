@@ -62,7 +62,7 @@ export default function App() {
       checkOnboarding();
     }, 300);
   }, []);
-
+  
   // Add a safe session setter to handle session changes safely
   const safeSetSession = useCallback((newSession) => {
     console.log("Setting session:", newSession ? "Session provided" : "No session");
@@ -81,9 +81,9 @@ export default function App() {
         startScreen: "Login"
       });
       setProfileLoading(false);
-      return;
-    }
-
+        return;
+      }
+      
     try {
       console.log("⚙️ Fetching profile for user:", session.user.id);
       // Simple database query to get user profile
@@ -112,7 +112,7 @@ export default function App() {
           !profile.country ||
           !profile.bodyweight ||
           !profile.unit_pref;
-          
+        
         // Determine appropriate starting screen if needed
         let startScreen = "Name";
         if (profile.name) {
@@ -172,7 +172,7 @@ export default function App() {
         debugLog("Initial session:", currentSession ? "Found" : "None");
         
         // Set initial session
-        setSession(currentSession);
+          setSession(currentSession);
 
         setAppIsReady(true);
       } catch (e) {
@@ -202,8 +202,8 @@ export default function App() {
       checkOnboarding();
     } else if (!session && appIsReady) {
       console.log("⚙️ No session, resetting onboarding state");
-      setOnboardingState({
-        needsOnboarding: false,
+        setOnboardingState({
+          needsOnboarding: false,
         profileLoaded: true,
         startScreen: "Login"
       });
@@ -223,7 +223,7 @@ export default function App() {
     console.log("⏳ App not ready yet: Fonts loading");
     return null;
   }
-  
+
   if (profileLoading) {
     console.log("⏳ App not ready yet: Profile loading");
     return null;
@@ -240,7 +240,7 @@ export default function App() {
   let ComponentToRender;
   
   if (!session) {
-    // No session - show auth screens
+              // No session - show auth screens
     ComponentToRender = (
       <AuthStack 
         setSession={safeSetSession} 
@@ -248,7 +248,7 @@ export default function App() {
       />
     );
   } else if (onboardingState.needsOnboarding) {
-    // Session exists but onboarding incomplete - show onboarding in auth stack
+              // Session exists but onboarding incomplete - show onboarding in auth stack
     console.log("👤 Rendering onboarding flow starting at:", onboardingState.startScreen);
     ComponentToRender = (
       <AuthStack 
@@ -257,44 +257,44 @@ export default function App() {
       />
     );
   } else {
-    // Session exists and onboarding complete - show main app
+              // Session exists and onboarding complete - show main app
     ComponentToRender = (
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          headerShown: false,
-          tabBarIcon: ({ color, size, focused }) => {
-            if (route.name === 'Feed') {
+              <Tab.Navigator
+                screenOptions={({ route }) => ({
+                  headerShown: false,
+                  tabBarIcon: ({ color, size, focused }) => {
+                    if (route.name === 'Feed') {
               return <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />;
-            }
-            if (route.name === 'Progress') {
+                    }
+                    if (route.name === 'Progress') {
               return <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={size} color={color} />;
-            }
-            if (route.name === 'Settings') {
+                    }
+                    if (route.name === 'Settings') {
               return <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />;
-            }
-            if (route.name === 'Workout') {
-              return null; // We'll handle this separately
-            }
-          },
-          tabBarStyle: {
-            backgroundColor: colors.white,
-            borderTopWidth: 1,
-            borderTopColor: '#EEEEEE',
-            elevation: 0,
-            shadowOpacity: 0,
-            height: 90, // Increased height for more padding
-            paddingBottom: 24, // More bottom padding for iPhone swipe bar
-            paddingTop: 0,
-          },
-          tabBarActiveTintColor: 'black',
-          tabBarInactiveTintColor: '#CCCCCC',
-          tabBarLabelStyle: {
-            fontFamily: 'DMSans-Medium',
-            fontSize: 12,
-            marginBottom: 5,
-          },
-        })}
-      >
+                    }
+                    if (route.name === 'Workout') {
+                      return null; // We'll handle this separately
+                    }
+                  },
+                  tabBarStyle: {
+                    backgroundColor: colors.white,
+                    borderTopWidth: 1,
+                    borderTopColor: '#EEEEEE',
+                    elevation: 0,
+                    shadowOpacity: 0,
+                    height: 90, // Increased height for more padding
+                    paddingBottom: 24, // More bottom padding for iPhone swipe bar
+                    paddingTop: 0,
+                  },
+                  tabBarActiveTintColor: 'black',
+                  tabBarInactiveTintColor: '#CCCCCC',
+                  tabBarLabelStyle: {
+                    fontFamily: 'DMSans-Medium',
+                    fontSize: 12,
+                    marginBottom: 5,
+                  },
+                })}
+              >
         <Tab.Screen 
           name="Profile" 
           component={ProfileScreen}
@@ -305,10 +305,10 @@ export default function App() {
             ),
           }}
         />
-        <Tab.Screen 
-          name="Feed" 
-          component={FeedScreen} 
-          options={{
+                <Tab.Screen 
+                  name="Feed" 
+                  component={FeedScreen} 
+                  options={{
             tabBarLabel: 'Feed',
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />
@@ -325,29 +325,29 @@ export default function App() {
                 <Ionicons name="barbell" size={32} color="#fff" />
               </View>
             ),
-          }}
-        />
-        <Tab.Screen 
-          name="Progress" 
-          component={HomeScreen}
-          options={{
+                  }}
+                />
+                <Tab.Screen 
+                  name="Progress" 
+                  component={HomeScreen}
+                  options={{
             tabBarLabel: 'Progress',
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={size} color={color} />
             ),
-          }}
-        />
-        <Tab.Screen 
-          name="Settings" 
-          component={ProfileScreen}
-          options={{
+                  }}
+                />
+                <Tab.Screen 
+                  name="Settings" 
+                  component={ProfileScreen}
+                  options={{
             tabBarLabel: 'Settings',
             tabBarIcon: ({ focused, color, size }) => (
               <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />
             ),
-          }}
-        />
-      </Tab.Navigator>
+                  }}
+                />
+              </Tab.Navigator>
     );
   }
 

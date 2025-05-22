@@ -17,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
 import { Video } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../config/supabase';
 
 const debugLog = (...args) => {
   if (__DEV__) {
@@ -37,7 +39,43 @@ export default function DemoVideoScreen({ navigation, route }) {
   const [videoReady, setVideoReady] = useState(false);
   const isFocused = useIsFocused();
   const videoRef = useRef(null);
+  const { updateProfile } = useAuth();
   
+  // Get route params
+  const userId = route.params?.userId;
+  const continueOnboarding = route.params?.continueOnboarding === true;
+  const forceFlow = route.params?.forceFlow === true;
+  
+  debugLog('DemoVideoScreen params:', { userId, continueOnboarding, forceFlow });
+  
+  // CRITICAL: Force onboarding to be incomplete when this screen loads
+  useEffect(() => {
+    if (isFocused) {
+      const forceOnboardingIncomplete = async () => {
+        try {
+          const currentUserId = await getCurrentUserId();
+          if (currentUserId) {
+            // Force-update onboarding_complete to false in Supabase
+            await supabase
+              .from('users')
+              .update({ onboarding_complete: false })
+              .eq('id', currentUserId);
+            
+            debugLog('Force-set onboarding_complete=false in DemoVideoScreen');
+            
+            // Also clear any local completion flags
+            await AsyncStorage.setItem('onboardingInProgress', 'true');
+            await AsyncStorage.removeItem('onboardingComplete');
+          }
+        } catch (error) {
+          console.error('Error in forceOnboardingIncomplete:', error);
+        }
+      };
+      
+      forceOnboardingIncomplete();
+    }
+  }, [isFocused]);
+
   // Get progress context
   const { progress, setProgress, updateProgress } = useContext(ProgressContext);
   
@@ -46,6 +84,103 @@ export default function DemoVideoScreen({ navigation, route }) {
   const slideAnim = useRef(new Animated.Value(30)).current;
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
+
+  // Function to get the current user ID
+  const getCurrentUserId = async () => {
+    try {
+      // Try to get user from route params first
+      if (route.params?.userId) {
+        debugLog('Using userId from route params:', route.params.userId);
+        return route.params.userId;
+      }
+      
+      // Try to get user from Supabase auth
+      try {
+        const user = supabase.auth.user();
+        if (user && user.id) {
+          debugLog('Using userId from Supabase auth:', user.id);
+          return user.id;
+        }
+      } catch (err) {
+        console.error('Error getting user from Supabase auth:', err);
+      }
+      
+      // Try to get session from Supabase
+      try {
+        const session = supabase.auth.session();
+        if (session && session.user && session.user.id) {
+          debugLog('Using userId from Supabase session:', session.user.id);
+          return session.user.id;
+        }
+      } catch (err) {
+        console.error('Error getting session from Supabase:', err);
+      }
+      
+      // Last resort: try to get from AsyncStorage
+      try {
+        const storedUserId = await AsyncStorage.getItem('userId');
+        if (storedUserId) {
+          debugLog('Using userId from AsyncStorage:', storedUserId);
+          return storedUserId;
+        }
+      } catch (err) {
+        console.error('Error getting userId from AsyncStorage:', err);
+      }
+      
+      return null;
+    } catch (err) {
+      console.error('Error in getCurrentUserId:', err);
+      return null;
+    }
+  };
+
+  // Function to mark onboarding as complete
+  const markOnboardingComplete = async () => {
+    try {
+      debugLog('Marking onboarding as complete');
+      
+      // Get the user ID
+      const userId = await getCurrentUserId();
+      if (!userId) {
+        console.error('Cannot mark onboarding as complete: No user ID available');
+        return;
+      }
+      
+      // Set flag in AsyncStorage
+      await AsyncStorage.setItem('onboardingComplete', 'true');
+      await AsyncStorage.removeItem('onboardingInProgress');
+      
+      // Update Supabase
+      const { error } = await supabase
+        .from('users')
+        .update({ onboarding_complete: true })
+        .eq('id', userId);
+        
+      if (error) {
+        console.error('Error marking onboarding as complete in Supabase:', error);
+      } else {
+        debugLog('Successfully marked onboarding as complete in Supabase');
+      }
+      
+      // Also try with the updateProfile function from auth context
+      try {
+        await updateProfile({ onboarding_complete: true });
+        debugLog('Successfully marked onboarding as complete via updateProfile');
+      } catch (err) {
+        console.error('Error in updateProfile:', err);
+      }
+      
+      // Force refresh auth session to ensure the new onboarding state is picked up
+      try {
+        await supabase.auth.refreshSession();
+        debugLog('Refreshed auth session');
+      } catch (refreshErr) {
+        console.error('Error refreshing auth session:', refreshErr);
+      }
+    } catch (err) {
+      console.error('Error in markOnboardingComplete:', err);
+    }
+  };
 
   // Update progress tracking
   useEffect(() => {
@@ -144,23 +279,79 @@ export default function DemoVideoScreen({ navigation, route }) {
   };
   
   // Use the demo video
-  const handleUseVideo = () => {
+  const handleUseVideo = async () => {
+    // Only mark onboarding as complete when the user is actually going to finish
+    // the flow in VideoReview. Don't mark it complete here yet.
+    
+    // Get current user ID
+    const currentUserId = await getCurrentUserId();
+    
+    // Force onboarding to be incomplete before navigating away
+    if (currentUserId) {
+      try {
+        await supabase
+          .from('users')
+          .update({ onboarding_complete: false })
+          .eq('id', currentUserId);
+        
+        debugLog('Set onboarding_complete=false before navigating from DemoVideo');
+        
+        // Also clear any local completion flags
+        await AsyncStorage.setItem('onboardingInProgress', 'true');
+        await AsyncStorage.removeItem('onboardingComplete');
+      } catch (error) {
+        console.error('Error updating onboarding status:', error);
+      }
+    }
+    
     // Pass demo video info to the next screen
     navigation.navigate('VideoReview', {
       videoUri: SAMPLE_VIDEO_URL,
-      isDemo: true
+      isDemo: true,
+      onboardingComplete: false, // We'll mark it complete in VideoReview
+      userId: currentUserId,
+      continueOnboarding: true,
+      forceFlow: true
     });
   };
 
-  const handleContinue = () => {
-    // Navigate to Paywall screen
+  const handleContinue = async () => {
+    // Only mark onboarding as complete when the user is actually going to finish
+    // the flow in Paywall. Don't mark it complete here yet.
+    
+    // Get current user ID
+    const currentUserId = await getCurrentUserId();
+    
+    // Force onboarding to be incomplete before navigating away
+    if (currentUserId) {
+      try {
+        await supabase
+          .from('users')
+          .update({ onboarding_complete: false })
+          .eq('id', currentUserId);
+        
+        debugLog('Set onboarding_complete=false before navigating from DemoVideo');
+        
+        // Also clear any local completion flags
+        await AsyncStorage.setItem('onboardingInProgress', 'true');
+        await AsyncStorage.removeItem('onboardingComplete');
+      } catch (error) {
+        console.error('Error updating onboarding status:', error);
+      }
+    }
+    
+    // Navigate to Paywall screen with flag indicating onboarding is still in progress
     navigation.navigate('Paywall', {
       exerciseLogged: {
         exercise: 'Bench Press',
         weight: '225 lbs',
         reps: 8,
         date: new Date().toDateString()
-      }
+      },
+      onboardingComplete: false, // This will be marked at the end of the flow
+      userId: currentUserId,
+      continueOnboarding: true,
+      forceFlow: true
     });
   };
 

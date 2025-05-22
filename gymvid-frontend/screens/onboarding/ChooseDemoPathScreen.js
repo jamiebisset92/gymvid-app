@@ -13,6 +13,8 @@ import colors from '../../config/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../config/supabase';
 
 const debugLog = (...args) => {
   if (__DEV__) {
@@ -24,6 +26,13 @@ export default function ChooseDemoPathScreen({ navigation, route }) {
   const isFocused = useIsFocused();
   const { updateProfile } = useAuth();
   
+  // Get user ID from route params
+  const [userId, setUserId] = useState(route.params?.userId);
+  const continueOnboarding = route.params?.continueOnboarding === true;
+  const forceFlow = route.params?.forceFlow === true;
+  
+  debugLog('ChooseDemoPathScreen params:', { userId, continueOnboarding, forceFlow });
+  
   // Get progress context
   const { progress, setProgress, updateProgress } = useContext(ProgressContext);
   
@@ -33,6 +42,73 @@ export default function ChooseDemoPathScreen({ navigation, route }) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const buttonsAnim = useRef(new Animated.Value(0)).current;
 
+  // Function to get current user ID
+  const getCurrentUserId = async () => {
+    try {
+      // If we already have it from route params, use that
+      if (userId) {
+        return userId;
+      }
+
+      // Try to get user from route params
+      if (route.params?.userId) {
+        const id = route.params.userId;
+        setUserId(id);
+        return id;
+      }
+      
+      // Try to get user from Supabase auth
+      try {
+        const user = supabase.auth.user();
+        if (user && user.id) {
+          debugLog('Using userId from Supabase auth:', user.id);
+          setUserId(user.id);
+          return user.id;
+        }
+      } catch (err) {
+        console.error('Error getting user from Supabase auth:', err);
+      }
+      
+      // Try to get session from Supabase
+      try {
+        const session = supabase.auth.session();
+        if (session && session.user && session.user.id) {
+          debugLog('Using userId from Supabase session:', session.user.id);
+          setUserId(session.user.id);
+          return session.user.id;
+        }
+      } catch (err) {
+        console.error('Error getting session from Supabase:', err);
+      }
+      
+      // Last resort: try to get from AsyncStorage
+      try {
+        const storedUserId = await AsyncStorage.getItem('userId');
+        if (storedUserId) {
+          debugLog('Using userId from AsyncStorage:', storedUserId);
+          setUserId(storedUserId);
+          return storedUserId;
+        }
+      } catch (err) {
+        console.error('Error getting userId from AsyncStorage:', err);
+      }
+      
+      return null;
+    } catch (err) {
+      console.error('Error in getCurrentUserId:', err);
+      return null;
+    }
+  };
+
+  // Get user ID on mount
+  useEffect(() => {
+    const fetchUserId = async () => {
+      await getCurrentUserId();
+    };
+    
+    fetchUserId();
+  }, []);
+
   // Update progress tracking
   useEffect(() => {
     if (isFocused) {
@@ -40,6 +116,34 @@ export default function ChooseDemoPathScreen({ navigation, route }) {
       updateProgress('ChooseDemoPath');
     }
   }, [isFocused, updateProgress]);
+
+  // CRITICAL: Force onboarding to be incomplete when this screen loads
+  useEffect(() => {
+    if (isFocused) {
+      const forceOnboardingIncomplete = async () => {
+        try {
+          const currentUserId = await getCurrentUserId();
+          if (currentUserId) {
+            // Force-update onboarding_complete to false
+            await supabase
+              .from('users')
+              .update({ onboarding_complete: false })
+              .eq('id', currentUserId);
+            
+            debugLog('Force-set onboarding_complete=false in ChooseDemoPathScreen');
+            
+            // Also clear any local completion flags
+            await AsyncStorage.setItem('onboardingInProgress', 'true');
+            await AsyncStorage.removeItem('onboardingComplete');
+          }
+        } catch (error) {
+          console.error('Error in forceOnboardingIncomplete:', error);
+        }
+      };
+      
+      forceOnboardingIncomplete();
+    }
+  }, [isFocused]);
 
   // Run entrance animations
   useEffect(() => {
@@ -95,13 +199,49 @@ export default function ChooseDemoPathScreen({ navigation, route }) {
   }, [navigation]);
 
   // Handler for sample video button
-  const handleShowSampleVideo = () => {
-    navigation.navigate('DemoVideo');
+  const handleShowSampleVideo = async () => {
+    const currentUserId = await getCurrentUserId();
+    
+    // Force onboarding to be incomplete
+    if (currentUserId) {
+      try {
+        await supabase
+          .from('users')
+          .update({ onboarding_complete: false })
+          .eq('id', currentUserId);
+      } catch (error) {
+        console.error('Error updating onboarding status:', error);
+      }
+    }
+    
+    navigation.navigate('DemoVideo', {
+      userId: currentUserId,
+      continueOnboarding: true,
+      forceFlow: true
+    });
   };
   
   // Handler for manual log button
-  const handleManualLog = () => {
-    navigation.navigate('ManualDemo');
+  const handleManualLog = async () => {
+    const currentUserId = await getCurrentUserId();
+    
+    // Force onboarding to be incomplete
+    if (currentUserId) {
+      try {
+        await supabase
+          .from('users')
+          .update({ onboarding_complete: false })
+          .eq('id', currentUserId);
+      } catch (error) {
+        console.error('Error updating onboarding status:', error);
+      }
+    }
+    
+    navigation.navigate('ManualDemo', {
+      userId: currentUserId,
+      continueOnboarding: true,
+      forceFlow: true
+    });
   };
 
   return (

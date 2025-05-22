@@ -10,7 +10,9 @@ import {
   TextInput,
   FlatList,
   Keyboard,
-  Easing
+  Easing,
+  Platform,
+  Pressable
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
@@ -266,6 +268,9 @@ export default function CountryScreen({ navigation, route }) {
   // Add isFocused hook
   const isFocused = useIsFocused();
 
+  // Add state to track currently highlighted item
+  const [highlightedItemIndex, setHighlightedItemIndex] = useState(-1);
+
   // Update progress tracking when screen comes into focus
   useEffect(() => {
     if (isFocused) {
@@ -426,6 +431,30 @@ export default function CountryScreen({ navigation, route }) {
     }
   }, [country, countryCode]);
 
+  // Modify animation for dropdown to make it more premium
+  useEffect(() => {
+    if (showDropdown) {
+      // Reset any highlighted item when dropdown appears
+      setHighlightedItemIndex(-1);
+      
+      // Premium dropdown animation - eases in
+      Animated.timing(dropdownAnim, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    } else {
+      // Fast fade out animation
+      Animated.timing(dropdownAnim, {
+        toValue: 0,
+        duration: 150,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showDropdown]);
+
   const handleSelectCountry = (selectedCountry) => {
     // Flag to track that this is a manual selection
     const isManualSelection = true;
@@ -571,20 +600,26 @@ export default function CountryScreen({ navigation, route }) {
   // Calculate progress percentage
   const progressPercentage = progress.current / progress.total;
 
-  // Render item for dropdown
-  const renderCountryItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.dropdownItem}
+  // Enhanced render item for dropdown with highlight effect
+  const renderCountryItem = ({ item, index }) => (
+    <Pressable
+      style={({ pressed }) => [
+        styles.dropdownItem,
+        index === 0 && styles.dropdownItemFirst,
+        index === filteredCountries.length - 1 && styles.dropdownItemLast,
+        (pressed || index === highlightedItemIndex) && styles.dropdownItemHighlighted
+      ]}
       onPress={() => handleSelectCountry(item)}
-      activeOpacity={0.6}
-      hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+      onHoverIn={() => setHighlightedItemIndex(index)}
+      onHoverOut={() => setHighlightedItemIndex(-1)}
+      android_ripple={{ color: 'rgba(0, 0, 0, 0.05)' }}
       key={item.code}
     >
       <View style={styles.countryFlagContainer}>
         <CountryFlag isoCode={item.code} size={24} />
       </View>
       <Text style={styles.dropdownItemText}>{item.name}</Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 
   return (
@@ -635,7 +670,10 @@ export default function CountryScreen({ navigation, route }) {
                 }}
               >
                 <View 
-                  style={styles.inputContainer}
+                  style={[
+                    styles.inputContainer,
+                    showDropdown && styles.inputContainerWithDropdown
+                  ]}
                   ref={inputContainerRef}
                   onLayout={(event) => {
                     const { x, y, width, height } = event.nativeEvent.layout;
@@ -679,7 +717,25 @@ export default function CountryScreen({ navigation, route }) {
                       styles.dropdownContainer,
                       { 
                         opacity: dropdownAnim,
-                        top: inputLayout.height + 38 // Position right after input container
+                        top: inputLayout.height,
+                        width: inputLayout.width,
+                        left: 0,
+                        transform: [
+                          { 
+                            scale: dropdownAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0.97, 1],
+                              extrapolate: 'clamp'
+                            })
+                          },
+                          {
+                            translateY: dropdownAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [-8, 0],
+                              extrapolate: 'clamp'
+                            })
+                          }
+                        ]
                       }
                     ]}
                   >
@@ -689,6 +745,10 @@ export default function CountryScreen({ navigation, route }) {
                       keyExtractor={item => item.code}
                       keyboardShouldPersistTaps="always"
                       style={styles.dropdown}
+                      contentContainerStyle={styles.dropdownContent}
+                      showsVerticalScrollIndicator={false}
+                      initialNumToRender={10}
+                      bounces={false}
                     />
                   </Animated.View>
                 )}
@@ -785,6 +845,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
     paddingHorizontal: 20,
+    zIndex: 101, // Ensure input is above dropdown
   },
   inputIcon: {
     marginRight: 12,
@@ -798,6 +859,10 @@ const styles = StyleSheet.create({
     marginRight: 12,
     borderRadius: 4,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
   },
   textInput: {
     flex: 1,
@@ -816,35 +881,62 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   dropdownContainer: {
-    marginTop: 0,
-    borderRadius: 16,
-    backgroundColor: colors.white,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-    zIndex: 100,
     position: 'absolute',
-    left: 0,
-    right: 0,
     width: '100%',
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+    borderTopWidth: 0,
+    overflow: 'hidden',
+    // Add subtle backdrop blur effect on iOS for premium feel
+    ...(Platform.OS === 'ios' ? {
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      backdropFilter: 'blur(20px)',
+    } : {})
   },
   dropdown: {
-    maxHeight: 250,
-    borderRadius: 16,
+    maxHeight: 300, // Increased to accommodate the taller items
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     overflow: 'hidden',
+  },
+  dropdownContent: {
+    paddingVertical: 0,
   },
   dropdownItem: {
     padding: 16,
+    paddingVertical: 14, // Slightly reduced default vertical padding for better proportions
     borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
+    borderBottomColor: 'rgba(0, 0, 0, 0.03)',
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.white,
+  },
+  dropdownItemFirst: {
+    paddingTop: 20, // Adjusted from 22 for better balance
+    marginTop: 6, // Slightly increased for more breathing room
+  },
+  dropdownItemLast: {
+    borderBottomWidth: 0,
+    paddingBottom: 20, // Matched with top padding for symmetry
+    marginBottom: 6, // Added margin at bottom too for symmetry
+  },
+  dropdownItemHighlighted: {
+    backgroundColor: 'rgba(0, 123, 255, 0.05)',
   },
   dropdownItemText: {
     fontSize: 16,
     color: colors.darkGray,
+    fontWeight: '500',
   },
   bottomButtonContainer: {
     width: '100%',
@@ -923,5 +1015,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 1,
+  },
+  inputContainerWithDropdown: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)', // Match dropdown border color
+    shadowOpacity: 0, // Remove shadow when dropdown is showing
   },
 }); 

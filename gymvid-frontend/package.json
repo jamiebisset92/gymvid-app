@@ -37,6 +37,7 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.2",
+    "react-native-confetti": "^0.1.0",
     "react-native-country-flag": "^2.0.2",
     "react-native-draggable-flatlist": "^4.0.2",
     "react-native-gesture-handler": "~2.24.0",

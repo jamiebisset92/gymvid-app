@@ -20,6 +20,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
 import { Video } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../config/supabase';
 
 const debugLog = (...args) => {
   if (__DEV__) {
@@ -35,6 +37,11 @@ export default function VideoReviewScreen({ navigation, route }) {
   const videoUri = route.params?.videoUri;
   const isDemo = route.params?.isDemo || false;
   const fromGallery = route.params?.fromGallery || false;
+  const onboardingComplete = route.params?.onboardingComplete || false;
+  const continueOnboarding = route.params?.continueOnboarding || false;
+  const userId = route.params?.userId;
+  
+  debugLog('VideoReviewScreen params:', { isDemo, fromGallery, continueOnboarding, userId });
   
   const [weight, setWeight] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,6 +49,7 @@ export default function VideoReviewScreen({ navigation, route }) {
   const [playing, setPlaying] = useState(false);
   const isFocused = useIsFocused();
   const videoRef = useRef(null);
+  const { updateProfile } = useAuth();
   
   // Get progress context
   const { progress, setProgress, updateProgress } = useContext(ProgressContext);
@@ -52,6 +60,102 @@ export default function VideoReviewScreen({ navigation, route }) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const formAnim = useRef(new Animated.Value(0)).current;
   const videoAnim = useRef(new Animated.Value(0)).current;
+
+  // Function to get the current user ID
+  const getCurrentUserId = async () => {
+    try {
+      // If we have it from route params, use that
+      if (userId) {
+        return userId;
+      }
+      
+      // Try to get user from Supabase auth
+      try {
+        const user = supabase.auth.user();
+        if (user && user.id) {
+          debugLog('Using userId from Supabase auth:', user.id);
+          return user.id;
+        }
+      } catch (err) {
+        console.error('Error getting user from Supabase auth:', err);
+      }
+      
+      // Try to get session from Supabase
+      try {
+        const session = supabase.auth.session();
+        if (session && session.user && session.user.id) {
+          debugLog('Using userId from Supabase session:', session.user.id);
+          return session.user.id;
+        }
+      } catch (err) {
+        console.error('Error getting session from Supabase:', err);
+      }
+      
+      // Last resort: try to get from AsyncStorage
+      try {
+        const storedUserId = await AsyncStorage.getItem('userId');
+        if (storedUserId) {
+          debugLog('Using userId from AsyncStorage:', storedUserId);
+          return storedUserId;
+        }
+      } catch (err) {
+        console.error('Error getting userId from AsyncStorage:', err);
+      }
+      
+      return null;
+    } catch (err) {
+      console.error('Error in getCurrentUserId:', err);
+      return null;
+    }
+  };
+
+  // Function to mark onboarding as complete
+  const markOnboardingComplete = async () => {
+    try {
+      debugLog('Marking onboarding as complete - FINAL STEP');
+      
+      // Get the user ID
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
+        console.error('Cannot mark onboarding as complete: No user ID available');
+        return;
+      }
+      
+      // Set flag in AsyncStorage
+      await AsyncStorage.setItem('onboardingComplete', 'true');
+      await AsyncStorage.removeItem('onboardingInProgress');
+      
+      // Update Supabase - THIS IS THE CRITICAL STEP
+      const { error } = await supabase
+        .from('users')
+        .update({ onboarding_complete: true })
+        .eq('id', currentUserId);
+        
+      if (error) {
+        console.error('Error marking onboarding as complete in Supabase:', error);
+      } else {
+        debugLog('Successfully marked onboarding as complete in Supabase');
+      }
+      
+      // Also try with the updateProfile function from auth context
+      try {
+        await updateProfile({ onboarding_complete: true });
+        debugLog('Successfully marked onboarding as complete via updateProfile');
+      } catch (err) {
+        console.error('Error in updateProfile:', err);
+      }
+      
+      // Force refresh auth session to ensure the new onboarding state is picked up
+      try {
+        await supabase.auth.refreshSession();
+        debugLog('Refreshed auth session');
+      } catch (refreshErr) {
+        console.error('Error refreshing auth session:', refreshErr);
+      }
+    } catch (err) {
+      console.error('Error in markOnboardingComplete:', err);
+    }
+  };
 
   // Update progress tracking
   useEffect(() => {
@@ -166,13 +270,20 @@ export default function VideoReviewScreen({ navigation, route }) {
   };
 
   // Handle logging the lift
-  const handleLogLift = () => {
+  const handleLogLift = async () => {
     if (!validateForm()) {
       return;
     }
     
     // Show loading state
     setLoading(true);
+    
+    // If this is part of the onboarding flow, mark onboarding as complete NOW
+    // This is the final step where we should set onboarding_complete to true
+    if (continueOnboarding) {
+      debugLog('This is part of onboarding flow - marking onboarding as complete');
+      await markOnboardingComplete();
+    }
     
     // Simulate processing the video and logging the lift
     setTimeout(() => {
@@ -185,7 +296,9 @@ export default function VideoReviewScreen({ navigation, route }) {
           exercise: 'Barbell Bench Press', // Placeholder exercise name
           reps: 5, // Placeholder reps count
           weight: Number(weight)
-        }
+        },
+        onboardingComplete: true, // Mark as complete since we've finished onboarding
+        userId: userId
       });
     }, 1500);
   };

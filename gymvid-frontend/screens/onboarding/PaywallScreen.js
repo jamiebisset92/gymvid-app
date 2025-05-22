@@ -14,6 +14,8 @@ import colors from '../../config/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../config/supabase';
 
 const debugLog = (...args) => {
   if (__DEV__) {
@@ -27,6 +29,10 @@ export default function PaywallScreen({ navigation, route }) {
   // Get exercise data from route params if available
   const exerciseLogged = route.params?.exerciseLogged;
   const videoLogged = route.params?.videoLogged;
+  const userId = route.params?.userId;
+  const onboardingComplete = route.params?.onboardingComplete || false;
+  
+  debugLog('PaywallScreen params:', { exerciseLogged, videoLogged, userId, onboardingComplete });
   
   const [loading, setLoading] = useState(false);
   const isFocused = useIsFocused();
@@ -46,6 +52,103 @@ export default function PaywallScreen({ navigation, route }) {
     useRef(new Animated.Value(0)).current,
     useRef(new Animated.Value(0)).current
   ];
+
+  // Function to get current user ID
+  const getCurrentUserId = async () => {
+    try {
+      // If we have it from route params, use that
+      if (userId) {
+        return userId;
+      }
+      
+      // Try to get user from Supabase auth
+      try {
+        const user = supabase.auth.user();
+        if (user && user.id) {
+          debugLog('Using userId from Supabase auth:', user.id);
+          return user.id;
+        }
+      } catch (err) {
+        console.error('Error getting user from Supabase auth:', err);
+      }
+      
+      // Try to get session from Supabase
+      try {
+        const session = supabase.auth.session();
+        if (session && session.user && session.user.id) {
+          debugLog('Using userId from Supabase session:', session.user.id);
+          return session.user.id;
+        }
+      } catch (err) {
+        console.error('Error getting session from Supabase:', err);
+      }
+      
+      // Last resort: try to get from AsyncStorage
+      try {
+        const storedUserId = await AsyncStorage.getItem('userId');
+        if (storedUserId) {
+          debugLog('Using userId from AsyncStorage:', storedUserId);
+          return storedUserId;
+        }
+      } catch (err) {
+        console.error('Error getting userId from AsyncStorage:', err);
+      }
+      
+      return null;
+    } catch (err) {
+      console.error('Error in getCurrentUserId:', err);
+      return null;
+    }
+  };
+
+  // Function to ensure onboarding is marked as complete
+  const finalizeOnboarding = async () => {
+    try {
+      // This is a final safety check to make sure onboarding is marked complete
+      // before going to the main app
+      debugLog('Performing final check to ensure onboarding is marked complete');
+      
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
+        console.error('Cannot finalize onboarding: No user ID available');
+        return;
+      }
+      
+      // Set flag in AsyncStorage
+      await AsyncStorage.setItem('onboardingComplete', 'true');
+      await AsyncStorage.removeItem('onboardingInProgress');
+      
+      // Update Supabase as final step
+      const { error } = await supabase
+        .from('users')
+        .update({ onboarding_complete: true })
+        .eq('id', currentUserId);
+        
+      if (error) {
+        console.error('Error marking onboarding as complete in Supabase:', error);
+      } else {
+        debugLog('Successfully marked onboarding as complete in Supabase');
+      }
+      
+      // Also try with the updateProfile function from auth context
+      try {
+        await updateProfile({ onboarding_complete: true });
+        debugLog('Successfully marked onboarding as complete via updateProfile');
+      } catch (err) {
+        console.error('Error in updateProfile:', err);
+      }
+      
+      // Force refresh auth session to ensure the new onboarding state is picked up
+      try {
+        await supabase.auth.refreshSession();
+        debugLog('Refreshed auth session');
+      } catch (refreshErr) {
+        console.error('Error refreshing auth session:', refreshErr);
+      }
+    } catch (err) {
+      console.error('Error in finalizeOnboarding:', err);
+    }
+  };
 
   // Update progress tracking
   useEffect(() => {
@@ -120,8 +223,11 @@ export default function PaywallScreen({ navigation, route }) {
   }, [navigation]);
 
   // Handle subscription button press
-  const handleSubscribe = () => {
+  const handleSubscribe = async () => {
     setLoading(true);
+    
+    // Make sure onboarding is marked as complete before proceeding
+    await finalizeOnboarding();
     
     // Simulate subscription process
     setTimeout(() => {
@@ -136,7 +242,10 @@ export default function PaywallScreen({ navigation, route }) {
   };
   
   // Handle continue with free version
-  const handleContinueFree = () => {
+  const handleContinueFree = async () => {
+    // Make sure onboarding is marked as complete before proceeding
+    await finalizeOnboarding();
+    
     // Navigate to main app
     navigation.reset({
       index: 0,
