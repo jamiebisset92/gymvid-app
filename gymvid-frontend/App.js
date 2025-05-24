@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RootSiblingParent } from 'react-native-root-siblings';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, StyleSheet, Text } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { supabase } from './config/supabase';
 import HomeScreen from './screens/HomeScreen';
@@ -113,9 +114,9 @@ export default function App() {
         }
       } else {
         console.log("⚙️ Profile loaded:", JSON.stringify(profile, null, 2));
-        // Check if any required fields are missing
+        // Check if onboarding is actually complete
         const needsOnboarding = 
-          !profile.onboarding_complete === true || 
+          profile.onboarding_complete !== true || // Changed from !profile.onboarding_complete === true
           !profile.name || 
           !profile.gender || 
           !profile.date_of_birth ||
@@ -210,10 +211,51 @@ export default function App() {
   useEffect(() => {
     if (session && appIsReady) {
       console.log("⚙️ Session available, checking onboarding");
-      // Add a small delay to allow profile creation to complete
-      setTimeout(() => {
-        checkOnboarding();
-      }, 500);
+      
+      // Check for fresh signup flag first
+      const checkFreshSignup = async () => {
+        try {
+          const freshSignup = await AsyncStorage.getItem('freshSignup');
+          if (freshSignup === 'true') {
+            console.log("⚙️ Fresh signup detected via flag - going straight to onboarding");
+            await AsyncStorage.removeItem('freshSignup'); // Clear the flag
+            setOnboardingState({
+              needsOnboarding: true,
+              profileLoaded: true,
+              startScreen: "Name"
+            });
+            setProfileLoading(false);
+            return true;
+          }
+        } catch (err) {
+          console.error("Error checking fresh signup flag:", err);
+        }
+        return false;
+      };
+      
+      checkFreshSignup().then(isFreshSignup => {
+        if (!isFreshSignup) {
+          // Check if this is a fresh signup by looking for a flag in session metadata
+          // or by checking if the user was just created (within last few seconds)
+          const userCreatedAt = session.user?.created_at;
+          const isNewUser = userCreatedAt && (new Date() - new Date(userCreatedAt)) < 10000; // Less than 10 seconds old
+          
+          if (isNewUser) {
+            console.log("⚙️ New user detected - going straight to onboarding");
+            setOnboardingState({
+              needsOnboarding: true,
+              profileLoaded: true,
+              startScreen: "Name"
+            });
+            setProfileLoading(false);
+          } else {
+            // Add a small delay to allow profile creation to complete
+            setTimeout(() => {
+              checkOnboarding();
+            }, 500);
+          }
+        }
+      });
     } else if (!session && appIsReady) {
       console.log("⚙️ No session, resetting onboarding state");
         setOnboardingState({
@@ -240,6 +282,12 @@ export default function App() {
 
   if (profileLoading) {
     console.log("⏳ App not ready yet: Profile loading");
+    return null;
+  }
+  
+  // Extra safety check - if we have a session but haven't determined onboarding state yet
+  if (session && !onboardingState.profileLoaded) {
+    console.log("⏳ App not ready yet: Onboarding state not determined");
     return null;
   }
 

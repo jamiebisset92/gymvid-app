@@ -23,6 +23,7 @@ import AuthBackground from '../../components/AuthBackground';
 import { useToast } from '../../components/ToastProvider';
 import { useKeyboardVisibility } from '../../hooks/useKeyboardVisibility';
 import { ANIMATION_CONFIG } from '../../utils/animationUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -212,6 +213,9 @@ export default function SignUpScreen({ navigation }) {
       
       // Show success toast
       toast.success('Account created! Setting up your profile...', { position: 'top' });
+      
+      // Mark this as a fresh signup to prevent ProfileScreen flash
+      await AsyncStorage.setItem('freshSignup', 'true');
       
       // Ensure we're not in a loading state before navigating
       setTimeout(() => {

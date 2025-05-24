@@ -4,6 +4,11 @@ import { ENV } from './env';
 
 // Determine the API base URL based on the platform and environment
 const getApiBaseUrl = () => {
+  // Always use the deployed backend for now
+  return 'https://gymvid-app.onrender.com';
+  
+  // Previous local development logic (commented out for reference)
+  /*
   if (__DEV__) {
     // Development environment
     
@@ -29,8 +34,9 @@ const getApiBaseUrl = () => {
       return `http://10.0.2.2:${ENV.API_PORT}`;
     }
   }
-  // Production URL (replace with real one)
-  return 'https://your-api-server.com';
+  // Production URL
+  return 'https://gymvid-app.onrender.com';
+  */
 };
 
 // You can also set this to your local machine's IP address for testing on physical devices
@@ -60,14 +66,14 @@ export const checkBackendHealth = async () => {
     });
     
     if (response.ok) {
-      console.log('✅ Backend is healthy and reachable');
+      console.log('✅ Backend is healthy and reachable at:', API_BASE_URL);
       return true;
     } else {
       console.log('❌ Backend returned status:', response.status);
       return false;
     }
   } catch (error) {
-    console.log('❌ Cannot reach backend:', error.message);
+    console.log('❌ Cannot reach backend at:', API_BASE_URL, 'Error:', error.message);
     return false;
   }
 };
@@ -78,6 +84,10 @@ if (__DEV__) {
     platform: Platform.OS,
     isDev: __DEV__,
     baseUrl: API_BASE_URL,
-    useLocalIP: ENV.USE_LOCAL_IP,
+    endpoints: {
+      health: API_ENDPOINTS.HEALTH,
+      predictExercise: API_ENDPOINTS.PREDICT_EXERCISE,
+      detectReps: API_ENDPOINTS.DETECT_REPS,
+    }
   });
 } 

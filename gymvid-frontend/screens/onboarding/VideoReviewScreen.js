@@ -26,6 +26,7 @@ import { supabase } from '../../config/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { API_ENDPOINTS, checkBackendHealth } from '../../config/api';
+import { useToast } from '../../components/ToastProvider';
 
 const debugLog = (...args) => {
   if (__DEV__) {
@@ -86,6 +87,7 @@ export default function VideoReviewScreen({ navigation, route }) {
   const isFocused = useIsFocused();
   const videoRef = useRef(null);
   const { updateProfile } = useAuth();
+  const toast = useToast();
   
   // Get progress context
   const { progress, setProgress, updateProgress } = useContext(ProgressContext);
@@ -226,7 +228,7 @@ export default function VideoReviewScreen({ navigation, route }) {
       const isHealthy = await checkBackendHealth();
       if (!isHealthy && __DEV__) {
         console.warn('⚠️ Backend health check failed - API calls may not work');
-        console.warn('📍 Make sure your backend server is running');
+        console.warn('📍 Make sure the backend is running at https://gymvid-app.onrender.com');
       }
     };
     
@@ -401,25 +403,18 @@ export default function VideoReviewScreen({ navigation, route }) {
     } catch (error) {
       console.error('Error predicting exercise:', error);
       
-      // Provide helpful error message based on error type
+      // Show user-friendly error message
       if (error.message && error.message.includes('Network request failed')) {
         console.error('⚠️ Network Error: Cannot connect to backend server');
         console.error('📍 Attempted URL:', API_ENDPOINTS.PREDICT_EXERCISE);
-        console.error('💡 Troubleshooting:');
-        console.error('   1. Make sure your backend server is running on port 8000');
-        console.error('   2. If using a physical device, update LOCAL_IP in config/env.js');
-        console.error('   3. Check that your device/emulator can reach the backend');
         
-        Alert.alert(
-          'Connection Error',
-          'Cannot connect to the backend server. Please ensure:\n\n' +
-          '1. Backend is running (python main.py)\n' +
-          '2. You\'re using the correct IP address\n' +
-          '3. Both devices are on the same network',
-          [{ text: 'OK' }]
-        );
+        // Show toast instead of alert
+        toast.error('We couldn\'t reach the server — please try again.');
+      } else {
+        toast.error('Failed to analyze exercise. Please try again.');
       }
       
+      // Return graceful fallback
       return 'Unknown Exercise';
     }
   };
@@ -454,8 +449,8 @@ export default function VideoReviewScreen({ navigation, route }) {
     } catch (error) {
       console.error('Error detecting reps:', error);
       
-      // Network errors are already handled by predictExercise
-      // Just return default value here
+      // No need to show another toast if exercise prediction already showed one
+      // Just return graceful fallback
       return '-';
     }
   };
