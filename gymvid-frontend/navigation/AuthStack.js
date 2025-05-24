@@ -309,8 +309,9 @@ export const ProgressContext = React.createContext({
 
 const Tab = createBottomTabNavigator();
 
-export default function AuthStack({ setSession, initialRouteName = 'Login' }) {
+export default function AuthStack({ setSession, initialRouteName = 'Login', initialParams = {} }) {
   console.log("🔑 AuthStack initializing with route:", initialRouteName);
+  console.log("🔑 AuthStack initializing with params:", initialParams);
   
   try {
     // Check if we're starting directly in onboarding mode
@@ -404,6 +405,7 @@ export default function AuthStack({ setSession, initialRouteName = 'Login' }) {
             <Stack.Screen 
               name="Name" 
               component={NameScreen}
+              initialParams={initialRouteName === 'Name' ? initialParams : undefined}
               options={{
                 ...screenOptions,
                 // No back button for Name screen

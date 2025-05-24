@@ -179,11 +179,12 @@ export default function SignUpScreen({ navigation }) {
       const { data, error } = await signUp(email, password);
       
       if (error) {
-        // Hide "User already registered" errors from console
-        if (!error || !error.message || error.message !== 'User already registered') {
-          console.error('Error signing up:', error);
+        // Only log errors that aren't "User already registered"
+        const errorMessage = error.message || error.msg || 'An error occurred. Please try again.';
+        if (errorMessage !== 'User already registered') {
+          console.error('Error signing up:', errorMessage);
         }
-        toast.error(error.message || 'An error occurred. Please try again.');
+        toast.error(errorMessage);
         return;
       }
       
@@ -226,10 +227,10 @@ export default function SignUpScreen({ navigation }) {
             }
           }],
         });
-      }, 500);
+      }, 800); // Increased timeout to ensure profile creation completes
     } catch (err) {
-      // Hide "User already registered" errors from console
-      if (!err || !err.message || err.message !== 'User already registered') {
+      // Only log errors that aren't "User already registered"
+      if (err && err.message !== 'User already registered') {
         console.error('Unexpected error during signup:', err);
       }
       toast.error('An unexpected error occurred. Please try again.');

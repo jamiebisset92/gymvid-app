@@ -140,7 +140,7 @@ export const useAuth = () => {
       
       // Check for errors
       if (response.error) {
-        // Hide "User already registered" errors from console
+        // Only log errors that aren't "User already registered"
         if (response.error.message !== 'User already registered') {
           console.error('Error during signup:', response.error);
         }
@@ -210,6 +210,8 @@ export const useAuth = () => {
           console.error('Error creating initial user record:', dbError);
         } else {
           console.log('Successfully created initial user record');
+          // Add a small delay to ensure the record is committed
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
       } catch (dbError) {
         console.error('Exception during user record creation:', dbError);
@@ -218,7 +220,7 @@ export const useAuth = () => {
       console.log('Signup successful, returning user with ID:', userId);
       return { data, error: null };
     } catch (error) {
-      // Hide "User already registered" errors from console
+      // Only log errors that aren't "User already registered"
       if (error && error.message !== 'User already registered') {
         console.error('Signup error:', error);
       }

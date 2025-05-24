@@ -4,6 +4,7 @@ import json
 import cv2
 import numpy as np
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor
 
 # ✅ Load environment variables
 load_dotenv()
@@ -27,7 +28,7 @@ from backend.ai.analyze.exercise_prediction import predict_exercise
 from backend.ai.analyze.weight_estimation import estimate_weight_from_keyframes as estimate_weight
 from backend.ai.analyze.coaching_feedback import generate_feedback
 from backend.ai.analyze.result_packager import package_result
-from backend.ai.analyze.keyframe_exporter import export_keyframes
+from backend.ai.analyze.keyframe_collage import export_keyframe_collages
 
 # ✅ Core function to run analysis
 def run_cli_args(args):
@@ -53,13 +54,15 @@ def run_cli_args(args):
     log("🔁 Detecting reps...")
     rep_data = detect_reps(video_data)
 
-    log("🖼️ Exporting keyframes...")
-    keyframe_paths = export_keyframes(video_path, rep_data)
+    log("🖼️ Creating keyframe collages...")
+    collage_paths = export_keyframe_collages(video_path, rep_data)
 
     # ✅ Decide exercise source
     if known_exercise_info:
         log(f"🔒 Using known exercise info from parent exercise: {known_exercise_info}")
         exercise_prediction = known_exercise_info
+        movement_name = exercise_prediction.get("movement")
+        weight_prediction = estimate_weight("keyframes", movement_name)
     elif user_provided_exercise:
         log(f"🏋️ Using manually provided exercise: {user_provided_exercise}")
         exercise_prediction = {
@@ -68,27 +71,33 @@ def run_cli_args(args):
             "movement": user_provided_exercise,
             "confidence": 100
         }
+        movement_name = user_provided_exercise
+        weight_prediction = estimate_weight("keyframes", movement_name)
     else:
-        log("🧠 Predicting exercise type...")
-        exercise_prediction = predict_exercise("keyframes")
+        log("🧠 Predicting exercise type and estimating weight in parallel...")
+        with ThreadPoolExecutor() as executor:
+            future_exercise = executor.submit(predict_exercise, collage_paths[0])
+            # temporarily assign placeholder; will extract movement from exercise_prediction
+            exercise_prediction = future_exercise.result()
 
-    log("⚖️ Estimating weight...")
-    movement_name = exercise_prediction.get("movement")
-    if not movement_name:
-        if "error" in exercise_prediction:
-            raise ValueError(f"Exercise prediction failed: {exercise_prediction['error']}")
-        else:
-            raise ValueError(f"Missing 'movement' in exercise prediction output: {exercise_prediction}")
+        movement_name = exercise_prediction.get("movement")
+        if not movement_name:
+            if "error" in exercise_prediction:
+                raise ValueError(f"Exercise prediction failed: {exercise_prediction['error']}")
+            else:
+                raise ValueError(f"Missing 'movement' in exercise prediction output: {exercise_prediction}")
 
-    weight_prediction = estimate_weight("keyframes", movement_name)
+        # run weight estimation after movement is confirmed
+        weight_prediction = estimate_weight("keyframes", movement_name)
 
     log("📦 Packaging result...")
     final_result = package_result(rep_data, exercise_prediction, weight_prediction)
+    final_result["collage_paths"] = collage_paths
 
     # ✅ Optional: Coaching feedback
     if INCLUDE_FEEDBACK:
         log("🗣️ Generating coaching feedback...")
-        feedback = generate_feedback(video_data, rep_data)
+        feedback = generate_feedback(video_data, rep_data, collage_paths)
         final_result["coaching_feedback"] = feedback
 
     return final_result

@@ -12,7 +12,8 @@ import {
   Dimensions,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
@@ -22,6 +23,9 @@ import { useIsFocused } from '@react-navigation/native';
 import { Video } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../config/supabase';
+import * as ImagePicker from 'expo-image-picker';
+import * as VideoThumbnails from 'expo-video-thumbnails';
+import { API_ENDPOINTS, checkBackendHealth } from '../../config/api';
 
 const debugLog = (...args) => {
   if (__DEV__) {
@@ -31,6 +35,38 @@ const debugLog = (...args) => {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const VIDEO_HEIGHT = SCREEN_WIDTH * 1.5; // 3:2 aspect ratio
+
+// Add VideoPreviewModal component
+const VideoPreviewModal = ({ visible, videoUri, onClose }) => {
+  const videoRef = useRef(null);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <Video
+            ref={videoRef}
+            source={{ uri: videoUri }}
+            style={styles.video}
+            useNativeControls
+            resizeMode="contain"
+            isLooping
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 export default function VideoReviewScreen({ navigation, route }) {
   // Get video URI from route params
@@ -60,6 +96,25 @@ export default function VideoReviewScreen({ navigation, route }) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const formAnim = useRef(new Animated.Value(0)).current;
   const videoAnim = useRef(new Animated.Value(0)).current;
+
+  // Add states for thumbnail and video preview
+  const [thumbnailUri, setThumbnailUri] = useState(null);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+
+  // Add state to track if the set is completed
+  const [isSetCompleted, setIsSetCompleted] = useState(false);
+
+  // Add states for dynamic exercise data and loading
+  const [exerciseName, setExerciseName] = useState('');
+  const [repCount, setRepCount] = useState('');
+  const [isLoadingExercise, setIsLoadingExercise] = useState(false);
+  const [isLoadingReps, setIsLoadingReps] = useState(false);
+  
+  // Animation values for smooth data transitions
+  const exerciseOpacity = useRef(new Animated.Value(0)).current;
+  const repOpacity = useRef(new Animated.Value(0)).current;
+  const loadingScale = useRef(new Animated.Value(0.8)).current;
+  const loadingOpacity = useRef(new Animated.Value(0)).current;
 
   // Function to get the current user ID
   const getCurrentUserId = async () => {
@@ -164,6 +219,19 @@ export default function VideoReviewScreen({ navigation, route }) {
       updateProgress('VideoReview');
     }
   }, [isFocused, updateProgress]);
+
+  // Check backend health on mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      const isHealthy = await checkBackendHealth();
+      if (!isHealthy && __DEV__) {
+        console.warn('⚠️ Backend health check failed - API calls may not work');
+        console.warn('📍 Make sure your backend server is running');
+      }
+    };
+    
+    checkBackend();
+  }, []);
 
   // Handle playback status changes
   const onPlaybackStatusUpdate = (status) => {
@@ -293,14 +361,236 @@ export default function VideoReviewScreen({ navigation, route }) {
       navigation.navigate('Paywall', {
         videoLogged: {
           videoUri,
-          exercise: 'Barbell Bench Press', // Placeholder exercise name
-          reps: 5, // Placeholder reps count
+          exercise: exerciseName || 'Unknown Exercise',
+          reps: Number(repCount) || 0,
           weight: Number(weight)
         },
         onboardingComplete: true, // Mark as complete since we've finished onboarding
         userId: userId
       });
     }, 1500);
+  };
+
+  // API function to predict exercise
+  const predictExercise = async (videoUri) => {
+    try {
+      debugLog('Predicting exercise for video:', videoUri);
+      debugLog('Using API endpoint:', API_ENDPOINTS.PREDICT_EXERCISE);
+      
+      const formData = new FormData();
+      formData.append('video', {
+        uri: videoUri,
+        type: 'video/mp4',
+        name: 'video.mp4',
+      });
+
+      const response = await fetch(API_ENDPOINTS.PREDICT_EXERCISE, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.movement;
+    } catch (error) {
+      console.error('Error predicting exercise:', error);
+      
+      // Provide helpful error message based on error type
+      if (error.message && error.message.includes('Network request failed')) {
+        console.error('⚠️ Network Error: Cannot connect to backend server');
+        console.error('📍 Attempted URL:', API_ENDPOINTS.PREDICT_EXERCISE);
+        console.error('💡 Troubleshooting:');
+        console.error('   1. Make sure your backend server is running on port 8000');
+        console.error('   2. If using a physical device, update LOCAL_IP in config/env.js');
+        console.error('   3. Check that your device/emulator can reach the backend');
+        
+        Alert.alert(
+          'Connection Error',
+          'Cannot connect to the backend server. Please ensure:\n\n' +
+          '1. Backend is running (python main.py)\n' +
+          '2. You\'re using the correct IP address\n' +
+          '3. Both devices are on the same network',
+          [{ text: 'OK' }]
+        );
+      }
+      
+      return 'Unknown Exercise';
+    }
+  };
+
+  // API function to detect reps
+  const detectReps = async (videoUri) => {
+    try {
+      debugLog('Detecting reps for video:', videoUri);
+      debugLog('Using API endpoint:', API_ENDPOINTS.DETECT_REPS);
+      
+      const formData = new FormData();
+      formData.append('video', {
+        uri: videoUri,
+        type: 'video/mp4',
+        name: 'video.mp4',
+      });
+
+      const response = await fetch(API_ENDPOINTS.DETECT_REPS, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.rep_count;
+    } catch (error) {
+      console.error('Error detecting reps:', error);
+      
+      // Network errors are already handled by predictExercise
+      // Just return default value here
+      return '-';
+    }
+  };
+
+  // Analyze video when it changes
+  const analyzeVideo = async (videoUri) => {
+    if (!videoUri) return;
+
+    // Start exercise loading animation
+    setIsLoadingExercise(true);
+    Animated.parallel([
+      Animated.timing(loadingOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(loadingScale, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Predict exercise
+    const movement = await predictExercise(videoUri);
+    setExerciseName(movement);
+    
+    // Fade out loading and fade in exercise name
+    Animated.sequence([
+      Animated.timing(loadingOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(exerciseOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsLoadingExercise(false);
+    });
+
+    // Start rep detection immediately
+    setIsLoadingReps(true);
+    const reps = await detectReps(videoUri);
+    setRepCount(reps.toString());
+    
+    // Fade in rep count
+    Animated.timing(repOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setIsLoadingReps(false);
+    });
+  };
+
+  // Function to generate thumbnail
+  const generateThumbnail = async (videoUri) => {
+    try {
+      const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
+        time: 0,
+        quality: 0.5,
+      });
+      setThumbnailUri(uri);
+      return uri;
+    } catch (error) {
+      console.error('Error generating thumbnail:', error);
+      return null;
+    }
+  };
+  
+  // Generate thumbnail and analyze video when videoUri changes
+  useEffect(() => {
+    if (videoUri) {
+      generateThumbnail(videoUri);
+      analyzeVideo(videoUri);
+    }
+  }, [videoUri]);
+  
+  // Function to select video from library
+  const selectVideo = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant media library permissions to upload videos.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        allowsEditing: true,
+        quality: 1,
+        videoMaxDuration: 60,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const newVideoUri = result.assets[0].uri;
+        
+        // Reset states for new video
+        setExerciseName('');
+        setRepCount('');
+        exerciseOpacity.setValue(0);
+        repOpacity.setValue(0);
+        
+        // Generate thumbnail for the selected video
+        await generateThumbnail(newVideoUri);
+        // Analyze the new video
+        await analyzeVideo(newVideoUri);
+        // Pass the new video to the parent component
+        navigation.setParams({ videoUri: newVideoUri });
+      }
+    } catch (error) {
+      console.error('Error selecting video:', error);
+      Alert.alert('Error', 'Failed to select video. Please try again.');
+    }
+  };
+  
+  // Function to preview video
+  const handleVideoPreview = () => {
+    if (videoUri) {
+      setIsPreviewVisible(true);
+    }
+  };
+  
+  // Function to close preview
+  const closePreview = () => {
+    setIsPreviewVisible(false);
+  };
+
+  // Update the handleCompleteSet function
+  const handleCompleteSet = () => {
+    setIsSetCompleted(!isSetCompleted);
   };
 
   return (
@@ -327,9 +617,6 @@ export default function VideoReviewScreen({ navigation, route }) {
             >
               <Ionicons name="chevron-back" size={24} color={colors.gray} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>
-              {isDemo ? 'Demo Video' : fromGallery ? 'Your Video' : 'Review Video'}
-            </Text>
             <View style={styles.headerSpacer} />
           </View>
 
@@ -351,81 +638,10 @@ export default function VideoReviewScreen({ navigation, route }) {
                 }
               ]}
             >
-              {isDemo ? 'Review Demo Lift' : 'Review Your Lift'}
+              How to Log Your Lifts:
             </Animated.Text>
             
-            {/* Video Player */}
-            <Animated.View 
-              style={[
-                styles.videoContainer, 
-                { 
-                  opacity: videoAnim,
-                  transform: [
-                    { 
-                      translateY: videoAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [15, 0],
-                        extrapolate: 'clamp'
-                      })
-                    }
-                  ]
-                }
-              ]}
-            >
-              {videoUri ? (
-                <>
-                  <Video
-                    ref={videoRef}
-                    source={{ uri: videoUri }}
-                    rate={1.0}
-                    volume={1.0}
-                    isMuted={false}
-                    resizeMode="cover"
-                    shouldPlay={false}
-                    isLooping={false}
-                    style={styles.video}
-                    onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-                    useNativeControls={false}
-                  />
-                  
-                  {!videoReady && (
-                    <View style={styles.loadingOverlay}>
-                      <ActivityIndicator size="large" color="#FFF" />
-                      <Text style={styles.loadingText}>Loading video...</Text>
-                    </View>
-                  )}
-                  
-                  {!playing && videoReady && (
-                    <TouchableOpacity
-                      style={styles.playButtonOverlay}
-                      onPress={togglePlayback}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.playButton}>
-                        <Ionicons name="play" size={40} color="#FFF" />
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                  
-                  {playing && (
-                    <TouchableOpacity
-                      style={styles.pauseOverlay}
-                      onPress={togglePlayback}
-                      activeOpacity={0.9}
-                    >
-                      {/* Transparent overlay to capture taps */}
-                    </TouchableOpacity>
-                  )}
-                </>
-              ) : (
-                <View style={styles.noVideoContainer}>
-                  <Ionicons name="videocam-off" size={60} color={colors.gray} />
-                  <Text style={styles.noVideoText}>No video available</Text>
-                </View>
-              )}
-            </Animated.View>
-            
-            {/* Exercise Info and Input Form */}
+            {/* Remove Video Player section and only show Exercise Card */}
             <Animated.View 
               style={[
                 styles.formContainer, 
@@ -443,55 +659,152 @@ export default function VideoReviewScreen({ navigation, route }) {
                 }
               ]}
             >
-              <View style={styles.exerciseInfoContainer}>
-                <View style={styles.exerciseInfoRow}>
-                  <Text style={styles.exerciseInfoLabel}>Exercise:</Text>
-                  <Text style={styles.exerciseInfoValue}>Barbell Bench Press</Text>
+              <View style={styles.exerciseTableCard}>
+                <View style={styles.exerciseTableHeader}>
+                  <Animated.Text style={[styles.exerciseTableTitle, { opacity: exerciseOpacity }]}>
+                    {exerciseName || 'Loading...'}
+                  </Animated.Text>
                 </View>
                 
-                <View style={styles.exerciseInfoRow}>
-                  <Text style={styles.exerciseInfoLabel}>Reps:</Text>
-                  <Text style={styles.exerciseInfoValue}>5</Text>
+                <View style={styles.tableContainer}>
+                  {/* Table header row */}
+                  <View style={styles.tableHeaderRow}>
+                    <View style={styles.tableCellSetHeader}>
+                      <Text style={styles.headerText}>#</Text>
+                    </View>
+                    <View style={styles.tableCellHeaderInput}>
+                      <Text style={styles.headerText}>kg</Text>
+                    </View>
+                    <View style={styles.tableCellHeaderInput}>
+                      <Text style={styles.headerText}>Reps</Text>
+                    </View>
+                    <View style={styles.tableCellIconHeader}>
+                      <Text style={styles.headerText}></Text>
+                    </View>
+                    <View style={styles.tableCellCheckHeader}>
+                      <Text style={styles.headerText}></Text>
+                    </View>
+                  </View>
+                  
+                  {/* Table data row */}
+                  <View style={styles.tableRow}>
+                    <Text style={styles.tableCellSet}>1</Text>
+                    <TextInput 
+                      style={styles.tableCellInput}
+                      placeholder="0"
+                      placeholderTextColor="#AAAAAA"
+                      keyboardType="decimal-pad"
+                      value={weight}
+                      onChangeText={setWeight}
+                    />
+                    <View style={styles.tableCellInput}>
+                      {isLoadingReps ? (
+                        <ActivityIndicator 
+                          size="small" 
+                          color={colors.primary} 
+                          style={styles.repSpinner}
+                        />
+                      ) : (
+                        <Animated.Text 
+                          style={[
+                            styles.repCountText, 
+                            { opacity: repOpacity }
+                          ]}
+                        >
+                          {repCount || '-'}
+                        </Animated.Text>
+                      )}
+                    </View>
+                    {thumbnailUri ? (
+                      <TouchableOpacity 
+                        style={styles.thumbnailContainer}
+                        onPress={handleVideoPreview}
+                      >
+                        <Image 
+                          source={{ uri: thumbnailUri }} 
+                          style={styles.thumbnail}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity 
+                        style={styles.cameraButtonContainer}
+                        onPress={selectVideo}
+                      >
+                        <View style={styles.cameraButtonInner}>
+                          <Ionicons name="camera-outline" size={24} color={colors.gray} />
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.tableCellCheck}
+                      onPress={handleCompleteSet}
+                    >
+                      <View style={[
+                        styles.checkSquare,
+                        isSetCompleted && styles.checkSquareCompleted
+                      ]}>
+                        <Ionicons 
+                          name="checkmark-sharp" 
+                          size={24} 
+                          color={isSetCompleted ? colors.white : colors.lightGray} 
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-              
-              <View style={styles.weightInputContainer}>
-                <Text style={styles.weightInputLabel}>Enter weight lifted (kg/lb)</Text>
-                <View style={styles.inputContainer}>
-                  <MaterialCommunityIcons name="weight" size={20} color={colors.primary} style={styles.inputIcon} />
-                  <TextInput 
-                    style={styles.textInput}
-                    placeholder="Enter weight"
-                    value={weight}
-                    onChangeText={setWeight}
-                    keyboardType="decimal-pad"
-                    returnKeyType="done"
-                  />
-                </View>
-              </View>
-              
-              <TouchableOpacity 
-                style={[
-                  styles.logButton,
-                  (!weight || loading) && styles.logButtonDisabled
-                ]}
-                onPress={handleLogLift}
-                disabled={!weight || loading}
-                activeOpacity={0.8}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Text style={styles.logButtonText}>Log Lift</Text>
-                    <Ionicons name="checkmark" size={24} color={colors.white} style={styles.buttonIcon} />
-                  </>
+                
+                {/* Loading overlay for exercise detection */}
+                {isLoadingExercise && (
+                  <Animated.View 
+                    style={[
+                      styles.loadingOverlay,
+                      {
+                        opacity: loadingOpacity,
+                        transform: [{ scale: loadingScale }]
+                      }
+                    ]}
+                  >
+                    <View style={styles.loadingContent}>
+                      <ActivityIndicator size="large" color={colors.primary} />
+                      <Text style={styles.loadingText}>Analyzing exercise...</Text>
+                    </View>
+                  </Animated.View>
                 )}
-              </TouchableOpacity>
+              </View>
+              
+              {/* Only show the Log Lift button if weight is entered and set is completed */}
+              {weight && isSetCompleted && (
+                <TouchableOpacity 
+                  style={[
+                    styles.logButton,
+                    loading && styles.logButtonDisabled
+                  ]}
+                  onPress={handleLogLift}
+                  disabled={loading}
+                  activeOpacity={0.8}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Text style={styles.logButtonText}>Log Lift</Text>
+                      <Ionicons name="checkmark" size={24} color={colors.white} style={styles.buttonIcon} />
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </Animated.View>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      
+      {/* Video Preview Modal */}
+      <VideoPreviewModal
+        visible={isPreviewVisible}
+        videoUri={videoUri}
+        onClose={closePreview}
+      />
     </Animated.View>
   );
 }
@@ -499,7 +812,7 @@ export default function VideoReviewScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   safeContainer: {
     flex: 1,
@@ -508,12 +821,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    height: 60,
-    paddingTop: 15,
+    height: 60, 
+    paddingTop: 15, 
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 20,
+    position: 'relative',
   },
   headerTitle: {
     fontSize: 17,
@@ -537,13 +851,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
+    position: 'absolute',
+    left: 20,
+    zIndex: 10,
   },
   contentContainer: {
     flex: 1,
     justifyContent: 'flex-start',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: 20,
     paddingBottom: 30,
+    paddingTop: 0,
   },
   titleText: {
     fontSize: 24,
@@ -551,122 +869,172 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
     letterSpacing: -0.5,
-    color: '#1A1A1A',
+    color: colors.darkGray,
     width: '100%',
-  },
-  videoContainer: {
-    width: SCREEN_WIDTH - 40,
-    height: SCREEN_WIDTH,
-    borderRadius: 15,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  video: {
-    width: '100%',
-    height: '100%',
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  loadingText: {
-    color: '#FFF',
-    marginTop: 10,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  playButtonOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  pauseOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
-  },
-  playButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noVideoContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noVideoText: {
-    color: colors.gray,
-    fontSize: 16,
-    marginTop: 10,
   },
   formContainer: {
     width: '100%',
+    maxWidth: 500,
   },
-  exerciseInfoContainer: {
-    backgroundColor: '#F8F8F8',
-    borderRadius: 15,
-    padding: 16,
-    marginBottom: 20,
-  },
-  exerciseInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  exerciseInfoLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.gray,
-  },
-  exerciseInfoValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.darkGray,
-  },
-  weightInputContainer: {
-    marginBottom: 20,
-  },
-  weightInputLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.darkGray,
-    marginBottom: 10,
-  },
-  inputContainer: {
+  exerciseTableCard: {
     backgroundColor: colors.white,
-    borderRadius: 16,
-    height: 56,
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.07,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  exerciseTableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.lightGray,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-    paddingHorizontal: 15,
+    justifyContent: 'space-between',
+    marginBottom: 15,
   },
-  inputIcon: {
-    marginRight: 10,
+  exerciseTableTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.darkGray,
   },
-  textInput: {
+  tableContainer: {
+    width: '100%',
+  },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    height: 20,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    height: 48,
+  },
+  tableCellSet: {
+    width: 20,
+    fontSize: 16,
+    color: colors.gray,
+    textAlign: 'center',
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  tableCellSetHeader: {
+    width: 20,
+    marginRight: 8,
+  },
+  tableCellHeaderInput: {
     flex: 1,
+    marginHorizontal: 4,
+  },
+  tableCellIconHeader: {
+    width: 48,
+    marginLeft: 3,
+    marginRight: 5,
+  },
+  headerText: {
+    fontSize: 12,
+    color: colors.gray,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  tableCellInput: {
+    flex: 1,
+    height: 48,
+    backgroundColor: colors.lightGray,
+    borderRadius: 12,
     fontSize: 16,
     color: colors.darkGray,
+    textAlign: 'center',
+    fontWeight: '600',
+    paddingVertical: 0,
+    paddingHorizontal: 4,
+    marginHorizontal: 4,
+  },
+  tableCellCheck: {
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
+  tableCellCheckHeader: {
+    width: 48,
+    marginLeft: 4,
+  },
+  checkSquare: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
+  },
+  checkSquareCompleted: {
+    backgroundColor: '#4cd964',
+    borderColor: '#4cd964',
+  },
+  thumbnailContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginLeft: 3,
+    marginRight: 5,
+    position: 'relative',
+  },
+  thumbnail: {
+    width: '100%',
     height: '100%',
+    borderRadius: 8,
+  },
+  cameraButtonContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 3,
+    marginRight: 5,
+    backgroundColor: 'transparent',
+  },
+  cameraButtonInner: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalHeader: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    zIndex: 1,
+  },
+  closeButton: {
+    padding: 10,
   },
   logButton: {
     backgroundColor: '#007BFF',
@@ -693,5 +1061,35 @@ const styles = StyleSheet.create({
   },
   buttonIcon: {
     marginLeft: 5,
+  },
+  repSpinner: {
+    flex: 1,
+  },
+  repCountText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.darkGray,
+    textAlign: 'center',
+    lineHeight: 48,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContent: {
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.gray,
+    marginTop: 12,
   },
 }); 

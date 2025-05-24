@@ -94,12 +94,23 @@ export default function App() {
         .single();
       
       if (error) {
-        console.error("⚠️ Error fetching profile:", error);
-        setOnboardingState({
-          needsOnboarding: true,
-          profileLoaded: true,
-          startScreen: "Name"
-        });
+        // PGRST116 means no rows found - this is expected for new users
+        if (error.code === 'PGRST116') {
+          console.log("⚙️ No profile found for new user - starting onboarding");
+          setOnboardingState({
+            needsOnboarding: true,
+            profileLoaded: true,
+            startScreen: "Name"
+          });
+        } else {
+          console.error("⚠️ Unexpected error fetching profile:", error);
+          // Still allow onboarding for other errors
+          setOnboardingState({
+            needsOnboarding: true,
+            profileLoaded: true,
+            startScreen: "Name"
+          });
+        }
       } else {
         console.log("⚙️ Profile loaded:", JSON.stringify(profile, null, 2));
         // Check if any required fields are missing
@@ -199,7 +210,10 @@ export default function App() {
   useEffect(() => {
     if (session && appIsReady) {
       console.log("⚙️ Session available, checking onboarding");
-      checkOnboarding();
+      // Add a small delay to allow profile creation to complete
+      setTimeout(() => {
+        checkOnboarding();
+      }, 500);
     } else if (!session && appIsReady) {
       console.log("⚙️ No session, resetting onboarding state");
         setOnboardingState({
@@ -253,7 +267,11 @@ export default function App() {
     ComponentToRender = (
       <AuthStack 
         setSession={safeSetSession} 
-        initialRouteName={onboardingState.startScreen} 
+        initialRouteName={onboardingState.startScreen}
+        initialParams={{
+          userId: session?.user?.id,
+          email: session?.user?.email
+        }}
       />
     );
   } else {

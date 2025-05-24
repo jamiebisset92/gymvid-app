@@ -8,22 +8,13 @@ from dotenv import load_dotenv
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def predict_exercise(keyframe_dir: str) -> dict:
-    # ✅ Load keyframes as base64
-    images = []
-    for fname in sorted(os.listdir(keyframe_dir)):
-        if fname.endswith(".jpg"):
-            with open(os.path.join(keyframe_dir, fname), "rb") as f:
-                b64 = base64.b64encode(f.read()).decode("utf-8")
-                images.append({"name": fname, "data": b64})
+def predict_exercise(image_path: str) -> dict:
+    # ✅ Read collage image as base64
+    with open(image_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("utf-8")
 
-    # ✅ Trim to 3 evenly spaced keyframes
-    MAX_IMAGES = 3
-    if len(images) > MAX_IMAGES:
-        step = max(len(images) // MAX_IMAGES, 1)
-        images = [images[i] for i in range(0, len(images), step)][:MAX_IMAGES]
-
-    print(f"📸 Using {len(images)} keyframes for prediction.")
+    print("📸 Using 1 collage image for prediction.")
+    print("🖼️ Image size (base64):", len(b64), "characters")
 
     # ✅ System prompt for GPT
     system_prompt = """
@@ -47,14 +38,9 @@ RULES:
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": "Analyze the exercise from these keyframes and return your prediction."}
+        {"role": "user", "content": "Analyze the exercise shown in this collage and return your prediction."},
+        {"role": "user", "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}]}
     ]
-
-    for img in images:
-        messages.append({
-            "role": "user",
-            "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img['data']}"}}]
-        })
 
     print("🧠 Sending request to GPT...")
 
@@ -64,6 +50,8 @@ RULES:
             messages=messages,
             max_tokens=500,
         )
+        print("🧠 Raw GPT response:", response)
+
         raw = response.choices[0].message.content.strip()
         return json.loads(raw)
 

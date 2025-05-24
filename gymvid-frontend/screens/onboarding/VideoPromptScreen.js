@@ -66,6 +66,52 @@ export default function VideoPromptScreen({ navigation, route }) {
   const videoFrame2FloatAnim = useRef(new Animated.Value(0)).current;
   const videoFrame3FloatAnim = useRef(new Animated.Value(0)).current;
 
+  // Add state for the header text animations
+  const firstLineAnim = useRef(new Animated.Value(0)).current;
+  const secondLineAnim = useRef(new Animated.Value(0)).current;
+  const headerTitleAnimation = useRef(new Animated.Value(0)).current;
+
+  // Add a hover/press animation for the buttons
+  const [primaryButtonScale] = useState(new Animated.Value(1));
+  const [secondaryButtonScale] = useState(new Animated.Value(1));
+
+  // Add touch handlers for button animations
+  const handlePrimaryButtonPressIn = () => {
+    Animated.spring(primaryButtonScale, {
+      toValue: 0.97,
+      tension: 40,
+      friction: 5,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePrimaryButtonPressOut = () => {
+    Animated.spring(primaryButtonScale, {
+      toValue: 1,
+      tension: 40,
+      friction: 5,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleSecondaryButtonPressIn = () => {
+    Animated.spring(secondaryButtonScale, {
+      toValue: 0.97,
+      tension: 40,
+      friction: 5,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleSecondaryButtonPressOut = () => {
+    Animated.spring(secondaryButtonScale, {
+      toValue: 1,
+      tension: 40,
+      friction: 5,
+      useNativeDriver: true,
+    }).start();
+  };
+
   // Function to get current user ID
   const getCurrentUserId = async () => {
     try {
@@ -244,9 +290,9 @@ export default function VideoPromptScreen({ navigation, route }) {
     }
   }, [isFocused]);
 
-  // Create floating animation for video frames
+  // Enhance floating animations for even more natural movement
   useEffect(() => {
-    // Start subtle floating animations for the video frames
+    // Create animations with different durations and delays for natural movement
     const createFloatingAnimation = (animValue, duration, delay) => {
       return Animated.loop(
         Animated.sequence([
@@ -343,9 +389,35 @@ export default function VideoPromptScreen({ navigation, route }) {
       buttonsAnim.setValue(0);
       videoFrameAnim.setValue(0);
       videoFrameScaleAnim.setValue(0.95);
+      headerTitleAnimation.setValue(0);
+      firstLineAnim.setValue(0);
+      secondLineAnim.setValue(0);
       
       // Restart the animation sequence
       animationSequence.start();
+      
+      // Restart header animations
+      Animated.timing(headerTitleAnimation, {
+        toValue: 1,
+        duration: 600,
+        delay: 150,
+        useNativeDriver: true,
+      }).start();
+      
+      // Animate the first and second lines with a staggered effect
+      Animated.sequence([
+        Animated.timing(firstLineAnim, {
+          toValue: 1,
+          duration: 500,
+          delay: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(secondLineAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        })
+      ]).start();
     });
     
     return () => {
@@ -465,7 +537,13 @@ export default function VideoPromptScreen({ navigation, route }) {
           {
             opacity: videoFrameAnim,
             transform: [
-              { scale: videoFrameScaleAnim }
+              { scale: videoFrameScaleAnim },
+              { 
+                translateY: videoFrameAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [10, 0],
+                }) 
+              }
             ]
           }
         ]}
@@ -492,7 +570,7 @@ export default function VideoPromptScreen({ navigation, route }) {
             imageStyle={styles.videoImageStyle}
           >
             <LinearGradient
-              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.4)']}
+              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)']}
               style={styles.videoGradient}
             >
               <View style={styles.playIconContainer}>
@@ -577,7 +655,65 @@ export default function VideoPromptScreen({ navigation, route }) {
         <View style={styles.contentContainer}>
           {/* Video frames placeholder component - placed directly below header with safe margin */}
           <View style={styles.videoSection}>
-            <Text style={styles.headerTitle}>How GymVid Works...</Text>
+            <Animated.Text 
+              style={[
+                styles.headerTitle,
+                {
+                  opacity: headerTitleAnimation,
+                  transform: [
+                    {
+                      translateY: headerTitleAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-10, 0],
+                      })
+                    }
+                  ]
+                }
+              ]}
+            >
+              <Animated.Text 
+                style={[
+                  styles.headerTitleLight,
+                  {
+                    opacity: firstLineAnim,
+                    transform: [
+                      {
+                        translateY: firstLineAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-8, 0],
+                        })
+                      }
+                    ]
+                  }
+                ]}
+              >
+                Let us show you{'\n'}
+              </Animated.Text>
+              <Animated.Text 
+                style={[
+                  styles.headerTitleBold,
+                  {
+                    opacity: secondLineAnim,
+                    transform: [
+                      {
+                        translateY: secondLineAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [5, 0],
+                        })
+                      },
+                      {
+                        scale: secondLineAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.95, 1],
+                        })
+                      }
+                    ]
+                  }
+                ]}
+              >
+                How GymVid Works!
+              </Animated.Text>
+            </Animated.Text>
             {renderVideoFrames()}
           </View>
           
@@ -602,7 +738,7 @@ export default function VideoPromptScreen({ navigation, route }) {
                   }
                 ]}
               >
-                Do you have any vids already on your phone?
+                {'Do you have any videos of you lifting in your phone?'}
               </Animated.Text>
             </View>
             
@@ -624,25 +760,45 @@ export default function VideoPromptScreen({ navigation, route }) {
                 }
               ]}
             >
-              <TouchableOpacity 
-                style={styles.primaryButton} 
-                onPress={openMediaPicker}
-                disabled={loading}
-                activeOpacity={0.8}
+              <Animated.View
+                style={{
+                  transform: [{ scale: primaryButtonScale }],
+                  width: '100%',
+                }}
               >
-                <Ionicons name="videocam" size={24} color={colors.white} style={styles.buttonIcon} />
-                <Text style={styles.primaryButtonText}>Yes, Choose Video</Text>
-              </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.primaryButton} 
+                  onPress={openMediaPicker}
+                  onPressIn={handlePrimaryButtonPressIn}
+                  onPressOut={handlePrimaryButtonPressOut}
+                  disabled={loading}
+                  activeOpacity={0.9}
+                >
+                  <View style={styles.buttonContent}>
+                    <Ionicons name="videocam" size={24} color={colors.white} style={styles.buttonIcon} />
+                    <Text style={styles.primaryButtonText}>Yes, I have a GymVid Ready!</Text>
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
               
-              <TouchableOpacity 
-                style={styles.secondaryButton} 
-                onPress={handleNoVideos}
-                disabled={loading}
-                activeOpacity={0.8}
+              <Animated.View
+                style={{
+                  transform: [{ scale: secondaryButtonScale }],
+                  width: '100%',
+                }}
               >
-                <MaterialCommunityIcons name="video-off" size={24} color={colors.darkGray} style={styles.buttonIcon} />
-                <Text style={styles.secondaryButtonText}>No, I'll Record Later</Text>
-              </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.secondaryButton} 
+                  onPress={handleNoVideos}
+                  onPressIn={handleSecondaryButtonPressIn}
+                  onPressOut={handleSecondaryButtonPressOut}
+                  disabled={loading}
+                  activeOpacity={0.9}
+                >
+                  <MaterialCommunityIcons name="video-off" size={24} color={colors.darkGray} style={styles.buttonIcon} />
+                  <Text style={styles.secondaryButtonText}>No, I don't have any vids yet</Text>
+                </TouchableOpacity>
+              </Animated.View>
               
               {loading && (
                 <View style={styles.loadingOverlay}>
@@ -675,32 +831,41 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     paddingHorizontal: 20,
+    paddingTop: 0,
+    paddingBottom: 20,
   },
   videoSection: {
     width: '100%',
-    height: SCREEN_HEIGHT * 0.45, // Increased to fit header
-    marginTop: 10, // Reduced from 20
-    marginBottom: 10,
+    height: SCREEN_HEIGHT * 0.4,
+    marginTop: 5,
+    marginBottom: 30, // Reduced from 70px to 30px
     alignItems: 'center',
+    paddingTop: 5,
   },
   bottomSection: {
     width: '100%',
-    marginBottom: 30, // Space at bottom
+    marginBottom: 40,
+    paddingHorizontal: 10,
+    marginTop: 15, // Reduced from 30px to 15px
+    paddingTop: 0, // Removed padding
   },
   questionContainer: {
     width: '100%',
-    marginBottom: 25, // Space between question and buttons
+    marginBottom: 35,
+    paddingHorizontal: 0,
+    paddingTop: 45, // Removed padding
   },
   titleText: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '500',
     textAlign: 'center',
-    letterSpacing: -0.5,
-    color: '#1A1A1A',
-    lineHeight: 36,
+    letterSpacing: -0.2,
+    color: '#434343',
+    lineHeight: 32,
+    marginHorizontal: 15,
   },
   videoFramesContainer: {
     width: '100%',
@@ -710,7 +875,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   videoFrameMain: {
-    width: SCREEN_WIDTH * 0.45, // Reduced from 0.52
+    width: SCREEN_WIDTH * 0.45, // Maintained from before
     height: SCREEN_WIDTH * 0.45 * 1.78, // 16:9 aspect ratio
     borderRadius: 14,
     overflow: 'hidden',
@@ -721,6 +886,8 @@ const styles = StyleSheet.create({
     elevation: 10,
     backgroundColor: '#000',
     zIndex: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)', // Subtle border
   },
   videoFrameLeft: {
     position: 'absolute',
@@ -772,62 +939,72 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: '40%',
+    height: '50%', // Increased from 40%
     justifyContent: 'center',
     alignItems: 'center',
   },
   playIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: 'rgba(0, 123, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#0066FF',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   buttonsContainer: {
     width: '100%',
     marginTop: 0,
   },
   primaryButton: {
-    backgroundColor: '#007BFF',
+    backgroundColor: '#0070E0', // Slightly deeper blue for better contrast
     borderRadius: 16,
-    height: 60,
+    height: 62,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 17, // Slightly reduced for better fit
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
   secondaryButton: {
-    backgroundColor: '#F6F6F6',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    height: 60,
+    height: 62,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#E0E0E0', // Slightly darker border for better definition
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   secondaryButtonText: {
     color: colors.darkGray,
-    fontSize: 18,
+    fontSize: 16, // Reduced from 18
     fontWeight: '600',
   },
   buttonIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -842,25 +1019,48 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderWidth: 1,
-    borderColor: colors.lightGray,
+    borderColor: 'rgba(220, 220, 220, 0.8)',
     position: 'absolute',
     left: 20,
     top: 20,
     zIndex: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 30,
     color: '#1A1A1A',
-    marginBottom: 15,
+    marginBottom: 16,
     textAlign: 'center',
     letterSpacing: -0.5,
+    lineHeight: 38,
+    marginTop: -15,
+    marginHorizontal: 20,
+  },
+  headerTitleLight: {
+    fontWeight: '400',
+    fontSize: 28,
+    color: '#404040',
+  },
+  headerTitleBold: {
+    fontWeight: '700',
+    fontSize: 32,
+    color: '#0070E0',
+    textShadowColor: 'rgba(0, 112, 224, 0.25)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  buttonContent: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
   },
 }); 

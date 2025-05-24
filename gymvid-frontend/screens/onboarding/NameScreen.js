@@ -124,13 +124,14 @@ export default function NameScreen({ navigation, route }) {
             .from('users')
             .select('name')
             .eq('id', userIdToUse)
-            .single();
+            .maybeSingle(); // Use maybeSingle() instead of single() to avoid error when no rows found
 
           // If we have name data, set it in the state
-          if (!error && profile && profile.name) {
+          if (profile && profile.name) {
             console.log('📱 Loaded existing name:', profile.name);
             setName(profile.name);
-          } else if (error) {
+          } else if (error && error.code !== 'PGRST116') {
+            // Only log non-"no rows found" errors
             console.warn('📱 Error loading profile:', error.message);
           } else {
             console.log('📱 No existing name found for user');
