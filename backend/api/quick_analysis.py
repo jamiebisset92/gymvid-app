@@ -21,7 +21,7 @@ from backend.ai.analyze.rep_detection import run_rep_detection_from_landmark_y
 app = FastAPI()
 
 # ✅ Route 1: Exercise Prediction
-@app.post("/analyze/quick_exercise_prediction")
+@app.post("/quick_exercise_prediction")
 async def quick_exercise_prediction(video: UploadFile = File(...)):
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
@@ -82,7 +82,7 @@ RULES:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ✅ Route 2: Rep Detection
-@app.post("/analyze/quick_rep_detection")
+@app.post("/quick_rep_detection")
 async def quick_rep_detection(video: UploadFile = File(...)):
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
