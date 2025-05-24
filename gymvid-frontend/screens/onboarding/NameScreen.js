@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, TextInput, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, TextInput, Keyboard, Animated, Easing, Dimensions, Image } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../config/supabase';
 import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
-import { Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { runWorldClassEntranceAnimation, ANIMATION_CONFIG } from '../../utils/animationUtils';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Create a debug logging function that only logs in development
 const debugLog = (...args) => {
@@ -17,7 +19,6 @@ const debugLog = (...args) => {
 };
 
 export default function NameScreen({ navigation, route }) {
-  console.log("📱 NameScreen mounted - route params:", JSON.stringify(route.params || {}, null, 2));
   
   try {
     const [name, setName] = useState('');
@@ -26,6 +27,9 @@ export default function NameScreen({ navigation, route }) {
     // Get the userId and email passed from SignUpScreen
     const userId = route.params?.userId;
     const userEmail = route.params?.email;
+    
+    // State for reveal animation
+    const [isRevealed, setIsRevealed] = useState(false);
     
     // Log parameters immediately when component mounts
     useEffect(() => {
@@ -39,11 +43,24 @@ export default function NameScreen({ navigation, route }) {
     // Get progress context
     const { updateProgress } = useContext(ProgressContext);
     
-    // Animations
+    // Animations for original content
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(30)).current;
     const titleAnim = useRef(new Animated.Value(20)).current;
     const inputAnim = useRef(new Animated.Value(0)).current;
+    
+    // Animations for welcome screen
+    const welcomeFadeAnim = useRef(new Animated.Value(0)).current;
+    const welcomeTitleAnim = useRef(new Animated.Value(0)).current;
+    const welcomeLogoAnim = useRef(new Animated.Value(0)).current;
+    const welcomeSubtitleAnim = useRef(new Animated.Value(0)).current;
+    const welcomeArrowAnim = useRef(new Animated.Value(0)).current;
+    const arrowBounceAnim = useRef(new Animated.Value(0)).current;
+    const getStartedButtonAnim = useRef(new Animated.Value(0)).current;
+    const getStartedButtonScale = useRef(new Animated.Value(0.5)).current;
+    const getStartedButtonPulse = useRef(new Animated.Value(1)).current;
+    const contentRevealAnim = useRef(new Animated.Value(0)).current;
+    const welcomeContentFadeOut = useRef(new Animated.Value(1)).current;
     
     const isFocused = useIsFocused();
     const inputRef = useRef(null);
@@ -67,21 +84,139 @@ export default function NameScreen({ navigation, route }) {
         slideAnim.setValue(30);
         titleAnim.setValue(20);
         inputAnim.setValue(0);
+        welcomeFadeAnim.setValue(0);
+        welcomeTitleAnim.setValue(0);
+        welcomeLogoAnim.setValue(0);
+        welcomeSubtitleAnim.setValue(0);
+        welcomeArrowAnim.setValue(0);
+        getStartedButtonAnim.setValue(0);
+        getStartedButtonScale.setValue(0.5);
+        contentRevealAnim.setValue(0);
+        welcomeContentFadeOut.setValue(1);
+        setIsRevealed(false);
         
         // Wait for the navigator transition to be fully complete
         timer = setTimeout(() => {
-          // Use the world-class animation utility for consistent, premium feel
-          runWorldClassEntranceAnimation({
-            fadeAnim,
-            titleAnim,
-            slideAnim,
-            elementsAnim: [inputAnim]
+          // Show welcome screen first
+          Animated.sequence([
+            // Fade in welcome screen
+            Animated.timing(welcomeFadeAnim, {
+              toValue: 1,
+              duration: 800,
+              useNativeDriver: true,
+              easing: Easing.out(Easing.quad),
+            }),
+            
+            // Animate welcome content
+            Animated.parallel([
+              // Title animation
+              Animated.timing(welcomeTitleAnim, {
+                toValue: 1,
+                duration: 1000,
+                useNativeDriver: true,
+                easing: Easing.out(Easing.cubic),
+              }),
+              
+              // Logo animation with delay
+              Animated.sequence([
+                Animated.delay(150),
+                Animated.timing(welcomeLogoAnim, {
+                  toValue: 1,
+                  duration: 800,
+                  useNativeDriver: true,
+                  easing: Easing.out(Easing.cubic),
+                })
+              ]),
+              
+              // Subtitle animation with delay
+              Animated.sequence([
+                Animated.delay(300),
+                Animated.timing(welcomeSubtitleAnim, {
+                  toValue: 1,
+                  duration: 900,
+                  useNativeDriver: true,
+                  easing: Easing.out(Easing.cubic),
+                })
+              ]),
+              
+              // Arrow animation with slightly more delay
+              Animated.sequence([
+                Animated.delay(450), 
+                Animated.timing(welcomeArrowAnim, {
+                  toValue: 1,
+                  duration: 700,
+                  useNativeDriver: true,
+                  easing: Easing.out(Easing.back(1.5)),
+                })
+              ]),
+              
+              // Get Started button animation (delay further to appear after arrow)
+              Animated.sequence([
+                Animated.delay(600),
+                Animated.parallel([
+                  Animated.timing(getStartedButtonAnim, {
+                    toValue: 1,
+                    duration: 700,
+                    useNativeDriver: true,
+                    easing: Easing.out(Easing.cubic),
+                  }),
+                  Animated.sequence([
+                    Animated.spring(getStartedButtonScale, {
+                      toValue: 1.1,
+                      from: 0.5,
+                      tension: 100,
+                      friction: 8,
+                      useNativeDriver: true,
+                    }),
+                    Animated.spring(getStartedButtonScale, {
+                      toValue: 1,
+                      tension: 80,
+                      friction: 10,
+                      useNativeDriver: true,
+                    })
+                  ])
+                ])
+              ])
+            ])
+          ]).start(() => {
+            // Start pulse animation for Get Started button
+            if (!isRevealed) {
+              Animated.loop(
+                Animated.sequence([
+                  Animated.timing(getStartedButtonPulse, {
+                    toValue: 1.05,
+                    duration: 1000,
+                    useNativeDriver: true,
+                    easing: Easing.inOut(Easing.sin),
+                  }),
+                  Animated.timing(getStartedButtonPulse, {
+                    toValue: 1,
+                    duration: 1000,
+                    useNativeDriver: true,
+                    easing: Easing.inOut(Easing.sin),
+                  })
+                ])
+              ).start();
+
+              // Start arrow bounce animation
+              Animated.loop(
+                Animated.sequence([
+                  Animated.timing(arrowBounceAnim, {
+                    toValue: 1,
+                    duration: 800,
+                    useNativeDriver: true,
+                    easing: Easing.inOut(Easing.sin),
+                  }),
+                  Animated.timing(arrowBounceAnim, {
+                    toValue: 0,
+                    duration: 800,
+                    useNativeDriver: true,
+                    easing: Easing.inOut(Easing.sin),
+                  }),
+                ])
+              ).start();
+            }
           });
-          
-          // Focus the input after animations
-          if (inputRef.current) {
-            inputRef.current.focus();
-          }
         }, 100);
       }
       
@@ -93,6 +228,15 @@ export default function NameScreen({ navigation, route }) {
         slideAnim.stopAnimation();
         titleAnim.stopAnimation();
         inputAnim.stopAnimation();
+        welcomeFadeAnim.stopAnimation();
+        welcomeTitleAnim.stopAnimation();
+        welcomeLogoAnim.stopAnimation();
+        welcomeSubtitleAnim.stopAnimation();
+        welcomeArrowAnim.stopAnimation();
+        arrowBounceAnim.stopAnimation();
+        getStartedButtonAnim.stopAnimation();
+        getStartedButtonScale.stopAnimation();
+        getStartedButtonPulse.stopAnimation();
       };
     }, [isFocused]);
     
@@ -145,6 +289,120 @@ export default function NameScreen({ navigation, route }) {
         loadUserName();
       }
     }, [userId, isFocused]);
+
+    // Handle Get Started button press - triggers the reveal sequence
+    const handleGetStarted = () => {
+      if (isRevealed) return;
+      setIsRevealed(true);
+      
+      // Stop the pulse animation
+      getStartedButtonPulse.stopAnimation();
+      getStartedButtonPulse.setValue(1);
+      arrowBounceAnim.stopAnimation(); // Stop the arrow bounce
+      arrowBounceAnim.setValue(0); // Reset its position
+      
+      // Create the reveal sequence
+      Animated.sequence([
+        // First, scale down the Get Started button and fade out welcome content
+        Animated.parallel([
+          Animated.timing(getStartedButtonScale, {
+            toValue: 0.8,
+            duration: 200,
+            useNativeDriver: true,
+            easing: Easing.in(Easing.cubic),
+          }),
+          Animated.timing(getStartedButtonAnim, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+            easing: Easing.in(Easing.cubic),
+          }),
+          // Fade out the welcome content
+          Animated.timing(welcomeContentFadeOut, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.cubic),
+          })
+        ]),
+        
+        // Small delay before content appears
+        Animated.delay(200),
+        
+        // Reveal name input content
+        Animated.parallel([
+          // Set content reveal for overall opacity
+          Animated.timing(contentRevealAnim, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.cubic),
+          }),
+          
+          // Main fade animation
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.quad),
+          }),
+          
+          // Title and input animations
+          Animated.sequence([
+            Animated.parallel([
+              Animated.timing(titleAnim, {
+                toValue: 0,
+                duration: 700,
+                useNativeDriver: true,
+                easing: Easing.out(Easing.cubic),
+              }),
+              Animated.timing(slideAnim, {
+                toValue: 0,
+                duration: 700,
+                useNativeDriver: true,
+                easing: Easing.out(Easing.cubic),
+              }),
+            ]),
+            
+            // Input animation
+            Animated.timing(inputAnim, {
+              toValue: 1,
+              duration: 600,
+              useNativeDriver: true,
+              easing: Easing.out(Easing.cubic),
+            })
+          ])
+        ])
+      ]).start(() => {
+        // Focus the input after reveal
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      });
+    };
+
+    // Handle Get Started button animations
+    const handleGetStartedButtonPressIn = () => {
+      if (!isRevealed) {
+        Animated.spring(getStartedButtonScale, {
+          toValue: 0.92,
+          tension: 200,
+          friction: 10,
+          useNativeDriver: true,
+        }).start();
+      }
+    };
+
+    const handleGetStartedButtonPressOut = () => {
+      if (!isRevealed) {
+        Animated.spring(getStartedButtonScale, {
+          toValue: 1,
+          tension: 100,
+          friction: 6,
+          useNativeDriver: true,
+        }).start();
+      }
+    };
 
     const handleNameChange = (text) => {
       setName(text);
@@ -246,7 +504,7 @@ export default function NameScreen({ navigation, route }) {
         style={[
           styles.container, 
           { 
-            opacity: fadeAnim,
+            opacity: welcomeFadeAnim,
             backgroundColor: '#FFFFFF' 
           }
         ]}
@@ -255,11 +513,193 @@ export default function NameScreen({ navigation, route }) {
           {/* Header spacer - to account for the global progress bar */}
           <View style={styles.header} />
           
-          <View style={styles.contentContainer}>
+          {/* Welcome screen content */}
+          <Animated.View
+            style={[
+              styles.welcomeContainer,
+              {
+                opacity: welcomeContentFadeOut,
+                transform: [
+                  {
+                    scale: welcomeContentFadeOut.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.9, 1],
+                    })
+                  }
+                ],
+                pointerEvents: isRevealed ? 'none' : 'auto',
+              }
+            ]}
+          >
+            <Animated.View style={styles.welcomeContent}>
+              <Animated.Text
+                style={[
+                  styles.welcomeTitle,
+                  {
+                    opacity: welcomeTitleAnim,
+                    transform: [
+                      {
+                        translateY: welcomeTitleAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-20, 0],
+                        })
+                      },
+                      {
+                        scale: welcomeTitleAnim.interpolate({
+                          inputRange: [0, 0.5, 1],
+                          outputRange: [0.9, 1.05, 1],
+                        })
+                      }
+                    ]
+                  }
+                ]}
+              >
+                Welcome to
+              </Animated.Text>
+              
+              <Animated.Image
+                source={require('../../assets/images/logo.png')}
+                style={[
+                  styles.logoImage,
+                  {
+                    opacity: welcomeLogoAnim,
+                    transform: [
+                      {
+                        scale: welcomeLogoAnim.interpolate({
+                          inputRange: [0, 0.5, 1],
+                          outputRange: [0.8, 1.1, 1],
+                        })
+                      },
+                      {
+                        translateY: welcomeLogoAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [20, 0],
+                        })
+                      }
+                    ]
+                  }
+                ]}
+                resizeMode="contain"
+              />
+              
+              <Animated.Text
+                style={[
+                  styles.welcomeSubtitle,
+                  {
+                    opacity: welcomeSubtitleAnim,
+                    transform: [
+                      {
+                        translateY: welcomeSubtitleAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [10, 0],
+                        })
+                      }
+                    ]
+                  }
+                ]}
+              >
+                Help us get to know you!
+              </Animated.Text>
+
+              {/* Animated Arrow */}
+              <Animated.View
+                style={[
+                  styles.arrowContainer,
+                  {
+                    opacity: welcomeArrowAnim,
+                    transform: [
+                      {
+                        translateY: welcomeArrowAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [20, 0], // Initial slide up
+                        })
+                      },
+                      {
+                        translateY: arrowBounceAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 8], // Bounces 8px up and down
+                        })
+                      },
+                      {
+                        scale: welcomeArrowAnim.interpolate({
+                          inputRange: [0, 0.5, 1],
+                          outputRange: [0.5, 1.1, 1], // Initial scale in
+                        })
+                      }
+                    ]
+                  }
+                ]}
+              >
+                <Ionicons name="arrow-down" size={32} color={colors.primary} />
+              </Animated.View>
+
+            </Animated.View>
+            
+            {/* Get Started button */}
+            <Animated.View
+              style={[
+                styles.getStartedButtonContainer,
+                {
+                  opacity: getStartedButtonAnim,
+                  transform: [
+                    {
+                      scale: Animated.multiply(getStartedButtonScale, getStartedButtonPulse)
+                    },
+                    {
+                      translateY: getStartedButtonAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [20, 0],
+                      })
+                    }
+                  ],
+                }
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.getStartedButton}
+                onPress={handleGetStarted}
+                onPressIn={handleGetStartedButtonPressIn}
+                onPressOut={handleGetStartedButtonPressOut}
+                activeOpacity={0.9}
+                disabled={isRevealed}
+              >
+                <LinearGradient
+                  colors={['#0099FF', '#0066DD', '#0044BB']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.getStartedGradient}
+                >
+                  <Text style={styles.getStartedButtonText}>Get Started</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
+          </Animated.View>
+          
+          {/* Original content that reveals after Get Started is pressed */}
+          <Animated.View
+            style={[
+              styles.contentContainer,
+              {
+                opacity: contentRevealAnim,
+                transform: [
+                  {
+                    translateY: contentRevealAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [30, 0],
+                    })
+                  }
+                ],
+                pointerEvents: isRevealed ? 'auto' : 'none',
+              }
+            ]}
+          >
             <Animated.Text
               style={[
                 styles.titleText,
-                { transform: [{ translateY: titleAnim }] }
+                { 
+                  opacity: fadeAnim,
+                  transform: [{ translateY: titleAnim }] 
+                }
               ]}
             >
               What's your name?
@@ -312,7 +752,7 @@ export default function NameScreen({ navigation, route }) {
                 </Animated.View>
               </View>
             </Animated.View>
-          </View>
+          </Animated.View>
         </SafeAreaView>
       </Animated.View>
     );
@@ -413,5 +853,76 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'absolute',
     right: 20,
-  }
+  },
+  welcomeContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  welcomeContent: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  welcomeTitle: {
+    fontSize: 36 * 1.2,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+    color: '#1A1A1A',
+  },
+  logoImage: {
+    width: 200 * 1.2,
+    height: 60 * 1.2,
+    marginBottom: 24,
+  },
+  welcomeSubtitle: {
+    fontSize: 22.5,
+    fontWeight: '400',
+    textAlign: 'center',
+    color: '#505050',
+    opacity: 0.9,
+    letterSpacing: -0.2,
+    marginBottom: 20,
+  },
+  arrowContainer: {
+    padding: 8,
+    marginBottom: 20,
+  },
+  getStartedButtonContainer: {
+    marginTop: 0,
+  },
+  getStartedButton: {
+    borderRadius: 50,
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+    overflow: 'hidden',
+  },
+  getStartedGradient: {
+    borderRadius: 50,
+    paddingVertical: 18,
+    paddingHorizontal: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  getStartedButtonText: {
+    color: '#FFFFFF',
+    fontSize: 19,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
 }); 

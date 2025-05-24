@@ -25,7 +25,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../config/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
-import { API_ENDPOINTS, checkBackendHealth } from '../../config/api';
 import { useToast } from '../../components/ToastProvider';
 
 const debugLog = (...args) => {
@@ -108,15 +107,15 @@ export default function VideoReviewScreen({ navigation, route }) {
 
   // Add states for dynamic exercise data and loading
   const [exerciseName, setExerciseName] = useState('');
-  const [repCount, setRepCount] = useState('');
   const [isLoadingExercise, setIsLoadingExercise] = useState(false);
-  const [isLoadingReps, setIsLoadingReps] = useState(false);
+  const [isEditingExercise, setIsEditingExercise] = useState(false);
+  const [tempExerciseName, setTempExerciseName] = useState('');
   
   // Animation values for smooth data transitions
   const exerciseOpacity = useRef(new Animated.Value(0)).current;
-  const repOpacity = useRef(new Animated.Value(0)).current;
   const loadingScale = useRef(new Animated.Value(0.8)).current;
   const loadingOpacity = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   // Function to get the current user ID
   const getCurrentUserId = async () => {
@@ -221,19 +220,6 @@ export default function VideoReviewScreen({ navigation, route }) {
       updateProgress('VideoReview');
     }
   }, [isFocused, updateProgress]);
-
-  // Check backend health on mount
-  useEffect(() => {
-    const checkBackend = async () => {
-      const isHealthy = await checkBackendHealth();
-      if (!isHealthy && __DEV__) {
-        console.warn('⚠️ Backend health check failed - API calls may not work');
-        console.warn('📍 Make sure the backend is running at https://gymvid-app.onrender.com');
-      }
-    };
-    
-    checkBackend();
-  }, []);
 
   // Handle playback status changes
   const onPlaybackStatusUpdate = (status) => {
@@ -364,7 +350,6 @@ export default function VideoReviewScreen({ navigation, route }) {
         videoLogged: {
           videoUri,
           exercise: exerciseName || 'Unknown Exercise',
-          reps: Number(repCount) || 0,
           weight: Number(weight)
         },
         onboardingComplete: true, // Mark as complete since we've finished onboarding
@@ -377,7 +362,6 @@ export default function VideoReviewScreen({ navigation, route }) {
   const predictExercise = async (videoUri) => {
     try {
       debugLog('Predicting exercise for video:', videoUri);
-      debugLog('Using API endpoint:', API_ENDPOINTS.PREDICT_EXERCISE);
       
       const formData = new FormData();
       formData.append('video', {
@@ -386,7 +370,7 @@ export default function VideoReviewScreen({ navigation, route }) {
         name: 'video.mp4',
       });
 
-      const response = await fetch(API_ENDPOINTS.PREDICT_EXERCISE, {
+      const response = await fetch('https://gymvid-app.onrender.com/analyze/quick_exercise_prediction', {
         method: 'POST',
         body: formData,
         headers: {
@@ -399,14 +383,14 @@ export default function VideoReviewScreen({ navigation, route }) {
       }
 
       const data = await response.json();
-      return data.movement;
+      return data.exercise_name;
     } catch (error) {
       console.error('Error predicting exercise:', error);
       
       // Show user-friendly error message
       if (error.message && error.message.includes('Network request failed')) {
         console.error('⚠️ Network Error: Cannot connect to backend server');
-        console.error('📍 Attempted URL:', API_ENDPOINTS.PREDICT_EXERCISE);
+        console.error('📍 Attempted URL: https://gymvid-app.onrender.com/analyze/quick_exercise_prediction');
         
         // Show toast instead of alert
         toast.error('We couldn\'t reach the server — please try again.');
@@ -419,48 +403,30 @@ export default function VideoReviewScreen({ navigation, route }) {
     }
   };
 
-  // API function to detect reps
-  const detectReps = async (videoUri) => {
-    try {
-      debugLog('Detecting reps for video:', videoUri);
-      debugLog('Using API endpoint:', API_ENDPOINTS.DETECT_REPS);
-      
-      const formData = new FormData();
-      formData.append('video', {
-        uri: videoUri,
-        type: 'video/mp4',
-        name: 'video.mp4',
-      });
-
-      const response = await fetch(API_ENDPOINTS.DETECT_REPS, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.rep_count;
-    } catch (error) {
-      console.error('Error detecting reps:', error);
-      
-      // No need to show another toast if exercise prediction already showed one
-      // Just return graceful fallback
-      return '-';
-    }
-  };
-
   // Analyze video when it changes
   const analyzeVideo = async (videoUri) => {
     if (!videoUri) return;
 
     // Start exercise loading animation
     setIsLoadingExercise(true);
+    
+    // Start pulse animation
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulseAnimation.start();
+    
     Animated.parallel([
       Animated.timing(loadingOpacity, {
         toValue: 1,
@@ -478,6 +444,11 @@ export default function VideoReviewScreen({ navigation, route }) {
     // Predict exercise
     const movement = await predictExercise(videoUri);
     setExerciseName(movement);
+    setTempExerciseName(movement);
+    
+    // Stop pulse animation
+    pulseAnimation.stop();
+    pulseAnim.setValue(1);
     
     // Fade out loading and fade in exercise name
     Animated.sequence([
@@ -493,20 +464,6 @@ export default function VideoReviewScreen({ navigation, route }) {
       }),
     ]).start(() => {
       setIsLoadingExercise(false);
-    });
-
-    // Start rep detection immediately
-    setIsLoadingReps(true);
-    const reps = await detectReps(videoUri);
-    setRepCount(reps.toString());
-    
-    // Fade in rep count
-    Animated.timing(repOpacity, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setIsLoadingReps(false);
     });
   };
 
@@ -554,9 +511,7 @@ export default function VideoReviewScreen({ navigation, route }) {
         
         // Reset states for new video
         setExerciseName('');
-        setRepCount('');
         exerciseOpacity.setValue(0);
-        repOpacity.setValue(0);
         
         // Generate thumbnail for the selected video
         await generateThumbnail(newVideoUri);
@@ -586,6 +541,24 @@ export default function VideoReviewScreen({ navigation, route }) {
   // Update the handleCompleteSet function
   const handleCompleteSet = () => {
     setIsSetCompleted(!isSetCompleted);
+  };
+
+  // Function to handle exercise name editing
+  const handleStartEditExercise = () => {
+    setIsEditingExercise(true);
+    setTempExerciseName(exerciseName);
+  };
+
+  // Function to save edited exercise name
+  const handleSaveExercise = () => {
+    setExerciseName(tempExerciseName);
+    setIsEditingExercise(false);
+  };
+
+  // Function to cancel editing
+  const handleCancelEditExercise = () => {
+    setTempExerciseName(exerciseName);
+    setIsEditingExercise(false);
   };
 
   return (
@@ -656,9 +629,34 @@ export default function VideoReviewScreen({ navigation, route }) {
             >
               <View style={styles.exerciseTableCard}>
                 <View style={styles.exerciseTableHeader}>
-                  <Animated.Text style={[styles.exerciseTableTitle, { opacity: exerciseOpacity }]}>
-                    {exerciseName || 'Loading...'}
-                  </Animated.Text>
+                  {isEditingExercise ? (
+                    <View style={styles.exerciseEditContainer}>
+                      <TextInput
+                        style={styles.exerciseEditInput}
+                        value={tempExerciseName}
+                        onChangeText={setTempExerciseName}
+                        autoFocus
+                        selectTextOnFocus
+                      />
+                      <TouchableOpacity onPress={handleSaveExercise} style={styles.editButton}>
+                        <Ionicons name="checkmark" size={20} color={colors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={handleCancelEditExercise} style={styles.editButton}>
+                        <Ionicons name="close" size={20} color={colors.gray} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.exerciseNameContainer}>
+                      <Animated.Text style={[styles.exerciseTableTitle, { opacity: exerciseOpacity }]}>
+                        {exerciseName || ''}
+                      </Animated.Text>
+                      {exerciseName && !isLoadingExercise && (
+                        <TouchableOpacity onPress={handleStartEditExercise} style={styles.editButton}>
+                          <Ionicons name="pencil" size={18} color={colors.gray} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
                 </View>
                 
                 <View style={styles.tableContainer}>
@@ -672,9 +670,6 @@ export default function VideoReviewScreen({ navigation, route }) {
                     </View>
                     <View style={styles.tableCellHeaderInput}>
                       <Text style={styles.headerText}>Weight (kg)</Text>
-                    </View>
-                    <View style={styles.tableCellHeaderInput}>
-                      <Text style={styles.headerText}>Reps</Text>
                     </View>
                     <View style={styles.tableCellCheckHeader}>
                       <Text style={styles.headerText}></Text>
@@ -713,24 +708,6 @@ export default function VideoReviewScreen({ navigation, route }) {
                       value={weight}
                       onChangeText={setWeight}
                     />
-                    <View style={styles.tableCellInput}>
-                      {isLoadingReps ? (
-                        <ActivityIndicator 
-                          size="small" 
-                          color={colors.primary} 
-                          style={styles.repSpinner}
-                        />
-                      ) : (
-                        <Animated.Text 
-                          style={[
-                            styles.repCountText, 
-                            { opacity: repOpacity }
-                          ]}
-                        >
-                          {repCount || '-'}
-                        </Animated.Text>
-                      )}
-                    </View>
                     <TouchableOpacity
                       style={styles.tableCellCheck}
                       onPress={handleCompleteSet}
@@ -756,13 +733,45 @@ export default function VideoReviewScreen({ navigation, route }) {
                       styles.loadingOverlay,
                       {
                         opacity: loadingOpacity,
-                        transform: [{ scale: loadingScale }]
                       }
                     ]}
                   >
                     <View style={styles.loadingContent}>
-                      <ActivityIndicator size="large" color={colors.primary} />
-                      <Text style={styles.loadingText}>Analyzing exercise...</Text>
+                      <Animated.View 
+                        style={[
+                          styles.loadingCircle,
+                          {
+                            transform: [{ scale: loadingScale }]
+                          }
+                        ]}
+                      >
+                        <Animated.View 
+                          style={[
+                            styles.pulse,
+                            {
+                              transform: [{ scale: pulseAnim }],
+                              opacity: 0.3
+                            }
+                          ]}
+                        />
+                        <ActivityIndicator size="large" color={colors.primary} />
+                      </Animated.View>
+                      <Animated.Text 
+                        style={[
+                          styles.loadingText,
+                          {
+                            opacity: loadingOpacity,
+                            transform: [{
+                              translateY: loadingOpacity.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [10, 0]
+                              })
+                            }]
+                          }
+                        ]}
+                      >
+                        Analyzing exercise...
+                      </Animated.Text>
                     </View>
                   </Animated.View>
                 )}
@@ -1054,23 +1063,13 @@ const styles = StyleSheet.create({
   buttonIcon: {
     marginLeft: 5,
   },
-  repSpinner: {
-    flex: 1,
-  },
-  repCountText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.darkGray,
-    textAlign: 'center',
-    lineHeight: 48,
-  },
   loadingOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 1)',
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1083,5 +1082,46 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.gray,
     marginTop: 12,
+  },
+  exerciseEditContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  exerciseEditInput: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.darkGray,
+    padding: 8,
+    marginRight: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  editButton: {
+    padding: 8,
+    marginLeft: 4,
+  },
+  exerciseNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  loadingCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pulse: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 40,
+    backgroundColor: colors.lightGray,
   },
 }); 
