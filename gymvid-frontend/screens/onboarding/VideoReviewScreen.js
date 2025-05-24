@@ -667,14 +667,14 @@ export default function VideoReviewScreen({ navigation, route }) {
                     <View style={styles.tableCellSetHeader}>
                       <Text style={styles.headerText}>#</Text>
                     </View>
+                    <View style={styles.tableCellIconHeader}>
+                      <Text style={styles.headerText}>GymVid</Text>
+                    </View>
                     <View style={styles.tableCellHeaderInput}>
-                      <Text style={styles.headerText}>kg</Text>
+                      <Text style={styles.headerText}>Weight (kg)</Text>
                     </View>
                     <View style={styles.tableCellHeaderInput}>
                       <Text style={styles.headerText}>Reps</Text>
-                    </View>
-                    <View style={styles.tableCellIconHeader}>
-                      <Text style={styles.headerText}></Text>
                     </View>
                     <View style={styles.tableCellCheckHeader}>
                       <Text style={styles.headerText}></Text>
@@ -684,6 +684,27 @@ export default function VideoReviewScreen({ navigation, route }) {
                   {/* Table data row */}
                   <View style={styles.tableRow}>
                     <Text style={styles.tableCellSet}>1</Text>
+                    {thumbnailUri ? (
+                      <TouchableOpacity 
+                        style={styles.thumbnailContainer}
+                        onPress={handleVideoPreview}
+                      >
+                        <Image 
+                          source={{ uri: thumbnailUri }} 
+                          style={styles.thumbnail}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity 
+                        style={styles.cameraButtonContainer}
+                        onPress={selectVideo}
+                      >
+                        <View style={styles.cameraButtonInner}>
+                          <Ionicons name="camera-outline" size={24} color={colors.gray} />
+                        </View>
+                      </TouchableOpacity>
+                    )}
                     <TextInput 
                       style={styles.tableCellInput}
                       placeholder="0"
@@ -710,27 +731,6 @@ export default function VideoReviewScreen({ navigation, route }) {
                         </Animated.Text>
                       )}
                     </View>
-                    {thumbnailUri ? (
-                      <TouchableOpacity 
-                        style={styles.thumbnailContainer}
-                        onPress={handleVideoPreview}
-                      >
-                        <Image 
-                          source={{ uri: thumbnailUri }} 
-                          style={styles.thumbnail}
-                          resizeMode="cover"
-                        />
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity 
-                        style={styles.cameraButtonContainer}
-                        onPress={selectVideo}
-                      >
-                        <View style={styles.cameraButtonInner}>
-                          <Ionicons name="camera-outline" size={24} color={colors.gray} />
-                        </View>
-                      </TouchableOpacity>
-                    )}
                     <TouchableOpacity
                       style={styles.tableCellCheck}
                       onPress={handleCompleteSet}
@@ -926,14 +926,13 @@ const styles = StyleSheet.create({
     width: 20,
     marginRight: 8,
   },
+  tableCellIconHeader: {
+    width: 48,
+    marginRight: 8,
+  },
   tableCellHeaderInput: {
     flex: 1,
     marginHorizontal: 4,
-  },
-  tableCellIconHeader: {
-    width: 48,
-    marginLeft: 3,
-    marginRight: 5,
   },
   headerText: {
     fontSize: 12,
@@ -983,8 +982,7 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 12,
     overflow: 'hidden',
-    marginLeft: 3,
-    marginRight: 5,
+    marginRight: 8,
     position: 'relative',
   },
   thumbnail: {
@@ -1000,8 +998,7 @@ const styles = StyleSheet.create({
     borderColor: colors.lightGray,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 3,
-    marginRight: 5,
+    marginRight: 8,
     backgroundColor: 'transparent',
   },
   cameraButtonInner: {

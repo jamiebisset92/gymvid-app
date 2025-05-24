@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 import tempfile
 import os
 
-from backend.ai.analyze.quick_analysis import quick_analyze
+from backend.api.quick_analysis import quick_analyze
 from backend.ai.analyze.video_analysis import analyze_video
 from backend.ai.analyze.rep_detection import run_rep_detection_from_landmark_y
 
