@@ -50,14 +50,16 @@ RULES:
             messages=messages,
             max_tokens=500,
         )
-        print("🧠 Raw GPT response:", response)
 
         raw = response.choices[0].message.content.strip()
+        print("🧠 Raw GPT response:", repr(raw))
+
         return json.loads(raw)
 
     except Exception as e:
         print("❌ GPT Error:", str(e))
         return {
-            "error": "Prediction failed due to GPT error or rate limit.",
-            "details": str(e)
+            "error": "Failed to parse GPT response",
+            "details": str(e),
+            "raw_response": raw if 'raw' in locals() else None
         }
