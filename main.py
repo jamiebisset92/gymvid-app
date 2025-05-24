@@ -23,6 +23,7 @@ from backend.ai.analyze.keyframe_exporter import export_keyframes
 from backend.ai.analyze.coaching_feedback import generate_feedback
 from backend.ai.analyze import analyze_set
 from backend.api.check_username import router as check_username_router  # ✅ ADDED for username checking
+from backend.api.quick_analysis import app as quick_analysis_app  # ✅ Mount quick prediction endpoints
 
 # ✅ Load env
 load_dotenv()
@@ -53,6 +54,7 @@ app.include_router(profile_image_router)  # ✅ ADDED
 from backend.api.onboarding import router as onboarding_router  # ✅ NEW
 app.include_router(onboarding_router)  # ✅ NEW
 app.include_router(check_username_router)  # ✅ ADDED for username checking
+app.mount("/analyze", quick_analysis_app)  # ✅ Mount exercise + rep detection API
 
 # ✅ AI set analysis
 @app.post("/analyze/log_set")
@@ -114,7 +116,6 @@ async def process_set(
             env=env
         )
         try:
-            # Extract JSON block even if logs are included
             match = re.search(r"({.*})", result.stdout.strip(), re.DOTALL)
             if match:
                 output = json.loads(match.group(1))
@@ -136,22 +137,14 @@ class FeedbackRequest(BaseModel):
 async def analyze_feedback(request: FeedbackRequest):
     try:
         local_path = download_video_from_url(request.video_url)
-
-        # ✅ Extract vertical motion and detect reps
         video_data = analyze_video(local_path)
         rep_data = run_rep_detection_from_landmark_y(video_data["raw_y"], video_data["fps"])
-
-        # ✅ Optionally save keyframes
         export_keyframes(local_path, rep_data)
-
-        # ✅ Generate GPT feedback
         feedback = generate_feedback(
             video_data={ "predicted_exercise": request.movement },
             rep_data=rep_data
         )
-
         return { "success": True, "feedback": feedback }
-
     except Exception as e:
         return {
             "success": False,
