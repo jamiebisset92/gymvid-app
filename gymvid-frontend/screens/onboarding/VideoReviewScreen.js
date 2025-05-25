@@ -14,7 +14,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
-  Easing
+  Easing,
+  Pressable
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
@@ -37,32 +38,294 @@ const debugLog = (...args) => {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const VIDEO_HEIGHT = SCREEN_WIDTH * 1.5; // 3:2 aspect ratio
 
+// World-Class GuidedPopup Component Definition
+const GuidedPopup = ({ visible, text, targetLayout, onClose, forcePositionBelow = false, highlightLayout = null }) => {
+  const animValue = useRef(new Animated.Value(0)).current;
+  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0, width: 0 });
+  const [arrowStyle, setArrowStyle] = useState({});
+  const [isPopupVisible, setIsPopupVisible] = useState(false);
+
+  const ARROW_SIZE = 10;
+  const POPUP_MARGIN_FROM_TARGET = 15;
+  const SCREEN_PADDING = 15;
+  const HIGHLIGHT_PADDING = 12; // Padding around the highlighted element
+  const HIGHLIGHT_BORDER_RADIUS = 12; // Rounded corners for spotlight
+  const screenDims = Dimensions.get('window');
+
+  useEffect(() => {
+    if (visible && targetLayout) {
+      const popupWidth = screenDims.width - (2 * SCREEN_PADDING);
+      const estimatedPopupHeight = text.length > 70 ? 100 : 85;
+
+      let pTop, pLeft;
+      let arrStyle = {};
+      pLeft = SCREEN_PADDING;
+
+      if (forcePositionBelow) {
+        pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET;
+        arrStyle = {
+          bottom: '100%',
+          left: targetLayout.x + targetLayout.width / 2 - pLeft - ARROW_SIZE,
+          borderBottomWidth: ARROW_SIZE, borderBottomColor: colors.white,
+          borderLeftWidth: ARROW_SIZE, borderLeftColor: 'transparent',
+          borderRightWidth: ARROW_SIZE, borderRightColor: 'transparent',
+        };
+      } else {
+        pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET;
+        arrStyle = {
+          bottom: '100%',
+          left: (popupPosition.width || popupWidth) / 2 - ARROW_SIZE, 
+          borderBottomWidth: ARROW_SIZE, borderBottomColor: colors.white,
+          borderLeftWidth: ARROW_SIZE, borderLeftColor: 'transparent',
+          borderRightWidth: ARROW_SIZE, borderRightColor: 'transparent',
+        };
+        if (pTop + estimatedPopupHeight > screenDims.height - SCREEN_PADDING) {
+          pTop = targetLayout.y - estimatedPopupHeight - POPUP_MARGIN_FROM_TARGET;
+          arrStyle = {
+            top: '100%',
+            left: (popupPosition.width || popupWidth) / 2 - ARROW_SIZE,
+            borderTopWidth: ARROW_SIZE, borderTopColor: colors.white,
+            borderLeftWidth: ARROW_SIZE, borderLeftColor: 'transparent',
+            borderRightWidth: ARROW_SIZE, borderRightColor: 'transparent',
+          };
+        }
+      }
+      
+      if (pTop < SCREEN_PADDING) pTop = SCREEN_PADDING;
+      if (!forcePositionBelow && (pTop + estimatedPopupHeight > screenDims.height - SCREEN_PADDING)){
+          pTop = screenDims.height - estimatedPopupHeight - SCREEN_PADDING;
+      }
+
+      setPopupPosition({ top: pTop, left: pLeft, width: popupWidth });
+      setArrowStyle(arrStyle);
+      setIsPopupVisible(true);
+
+      Animated.spring(animValue, {
+        toValue: 1, tension: 60, friction: 7, useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(animValue, {
+        toValue: 0, duration: 200, easing: Easing.ease, useNativeDriver: true,
+      }).start(() => setIsPopupVisible(false));
+    }
+  }, [visible, targetLayout, text, forcePositionBelow, screenDims]);
+
+  if (!isPopupVisible || !targetLayout) return null;
+
+  const overlayStyle = {
+    position: 'absolute',
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    opacity: animValue,
+  };
+
+  // Calculate expanded highlight area with padding
+  const expandedHighlight = highlightLayout ? {
+    x: highlightLayout.x - HIGHLIGHT_PADDING,
+    y: highlightLayout.y - HIGHLIGHT_PADDING,
+    width: highlightLayout.width + (HIGHLIGHT_PADDING * 2),
+    height: highlightLayout.height + (HIGHLIGHT_PADDING * 2),
+  } : null;
+
+  return (
+    <Modal transparent visible={isPopupVisible} animationType="none" onRequestClose={onClose}>
+      <Pressable style={styles.fullScreenContainerForPressable} onPress={onClose}>
+        {/* Spotlight Effect with rounded corners */}
+        {expandedHighlight ? (
+          <>
+            {/* Top overlay */}
+            <Animated.View style={[overlayStyle, { 
+              top: 0, 
+              left: 0, 
+              width: screenDims.width, 
+              height: expandedHighlight.y 
+            }]} />
+            
+            {/* Bottom overlay */}
+            <Animated.View style={[overlayStyle, { 
+              top: expandedHighlight.y + expandedHighlight.height, 
+              left: 0, 
+              width: screenDims.width, 
+              height: screenDims.height - (expandedHighlight.y + expandedHighlight.height) 
+            }]} />
+            
+            {/* Left overlay */}
+            <Animated.View style={[overlayStyle, { 
+              top: expandedHighlight.y, 
+              left: 0, 
+              width: expandedHighlight.x, 
+              height: expandedHighlight.height 
+            }]} />
+            
+            {/* Right overlay */}
+            <Animated.View style={[overlayStyle, { 
+              top: expandedHighlight.y, 
+              left: expandedHighlight.x + expandedHighlight.width, 
+              width: screenDims.width - (expandedHighlight.x + expandedHighlight.width), 
+              height: expandedHighlight.height 
+            }]} />
+            
+            {/* Rounded corner masks for spotlight effect */}
+            {/* Top-left corner */}
+            <Animated.View style={[overlayStyle, {
+              top: expandedHighlight.y,
+              left: expandedHighlight.x,
+              width: HIGHLIGHT_BORDER_RADIUS,
+              height: HIGHLIGHT_BORDER_RADIUS,
+              borderTopLeftRadius: HIGHLIGHT_BORDER_RADIUS,
+            }]} />
+            
+            {/* Top-right corner */}
+            <Animated.View style={[overlayStyle, {
+              top: expandedHighlight.y,
+              left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS,
+              width: HIGHLIGHT_BORDER_RADIUS,
+              height: HIGHLIGHT_BORDER_RADIUS,
+              borderTopRightRadius: HIGHLIGHT_BORDER_RADIUS,
+            }]} />
+            
+            {/* Bottom-left corner */}
+            <Animated.View style={[overlayStyle, {
+              top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS,
+              left: expandedHighlight.x,
+              width: HIGHLIGHT_BORDER_RADIUS,
+              height: HIGHLIGHT_BORDER_RADIUS,
+              borderBottomLeftRadius: HIGHLIGHT_BORDER_RADIUS,
+            }]} />
+            
+            {/* Bottom-right corner */}
+            <Animated.View style={[overlayStyle, {
+              top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS,
+              left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS,
+              width: HIGHLIGHT_BORDER_RADIUS,
+              height: HIGHLIGHT_BORDER_RADIUS,
+              borderBottomRightRadius: HIGHLIGHT_BORDER_RADIUS,
+            }]} />
+          </>
+        ) : (
+          <Animated.View style={[styles.fullScreenTouchableOverlay, { opacity: animValue }]} />
+        )}
+
+        {/* Popup Content */}
+        <Animated.View 
+          style={[
+            styles.popupContainerAdvanced,
+            {
+              top: popupPosition.top,
+              left: popupPosition.left,
+              width: popupPosition.width,
+              opacity: animValue,
+              transform: [
+                { scale: animValue.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) },
+                { translateY: animValue.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }
+              ],
+            },
+          ]}
+        >
+          <View style={[styles.popupArrowAdvanced, arrowStyle]} />
+          <View style={styles.popupBodyAdvanced}>
+            <Text style={styles.popupTextAdvanced}>{text}</Text>
+            <TouchableOpacity onPress={onClose} style={styles.popupDismissButtonAdvanced}>
+              <Text style={styles.popupDismissButtonTextAdvanced}>Got it!</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </Pressable>
+    </Modal>
+  );
+};
+
 // Add VideoPreviewModal component
 const VideoPreviewModal = ({ visible, videoUri, onClose }) => {
   const videoRef = useRef(null);
 
+  useEffect(() => {
+    const managePlayback = async () => {
+      if (videoRef.current) {
+        if (visible && videoUri) {
+          try {
+            // Load and play the video. setPositionAsync(0) ensures it starts from the beginning.
+            // Using shouldPlay: true with loadAsync is generally effective.
+            await videoRef.current.loadAsync({ uri: videoUri }, { shouldPlay: true });
+            await videoRef.current.setPositionAsync(0); // Ensure it starts from the beginning
+            debugLog('Modal video play initiated via loadAsync');
+          } catch (error) {
+            debugLog('Error playing video in modal via loadAsync:', error);
+            // Fallback attempt if loadAsync had issues or for re-playing
+            try {
+                if (videoRef.current?.getStatusAsync && (await videoRef.current.getStatusAsync()).isLoaded) {
+                    await videoRef.current.setPositionAsync(0);
+                    await videoRef.current.playAsync();
+                    debugLog('Modal video play initiated via playAsync fallback');
+                } else {
+                    // If not loaded, try to set URI and play
+                    await videoRef.current.setURIAsync(videoUri);
+                    await videoRef.current.playAsync();
+                    debugLog('Modal video play initiated via setURIAsync and playAsync');
+                }
+            } catch (fallbackError) {
+                debugLog('Error in playAsync fallback for modal video:', fallbackError);
+            }
+          }
+        } else {
+          // If modal is not visible or no video URI, stop the video
+          try {
+            await videoRef.current.stopAsync();
+            debugLog('Modal video stopped');
+          } catch (error) {
+            // Suppress or log minor errors if stopAsync is called when not needed
+            debugLog('Minor error stopping video in modal (possibly already stopped):', error);
+          }
+        }
+      }
+    };
+
+    managePlayback();
+
+    // Cleanup: stop video when modal is hidden or component unmounts
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.stopAsync().catch(err => debugLog('Error stopping video on cleanup:', err));
+      }
+    };
+  }, [visible, videoUri]); // Rerun effect if visibility or URI changes
+
+  if (!visible) {
+    return null; // Don't render the modal if not visible
+  }
+
   return (
     <Modal
-      visible={visible}
       transparent={true}
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={onClose} // Allows hardware back button to close modal on Android
     >
       <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#fff" />
+              {/* Increased icon size and added subtle background for better UX */}
+              <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
           </View>
-          <Video
-            ref={videoRef}
-            source={{ uri: videoUri }}
-            style={styles.video}
-            useNativeControls
-            resizeMode="contain"
-            isLooping
-          />
+          {videoUri ? (
+            <Video
+              ref={videoRef}
+              source={{ uri: videoUri }}
+              style={styles.video} // Style defined in StyleSheet
+              useNativeControls
+              resizeMode="contain"
+              isLooping={false} // Previews are typically not looped
+              onError={(error) => debugLog('Modal Video Error:', error.error)} // Expo AV error has error.error
+              onLoadStart={() => debugLog('Modal video load started')}
+              onLoad={() => debugLog('Modal video loaded')}
+            />
+          ) : (
+            // Show a loading indicator if URI is not yet available or video is loading
+            <View style={styles.centeredMessage}>
+              <ActivityIndicator size="large" color="#fff" />
+              <Text style={styles.loadingVideoText}>Loading video...</Text>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -127,6 +390,18 @@ export default function VideoReviewScreen({ navigation, route }) {
   const pencilOpacity = useRef(new Animated.Value(0)).current;
   const exerciseBlur = useRef(new Animated.Value(0.3)).current;
 
+  // State for tooltips/guided popups
+  const [tooltipStep, setTooltipStep] = useState(0);
+  const [inputsRowLayout, setInputsRowLayout] = useState(null);
+  const [exerciseCardLayout, setExerciseCardLayout] = useState(null);
+  const [exerciseLoadingLayout, setExerciseLoadingLayout] = useState(null);
+  const [hasSeenTooltips, setHasSeenTooltips] = useState(true);
+
+  const inputsRowRef = useRef(null);
+  const exerciseCardRef = useRef(null);
+  const exerciseLoadingRef = useRef(null);
+  const thumbnailRef = useRef(null);
+
   // Add ellipsis animation effect
   useEffect(() => {
     let interval;
@@ -161,6 +436,60 @@ export default function VideoReviewScreen({ navigation, route }) {
       shimmerAnim.stopAnimation();
     };
   }, [isLoadingExercise]);
+
+  useEffect(() => {
+    const checkTooltipsSeen = async () => {
+      try {
+        const seen = await AsyncStorage.getItem('hasSeenVideoReviewTooltips_v2');
+        if (seen === null) setHasSeenTooltips(false);
+        else setHasSeenTooltips(true);
+      } catch (e) {
+        debugLog('Error reading tooltip pref', e); setHasSeenTooltips(false);
+      }
+    };
+    checkTooltipsSeen();
+  }, []);
+  
+  // Enhanced effect to measure the loading container with better positioning
+  useEffect(() => {
+    if (isLoadingExercise && exerciseLoadingRef.current && !exerciseLoadingLayout) {
+      // Increased delay to ensure proper layout
+      const timer = setTimeout(() => {
+        if (exerciseLoadingRef.current) {
+          exerciseLoadingRef.current.measureInWindow((x, y, width, height) => {
+            if (!isNaN(x) && !isNaN(y) && width > 0 && height > 0) {
+              // Adjust the measurement to include more vertical space
+              const adjustedLayout = {
+                x: x - 5, // Slight horizontal adjustment
+                y: y - 8, // Move up to better center the content
+                width: width + 10, // Add horizontal padding
+                height: height + 16, // Increase height for better coverage
+              };
+              debugLog('Measured and adjusted loading container:', adjustedLayout);
+              setExerciseLoadingLayout(adjustedLayout);
+            }
+          });
+        }
+      }, 150); // Slightly longer delay for stability
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoadingExercise, exerciseLoadingLayout]);
+
+  // Updated effect to show tooltips - now also checks isLoadingExercise
+  useEffect(() => {
+    // Only show tooltips when loading state is active and layouts are ready
+    if (!hasSeenTooltips && exerciseCardLayout && inputsRowLayout && exerciseLoadingLayout && 
+        tooltipStep === 0 && isLoadingExercise) {
+      if (exerciseCardLayout.width > 0 && exerciseCardLayout.height > 0 && 
+          inputsRowLayout.width > 0 && inputsRowLayout.height > 0 &&
+          exerciseLoadingLayout.width > 0 && exerciseLoadingLayout.height > 0) {
+        debugLog('All layouts ready with loading state active, showing first tooltip');
+        const timer = setTimeout(() => setTooltipStep(1), 300); // Shorter delay since we're already loaded
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [hasSeenTooltips, exerciseCardLayout, inputsRowLayout, exerciseLoadingLayout, tooltipStep, isLoadingExercise]);
 
   // Function to get the current user ID
   const getCurrentUserId = async () => {
@@ -621,6 +950,38 @@ export default function VideoReviewScreen({ navigation, route }) {
     setIsEditingExercise(false);
   };
 
+  // handleDismissTooltip (remains similar)
+  const handleDismissTooltip = async () => {
+    if (tooltipStep === 1) setTooltipStep(2);
+    else if (tooltipStep === 2) {
+      setTooltipStep(0); setHasSeenTooltips(true);
+      try { await AsyncStorage.setItem('hasSeenVideoReviewTooltips_v2', 'true'); } 
+      catch (e) { debugLog('Error saving tooltip_v2 pref', e); }
+    }
+  };
+  
+  // Enhanced measureElement with retry logic
+  const measureElement = (ref, setLayoutCallback, retryCount = 0) => {
+    if (ref.current) {
+      ref.current.measureInWindow((x, y, width, height) => {
+        if (!isNaN(x) && !isNaN(y) && width > 0 && height > 0) {
+          debugLog('Measured element:', { x, y, width, height });
+          setLayoutCallback({ x, y, width, height });
+        } else if (retryCount < 3) {
+          // Retry measurement after a short delay
+          setTimeout(() => {
+            measureElement(ref, setLayoutCallback, retryCount + 1);
+          }, 100);
+        } else {
+          debugLog('Failed to measure after retries:', {x, y, width, height});
+        }
+      });
+    }
+  };
+
+  const onInputsRowLayout = () => measureElement(inputsRowRef, setInputsRowLayout);
+  const onExerciseCardLayout = () => measureElement(exerciseCardRef, setExerciseCardLayout);
+
   return (
     <Animated.View 
       style={[
@@ -687,10 +1048,13 @@ export default function VideoReviewScreen({ navigation, route }) {
                 }
               ]}
             >
-              <View style={styles.exerciseTableCard}>
+              <View style={styles.exerciseTableCard} ref={exerciseCardRef} onLayout={onExerciseCardLayout}>
                 <View style={styles.exerciseTableHeader}>
                   {isLoadingExercise ? (
-                    <View style={styles.exerciseLoadingContainer}>
+                    <View 
+                      style={styles.exerciseLoadingContainer} 
+                      ref={exerciseLoadingRef}
+                    >
                       <View style={styles.loadingSpinnerContainer}>
                         <ActivityIndicator size="small" color={colors.primary} />
                       </View>
@@ -771,11 +1135,13 @@ export default function VideoReviewScreen({ navigation, route }) {
                     </View>
                   </View>
                   
-                  {/* Table data row */}
-                  <View style={styles.tableRow}>
+                  {/* Table data row - TARGET FOR TOOLTIP 2 */}
+                  <View style={styles.tableRow} ref={inputsRowRef} onLayout={onInputsRowLayout}>
                     <Text style={styles.tableCellSet}>1</Text>
                     {thumbnailUri ? (
+                      // TARGET FOR TOOLTIP 1
                       <TouchableOpacity 
+                        ref={thumbnailRef}
                         style={styles.thumbnailContainer}
                         onPress={handleVideoPreview}
                       >
@@ -787,6 +1153,7 @@ export default function VideoReviewScreen({ navigation, route }) {
                       </TouchableOpacity>
                     ) : (
                       <TouchableOpacity 
+                        ref={thumbnailRef} // Also measure this as a fallback if no thumbnail
                         style={styles.cameraButtonContainer}
                         onPress={selectVideo}
                       >
@@ -808,8 +1175,8 @@ export default function VideoReviewScreen({ navigation, route }) {
                       placeholder="0"
                       placeholderTextColor="#AAAAAA"
                       keyboardType="number-pad"
-                      value=""
-                      editable={false}
+                      value="" // Reps input is not directly handled here yet, assuming from original code
+                      editable={false} // Assuming reps come from somewhere else or this is a placeholder
                     />
                     <TouchableOpacity
                       style={styles.tableCellCheck}
@@ -855,6 +1222,22 @@ export default function VideoReviewScreen({ navigation, route }) {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      
+      <GuidedPopup
+        visible={tooltipStep === 1}
+        text="Our AI will find & select the exercise for you!"
+        targetLayout={exerciseCardLayout}
+        highlightLayout={exerciseLoadingLayout}
+        onClose={handleDismissTooltip}
+        forcePositionBelow={true}
+      />
+      <GuidedPopup
+        visible={tooltipStep === 2}
+        text="You can enter in the weight and reps while you wait and then tap the tick to log your first set."
+        targetLayout={inputsRowLayout}
+        highlightLayout={null}
+        onClose={handleDismissTooltip}
+      />
       
       {/* Video Preview Modal */}
       <VideoPreviewModal
@@ -1093,15 +1476,32 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   modalHeader: {
     position: 'absolute',
-    top: 40,
-    right: 20,
-    zIndex: 1,
+    top: Platform.OS === 'ios' ? 50 : 20, // Adjust for status bar
+    right: 15,
+    zIndex: 10,
   },
   closeButton: {
-    padding: 10,
+    padding: 8, // Touch area
+    borderRadius: 20, // Make it round
+    backgroundColor: 'rgba(0,0,0,0.25)', // Subtle background for better visibility
+  },
+  video: { // Style for the Video component itself in the modal
+    width: '100%', // Take full width of modalContent
+    height: '70%', // Adjust height as preferred for video preview
+    backgroundColor: '#000', // Background for the video area
+  },
+  centeredMessage: { // For loading text in modal
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingVideoText: { // For "Loading video..." text
+    color: 'white',
+    fontSize: 16,
+    marginTop: 12,
   },
   logButton: {
     backgroundColor: '#007BFF',
@@ -1194,5 +1594,42 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     marginRight: 10,
+  },
+  // Styles for World-Class GuidedPopup
+  fullScreenContainerForPressable: { // New style for the Pressable parent in Modal
+    flex: 1, 
+    // No background color here, overlay parts will handle dimming
+  },
+  fullScreenTouchableOverlay: { // Used as fallback when highlightLayout is null
+    position: 'absolute',
+    top: 0, bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+  },
+  popupContainerAdvanced: {
+    position: 'absolute',
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 20, 
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  popupArrowAdvanced: {
+    position: 'absolute', width: 0, height: 0, borderStyle: 'solid',
+  },
+  popupBodyAdvanced: { alignItems: 'center' },
+  popupTextAdvanced: {
+    fontSize: 15, color: colors.darkGray, textAlign: 'center',
+    marginBottom: 18, lineHeight: 22, fontWeight: '400',
+  },
+  popupDismissButtonAdvanced: {
+    backgroundColor: colors.primary,
+    paddingVertical: 10, paddingHorizontal: 25, borderRadius: 25, alignSelf: 'center',
+  },
+  popupDismissButtonTextAdvanced: {
+    color: colors.white, fontSize: 15, fontWeight: '600',
   },
 }); 

@@ -52,7 +52,7 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
             raise FileNotFoundError("Collage image not created or missing.")
 
         # ✅ Predict exercise from collage
-        prediction = predict_exercise(collage_paths[0], model="claude-3-haiku")
+        prediction = predict_exercise(collage_paths[0], model="claude-3-haiku-20240307")
 
         # ✅ Combine equipment and movement name for frontend use
         equipment = prediction.get("equipment", "").capitalize()
