@@ -7,8 +7,7 @@ import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 import NameScreen from '../screens/onboarding/NameScreen';
 import GenderScreen from '../screens/onboarding/GenderScreen';
 import DateOfBirthScreen from '../screens/onboarding/DateOfBirthScreen';
-import WeightPreferenceScreen from '../screens/onboarding/WeightPreferenceScreen';
-import BodyWeightScreen from '../screens/onboarding/BodyWeightScreen';
+import UserWeightScreen from '../screens/onboarding/UserWeightScreen';
 import CountryScreen from '../screens/onboarding/CountryScreen';
 import UsernameScreen from '../screens/onboarding/UsernameScreen';
 import OnboardingSummaryScreen from '../screens/onboarding/OnboardingSummaryScreen';
@@ -46,20 +45,19 @@ const ONBOARDING_SCREENS = {
   Name: 0,
   Gender: 1,
   DateOfBirth: 2,
-  WeightPreference: 3,
-  BodyWeight: 4,
-  Country: 5,
-  Username: 6,
-  OnboardingSummary: 7,
-  VideoPrompt: 8,
-  ChooseDemoPath: 9,
-  DemoVideo: 10,
-  ManualDemo: 10, // Same level as DemoVideo (alternative paths)
-  VideoReview: 11,
-  Paywall: 12
+  UserWeight: 3,
+  Country: 4,
+  Username: 5,
+  OnboardingSummary: 6,
+  VideoPrompt: 7,
+  ChooseDemoPath: 8,
+  DemoVideo: 9,
+  ManualDemo: 9,
+  VideoReview: 10,
+  Paywall: 11
 };
 
-const TOTAL_ONBOARDING_STEPS = Object.keys(ONBOARDING_SCREENS).length - 5; // Subtract the extended flow screens from total
+const TOTAL_ONBOARDING_STEPS = ONBOARDING_SCREENS.VideoPrompt + 1; // VideoPrompt is step 7 (0-indexed), so 8 total steps for progress bar
 
 // Premium stack navigator configuration to prevent screen overlapping
 const screenOptions = {
@@ -423,22 +421,28 @@ export default function AuthStack({ setSession, initialRouteName = 'Login', init
               options={screenOptions}
             />
             <Stack.Screen 
-              name="WeightPreference" 
-              component={WeightPreferenceScreen}
-              options={screenOptions}
-            />
-            <Stack.Screen 
-              name="BodyWeight" 
-              component={BodyWeightScreen}
+              name="UserWeight" 
+              component={UserWeightScreen}
               options={{
                 ...screenOptions,
-                // Special screen with only top back button
                 gestureEnabled: true
               }}
             />
-            <Stack.Screen name="Country" component={CountryScreen} />
-            <Stack.Screen name="Username" component={UsernameScreen} />
-            <Stack.Screen name="OnboardingSummary" component={OnboardingSummaryScreen} />
+            <Stack.Screen 
+              name="Country" 
+              component={CountryScreen}
+              options={screenOptions}
+            />
+            <Stack.Screen 
+              name="Username" 
+              component={UsernameScreen}
+              options={screenOptions}
+            />
+            <Stack.Screen 
+              name="OnboardingSummary" 
+              component={OnboardingSummaryScreen}
+              options={screenOptions}
+            />
             <Stack.Screen name="VideoPrompt" component={VideoPromptScreen} />
             <Stack.Screen name="ChooseDemoPath" component={ChooseDemoPathScreen} />
             <Stack.Screen name="DemoVideo" component={DemoVideoScreen} />

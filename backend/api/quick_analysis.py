@@ -4,26 +4,31 @@ import tempfile
 import os
 
 from backend.ai.analyze.exercise_prediction import predict_exercise
-from backend.ai.analyze.export_quick_keyframes import export_quick_keyframes
+from backend.ai.analyze.export_quick_keyframes import export_evenly_spaced_collage
 
 app = APIRouter()
 
 @app.post("/quick_exercise_prediction")
 async def quick_exercise_prediction(video: UploadFile = File(...)):
     try:
-        # ✅ Save video to temporary file
+        # ✅ Save video to temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp.write(await video.read())
             tmp_path = tmp.name
 
-        # ✅ Extract keyframes at 15/30/45/60/75/90% and generate collage
-        collage_path = export_quick_keyframes(tmp_path)
+        # ✅ Export a collage using 6 evenly spaced frames
+        collage_paths = export_evenly_spaced_collage(tmp_path, total_frames=6)
+        print("✅ Collage paths:", collage_paths)
 
-        # ✅ Run GPT exercise prediction on collage
-        prediction = predict_exercise(collage_path)
+        if not collage_paths or not os.path.exists(collage_paths[0]):
+            raise FileNotFoundError("Collage image not created or missing.")
 
-        # ✅ Return flattened exercise name
+        # ✅ Predict exercise from collage
+        prediction = predict_exercise(collage_paths[0])
+
+        # ✅ Flatten prediction name for frontend use
         exercise_name = prediction.get("movement", "Unknown")
+
         return {"exercise_name": exercise_name}
 
     except Exception as e:

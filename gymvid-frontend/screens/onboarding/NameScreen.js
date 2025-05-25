@@ -293,91 +293,63 @@ export default function NameScreen({ navigation, route }) {
     // Handle Get Started button press - triggers the reveal sequence
     const handleGetStarted = () => {
       if (isRevealed) return;
-      setIsRevealed(true);
       
-      // Stop the pulse animation
       getStartedButtonPulse.stopAnimation();
       getStartedButtonPulse.setValue(1);
-      arrowBounceAnim.stopAnimation(); // Stop the arrow bounce
-      arrowBounceAnim.setValue(0); // Reset its position
+      arrowBounceAnim.stopAnimation(); 
+      arrowBounceAnim.setValue(0); 
       
-      // Create the reveal sequence
-      Animated.sequence([
-        // First, scale down the Get Started button and fade out welcome content
-        Animated.parallel([
-          Animated.timing(getStartedButtonScale, {
-            toValue: 0.8,
-            duration: 200,
-            useNativeDriver: true,
-            easing: Easing.in(Easing.cubic),
-          }),
-          Animated.timing(getStartedButtonAnim, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-            easing: Easing.in(Easing.cubic),
-          }),
-          // Fade out the welcome content
-          Animated.timing(welcomeContentFadeOut, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-            easing: Easing.out(Easing.cubic),
-          })
-        ]),
+      // Fade out welcome screen components
+      Animated.parallel([
+        Animated.timing(getStartedButtonScale, { toValue: 0.8, duration: 200, useNativeDriver: true, easing: Easing.in(Easing.cubic) }),
+        Animated.timing(getStartedButtonAnim, { toValue: 0, duration: 200, useNativeDriver: true, easing: Easing.in(Easing.cubic) }),
+        Animated.timing(welcomeContentFadeOut, { toValue: 0, duration: 400, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+        Animated.timing(welcomeFadeAnim, { toValue: 0, duration: 400, useNativeDriver: true, easing: Easing.out(Easing.cubic) })
+      ]).start(() => {
+        // After welcome screen fades, THEN set isRevealed to true
+        // This will trigger the conditional rendering of the main content
+        setIsRevealed(true);
         
-        // Small delay before content appears
-        Animated.delay(200),
-        
-        // Reveal name input content
-        Animated.parallel([
-          // Set content reveal for overall opacity
-          Animated.timing(contentRevealAnim, {
+        // Now, animate in the main content that has just been mounted
+        // Ensure contentRevealAnim is reset if it wasn't already 0
+        contentRevealAnim.setValue(0); 
+        titleAnim.setValue(20); // Reset to initial off-screen/invisible state
+        slideAnim.setValue(30); // Reset to initial off-screen/invisible state
+        inputAnim.setValue(0);  // Reset to initial invisible state
+
+        Animated.sequence([
+          Animated.timing(contentRevealAnim, { 
             toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-            easing: Easing.out(Easing.cubic),
-          }),
-          
-          // Main fade animation
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 800,
+            duration: 300, 
             useNativeDriver: true,
             easing: Easing.out(Easing.quad),
+            delay: 50 // Small delay to ensure state update has propagated
           }),
-          
-          // Title and input animations
-          Animated.sequence([
-            Animated.parallel([
-              Animated.timing(titleAnim, {
-                toValue: 0,
-                duration: 700,
-                useNativeDriver: true,
-                easing: Easing.out(Easing.cubic),
-              }),
-              Animated.timing(slideAnim, {
-                toValue: 0,
-                duration: 700,
-                useNativeDriver: true,
-                easing: Easing.out(Easing.cubic),
-              }),
-            ]),
-            
-            // Input animation
-            Animated.timing(inputAnim, {
-              toValue: 1,
-              duration: 600,
-              useNativeDriver: true,
-              easing: Easing.out(Easing.cubic),
+          Animated.parallel([ 
+            Animated.timing(titleAnim, { 
+              toValue: 0, 
+              duration: 700, 
+              useNativeDriver: true, 
+              easing: Easing.out(Easing.cubic) 
+            }),
+            Animated.timing(slideAnim, { 
+              toValue: 0, 
+              duration: 700, 
+              useNativeDriver: true, 
+              easing: Easing.out(Easing.cubic) 
+            }),
+            Animated.timing(inputAnim, { 
+              toValue: 1, 
+              duration: 600, 
+              useNativeDriver: true, 
+              easing: Easing.out(Easing.cubic) 
             })
           ])
-        ])
-      ]).start(() => {
-        // Focus the input after reveal
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
+        ]).start(() => {
+          if (inputRef.current) {
+            inputRef.current.focus();
+          }
+        });
       });
     };
 
@@ -500,261 +472,239 @@ export default function NameScreen({ navigation, route }) {
     };
 
     return (
-      <Animated.View 
-        style={[
-          styles.container, 
-          { 
-            opacity: welcomeFadeAnim,
-            backgroundColor: '#FFFFFF' 
-          }
-        ]}
-      >
+      <View style={styles.container}>
         <SafeAreaView style={styles.safeContainer}>
           {/* Header spacer - to account for the global progress bar */}
           <View style={styles.header} />
           
-          {/* Welcome screen content */}
-          <Animated.View
-            style={[
-              styles.welcomeContainer,
-              {
-                opacity: welcomeContentFadeOut,
-                transform: [
-                  {
-                    scale: welcomeContentFadeOut.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.9, 1],
-                    })
-                  }
-                ],
-                pointerEvents: isRevealed ? 'none' : 'auto',
-              }
-            ]}
-          >
-            <Animated.View style={styles.welcomeContent}>
-              <Animated.Text
-                style={[
-                  styles.welcomeTitle,
-                  {
-                    opacity: welcomeTitleAnim,
-                    transform: [
-                      {
-                        translateY: welcomeTitleAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [-20, 0],
-                        })
-                      },
-                      {
-                        scale: welcomeTitleAnim.interpolate({
-                          inputRange: [0, 0.5, 1],
-                          outputRange: [0.9, 1.05, 1],
-                        })
-                      }
-                    ]
-                  }
-                ]}
-              >
-                Welcome to
-              </Animated.Text>
+          {/* Welcome screen content - conditionally rendered or animated out */}
+          {!isRevealed && (
+            <Animated.View
+              style={[
+                styles.welcomeContainer,
+                {
+                  opacity: welcomeFadeAnim,
+                }
+              ]}
+            >
+              <Animated.View style={styles.welcomeContent}>
+                <Animated.Text
+                  style={[
+                    styles.welcomeTitle,
+                    {
+                      opacity: welcomeTitleAnim,
+                      transform: [
+                        {
+                          translateY: welcomeTitleAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-20, 0],
+                          })
+                        },
+                        {
+                          scale: welcomeTitleAnim.interpolate({
+                            inputRange: [0, 0.5, 1],
+                            outputRange: [0.9, 1.05, 1],
+                          })
+                        }
+                      ]
+                    }
+                  ]}
+                >
+                  Welcome to
+                </Animated.Text>
+                
+                <Animated.Image
+                  source={require('../../assets/images/logo.png')}
+                  style={[
+                    styles.logoImage,
+                    {
+                      opacity: welcomeLogoAnim,
+                      transform: [
+                        {
+                          scale: welcomeLogoAnim.interpolate({
+                            inputRange: [0, 0.5, 1],
+                            outputRange: [0.8, 1.1, 1],
+                          })
+                        },
+                        {
+                          translateY: welcomeLogoAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [20, 0],
+                          })
+                        }
+                      ]
+                    }
+                  ]}
+                  resizeMode="contain"
+                />
+                
+                <Animated.Text
+                  style={[
+                    styles.welcomeSubtitle,
+                    {
+                      opacity: welcomeSubtitleAnim,
+                      transform: [
+                        {
+                          translateY: welcomeSubtitleAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [10, 0],
+                          })
+                        }
+                      ]
+                    }
+                  ]}
+                >
+                  Help us get to know you!
+                </Animated.Text>
+
+                {/* Animated Arrow */}
+                <Animated.View
+                  style={[
+                    styles.arrowContainer,
+                    {
+                      opacity: welcomeArrowAnim,
+                      transform: [
+                        {
+                          translateY: welcomeArrowAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [20, 0], // Initial slide up
+                          })
+                        },
+                        {
+                          translateY: arrowBounceAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, 8], // Bounces 8px up and down
+                          })
+                        },
+                        {
+                          scale: welcomeArrowAnim.interpolate({
+                            inputRange: [0, 0.5, 1],
+                            outputRange: [0.5, 1.1, 1], // Initial scale in
+                          })
+                        }
+                      ]
+                    }
+                  ]}
+                >
+                  <Ionicons name="arrow-down" size={32} color={colors.primary} />
+                </Animated.View>
+
+              </Animated.View>
               
-              <Animated.Image
-                source={require('../../assets/images/logo.png')}
+              {/* Get Started button */}
+              <Animated.View
                 style={[
-                  styles.logoImage,
+                  styles.getStartedButtonContainer,
                   {
-                    opacity: welcomeLogoAnim,
+                    opacity: getStartedButtonAnim,
                     transform: [
                       {
-                        scale: welcomeLogoAnim.interpolate({
-                          inputRange: [0, 0.5, 1],
-                          outputRange: [0.8, 1.1, 1],
-                        })
+                        scale: Animated.multiply(getStartedButtonScale, getStartedButtonPulse)
                       },
                       {
-                        translateY: welcomeLogoAnim.interpolate({
+                        translateY: getStartedButtonAnim.interpolate({
                           inputRange: [0, 1],
                           outputRange: [20, 0],
                         })
                       }
-                    ]
-                  }
-                ]}
-                resizeMode="contain"
-              />
-              
-              <Animated.Text
-                style={[
-                  styles.welcomeSubtitle,
-                  {
-                    opacity: welcomeSubtitleAnim,
-                    transform: [
-                      {
-                        translateY: welcomeSubtitleAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [10, 0],
-                        })
-                      }
-                    ]
+                    ],
                   }
                 ]}
               >
-                Help us get to know you!
-              </Animated.Text>
-
-              {/* Animated Arrow */}
-              <Animated.View
-                style={[
-                  styles.arrowContainer,
-                  {
-                    opacity: welcomeArrowAnim,
-                    transform: [
-                      {
-                        translateY: welcomeArrowAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [20, 0], // Initial slide up
-                        })
-                      },
-                      {
-                        translateY: arrowBounceAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, 8], // Bounces 8px up and down
-                        })
-                      },
-                      {
-                        scale: welcomeArrowAnim.interpolate({
-                          inputRange: [0, 0.5, 1],
-                          outputRange: [0.5, 1.1, 1], // Initial scale in
-                        })
-                      }
-                    ]
-                  }
-                ]}
-              >
-                <Ionicons name="arrow-down" size={32} color={colors.primary} />
-              </Animated.View>
-
-            </Animated.View>
-            
-            {/* Get Started button */}
-            <Animated.View
-              style={[
-                styles.getStartedButtonContainer,
-                {
-                  opacity: getStartedButtonAnim,
-                  transform: [
-                    {
-                      scale: Animated.multiply(getStartedButtonScale, getStartedButtonPulse)
-                    },
-                    {
-                      translateY: getStartedButtonAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [20, 0],
-                      })
-                    }
-                  ],
-                }
-              ]}
-            >
-              <TouchableOpacity
-                style={styles.getStartedButton}
-                onPress={handleGetStarted}
-                onPressIn={handleGetStartedButtonPressIn}
-                onPressOut={handleGetStartedButtonPressOut}
-                activeOpacity={0.9}
-                disabled={isRevealed}
-              >
-                <LinearGradient
-                  colors={['#0099FF', '#0066DD', '#0044BB']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.getStartedGradient}
+                <TouchableOpacity
+                  style={styles.getStartedButton}
+                  onPress={handleGetStarted}
+                  onPressIn={handleGetStartedButtonPressIn}
+                  onPressOut={handleGetStartedButtonPressOut}
+                  activeOpacity={0.9}
+                  disabled={isRevealed}
                 >
-                  <Text style={styles.getStartedButtonText}>Get Started</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+                  <LinearGradient
+                    colors={['#0099FF', '#0066DD', '#0044BB']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.getStartedGradient}
+                  >
+                    <Text style={styles.getStartedButtonText}>Get Started</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animated.View>
             </Animated.View>
-          </Animated.View>
+          )}
           
           {/* Original content that reveals after Get Started is pressed */}
-          <Animated.View
-            style={[
-              styles.contentContainer,
-              {
-                opacity: contentRevealAnim,
-                transform: [
-                  {
-                    translateY: contentRevealAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [30, 0],
-                    })
-                  }
-                ],
-                pointerEvents: isRevealed ? 'auto' : 'none',
-              }
-            ]}
-          >
-            <Animated.Text
+          {isRevealed && (
+            <Animated.View
               style={[
-                styles.titleText,
-                { 
-                  opacity: fadeAnim,
-                  transform: [{ translateY: titleAnim }] 
+                styles.contentContainer, 
+                {
+                  opacity: contentRevealAnim,
                 }
               ]}
             >
-              What's your name?
-            </Animated.Text>
-            <Animated.View 
-              style={{ 
-                width: '100%', 
-                transform: [{ translateX: slideAnim }],
-                opacity: fadeAnim
-              }}
-            >
-              <View style={styles.formContainer}>
-                <Animated.View 
-                  style={{ 
-                    opacity: inputAnim
-                  }}
-                >
-                  <View style={styles.nameInputContainer}>
-                    <View style={styles.inputWrapper}>
-                      <TextInput
-                        ref={inputRef}
-                        style={styles.nameInput}
-                        value={name}
-                        onChangeText={handleNameChange}
-                        placeholder="Enter your name"
-                        placeholderTextColor="#AAAAAA"
-                        autoCapitalize="words"
-                        autoCorrect={false}
-                        textAlign="center"
-                        returnKeyType="done"
-                        onSubmitEditing={handleContinue}
-                      />
-                      <TouchableOpacity 
-                        style={styles.nextButton}
-                        onPress={handleContinue}
-                        disabled={loading || !name.trim()}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons 
-                          name="arrow-forward" 
-                          size={24} 
-                          color={!name.trim() ? colors.lightGray : colors.primary} 
+              <Animated.Text
+                style={[
+                  styles.titleText,
+                  { 
+                    opacity: titleAnim.interpolate({ inputRange: [0, 20], outputRange: [1, 0] }),
+                    transform: [{ translateY: titleAnim }] 
+                  }
+                ]}
+              >
+                What's your name?
+              </Animated.Text>
+              <Animated.View 
+                style={{ 
+                  width: '100%', 
+                  transform: [{ translateX: slideAnim }],
+                  opacity: inputAnim
+                }}
+              >
+                <View style={styles.formContainer}>
+                  <Animated.View 
+                    style={{ 
+                      opacity: inputAnim
+                    }}
+                  >
+                    <View style={styles.nameInputContainer}>
+                      <View style={styles.inputWrapper}>
+                        <TextInput
+                          ref={inputRef}
+                          style={styles.nameInput}
+                          value={name}
+                          onChangeText={handleNameChange}
+                          placeholder="Enter your name"
+                          placeholderTextColor="#AAAAAA"
+                          autoCapitalize="words"
+                          autoCorrect={false}
+                          textAlign="center"
+                          returnKeyType="done"
+                          onSubmitEditing={handleContinue}
                         />
-                      </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={styles.nextButton}
+                          onPress={handleContinue}
+                          disabled={loading || !name.trim()}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons 
+                            name="arrow-forward" 
+                            size={24} 
+                            color={!name.trim() ? colors.lightGray : colors.primary} 
+                          />
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
-                  <Text style={styles.nameHelper}>
-                    This is how we'll address you in the app
-                  </Text>
-                </Animated.View>
-              </View>
+                    <Text style={styles.nameHelper}>
+                      This is how we'll address you in the app
+                    </Text>
+                  </Animated.View>
+                </View>
+              </Animated.View>
             </Animated.View>
-          </Animated.View>
+          )}
         </SafeAreaView>
-      </Animated.View>
+      </View>
     );
   } catch (error) {
     // Error boundary to prevent the app from crashing

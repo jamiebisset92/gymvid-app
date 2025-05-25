@@ -2,48 +2,33 @@ import os
 import cv2
 import numpy as np
 
-def export_quick_keyframes(video_path: str, output_path: str = "quick_collage.jpg") -> str:
-    """
-    Extracts 6 evenly spaced frames from the video and creates a horizontal collage.
-    Fastest possible method using OpenCV (no pose detection).
+def export_evenly_spaced_collage(video_path: str, total_frames: int = 6, output_dir: str = "quick_collages") -> list:
+    os.makedirs(output_dir, exist_ok=True)
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError(f"Cannot open video file: {video_path}")
 
-    Args:
-        video_path (str): Path to the input video.
-        output_path (str): Path to save the collage image.
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if frame_count == 0:
+        raise ValueError("Video contains no frames")
 
-    Returns:
-        str: Path to the saved collage image.
-    """
-    capture = cv2.VideoCapture(video_path)
-    if not capture.isOpened():
-        raise ValueError(f"Failed to open video: {video_path}")
-
-    total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-    frame_indices = [
-        int(total_frames * 0.15),
-        int(total_frames * 0.30),
-        int(total_frames * 0.45),
-        int(total_frames * 0.60),
-        int(total_frames * 0.75),
-        int(total_frames * 0.90)
-    ]
-
-    frames = []
-    for idx in frame_indices:
-        capture.set(cv2.CAP_PROP_POS_FRAMES, idx)
-        ret, frame = capture.read()
+    selected_frames = []
+    for i in range(1, total_frames + 1):
+        frame_no = int((i / (total_frames + 1)) * frame_count)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
+        ret, frame = cap.read()
         if ret:
-            resized = cv2.resize(frame, (256, 256))  # Optional: standardize size
-            frames.append(resized)
-        else:
-            print(f"⚠️ Could not extract frame at index {idx}")
+            selected_frames.append(frame)
 
-    capture.release()
+    cap.release()
 
-    if not frames:
-        raise ValueError("No frames were extracted successfully.")
+    if not selected_frames:
+        raise ValueError("No frames could be extracted")
 
-    collage = np.hstack(frames)
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    cv2.imwrite(output_path, collage)
-    return output_path
+    # Create a collage image (1 row)
+    resized = [cv2.resize(f, (256, 256)) for f in selected_frames]
+    collage = np.hstack(resized)
+    collage_path = os.path.join(output_dir, "quick_collage.jpg")
+    cv2.imwrite(collage_path, collage)
+
+    return [collage_path]

@@ -177,7 +177,7 @@ export default function DateOfBirthScreen({ navigation, route }) {
       }).start(() => {
         // Navigate to the next screen only after screen is completely hidden
         // Pass all necessary data to next screen
-        navigation.navigate('WeightPreference', { 
+        navigation.navigate('UserWeight', {
           userId,
           email: userEmail,
           fromSignUp
