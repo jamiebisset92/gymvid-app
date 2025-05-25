@@ -1,5 +1,6 @@
 from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
+import numpy as np
 import tempfile
 import os
 import cv2
