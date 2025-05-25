@@ -9,7 +9,7 @@ from backend.ai.analyze.exercise_prediction import predict_exercise
 
 app = APIRouter()
 
-# ✅ New utility: Extract collage from 4 evenly spaced frames, resized to 192x192, with JPEG compression
+# ✅ New utility: Extract collage from 4 evenly spaced frames, resized to 128x128, with JPEG compression
 
 def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_dir: str = "quick_collages") -> list:
     os.makedirs(output_dir, exist_ok=True)
@@ -52,7 +52,7 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
             raise FileNotFoundError("Collage image not created or missing.")
 
         # ✅ Predict exercise from collage
-        prediction = predict_exercise(collage_paths[0], model="claude-3-haiku-20240307")
+        prediction = predict_exercise(collage_paths[0], model="claude-3-haiku")
 
         # ✅ Combine equipment and movement name for frontend use
         equipment = prediction.get("equipment", "").capitalize()

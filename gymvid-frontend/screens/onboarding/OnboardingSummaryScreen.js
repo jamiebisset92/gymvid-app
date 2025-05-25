@@ -1164,7 +1164,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
                   }
                 ]}
               >
-                Welcome to GymVid!
+                Your Profile is Done!
               </Animated.Text>
               
               <Animated.Text
@@ -1184,7 +1184,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
                   }
                 ]}
               >
-                You're all set up and ready to go!
+                Here's a summary of your details...
               </Animated.Text>
             </View>
             
@@ -1228,8 +1228,6 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
                 </View>
               ) : (
                 <View style={styles.profileContainer}>
-                  <Text style={styles.profileSectionTitle}>Your Profile</Text>
-                  
                   <ProfileItem 
                     label="Team"
                     value={userData.country}
@@ -1257,6 +1255,10 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
                     animValue={weightAnim}
                     icon="weight"
                   />
+                  
+                  <Text style={styles.helpText}>
+                    These details will be used if you decide to participate in the <Text style={styles.helpTextBold}>GymVid Games</Text> <Text style={styles.helpTextItalic}>~ (more on this later)</Text>
+                  </Text>
                 </View>
               )}
             </Animated.View>
@@ -1368,7 +1370,7 @@ const styles = StyleSheet.create({
   subtitleText: {
     fontSize: 18,
     fontWeight: '400',
-    marginBottom: 20,
+    marginBottom: 0,
     textAlign: 'center',
     color: colors.gray,
     width: '100%',
@@ -1394,13 +1396,6 @@ const styles = StyleSheet.create({
   profileContainer: {
     width: '100%',
     paddingHorizontal: 20,
-  },
-  profileSectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.darkGray,
-    marginBottom: 15,
-    marginLeft: 5,
   },
   profileItem: {
     borderRadius: 16,
@@ -1567,5 +1562,19 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 0,
     marginBottom: 0,
+  },
+  helpText: {
+    marginTop: 15,
+    marginBottom: 20,
+    color: colors.gray,
+    fontSize: 14,
+    lineHeight: 25,
+    textAlign: 'center',
+  },
+  helpTextItalic: {
+    fontStyle: 'italic',
+  },
+  helpTextBold: {
+    fontWeight: 'bold',
   },
 }); 
