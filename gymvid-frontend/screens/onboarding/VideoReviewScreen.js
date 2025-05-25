@@ -39,7 +39,15 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const VIDEO_HEIGHT = SCREEN_WIDTH * 1.5; // 3:2 aspect ratio
 
 // World-Class GuidedPopup Component Definition
-const GuidedPopup = ({ visible, text, targetLayout, onClose, forcePositionBelow = false, highlightLayout = null }) => {
+const GuidedPopup = ({ 
+  visible, 
+  text, 
+  targetLayout, // For positioning the popup box itself
+  onClose, 
+  forcePositionBelow = false, 
+  highlightLayout, // For the spotlight hole (raw layout of content to highlight)
+  screenBackgroundColor = colors.background // Screen's actual background color
+}) => {
   const animValue = useRef(new Animated.Value(0)).current;
   const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0, width: 0 });
   const [arrowStyle, setArrowStyle] = useState({});
@@ -48,18 +56,16 @@ const GuidedPopup = ({ visible, text, targetLayout, onClose, forcePositionBelow 
   const ARROW_SIZE = 10;
   const POPUP_MARGIN_FROM_TARGET = 15;
   const SCREEN_PADDING = 15;
-  const HIGHLIGHT_PADDING = 12; // Padding around the highlighted element
-  const HIGHLIGHT_BORDER_RADIUS = 12; // Rounded corners for spotlight
+  const HIGHLIGHT_PADDING = 12; 
+  const HIGHLIGHT_BORDER_RADIUS = 16; // Increased for more pronounced rounding
   const screenDims = Dimensions.get('window');
 
   useEffect(() => {
     if (visible && targetLayout) {
       const popupWidth = screenDims.width - (2 * SCREEN_PADDING);
       const estimatedPopupHeight = text.length > 70 ? 100 : 85;
-
-      let pTop, pLeft;
+      let pTop, pLeft = SCREEN_PADDING;
       let arrStyle = {};
-      pLeft = SCREEN_PADDING;
 
       if (forcePositionBelow) {
         pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET;
@@ -108,17 +114,17 @@ const GuidedPopup = ({ visible, text, targetLayout, onClose, forcePositionBelow 
         toValue: 0, duration: 200, easing: Easing.ease, useNativeDriver: true,
       }).start(() => setIsPopupVisible(false));
     }
-  }, [visible, targetLayout, text, forcePositionBelow, screenDims]);
+  }, [visible, targetLayout, text, forcePositionBelow, screenDims]); // Removed popupPosition.width from deps
 
-  if (!isPopupVisible || !targetLayout) return null;
+  if (!isPopupVisible) return null; // Only check isPopupVisible now
 
-  const overlayStyle = {
+  const overlayPartStyle = {
     position: 'absolute',
     backgroundColor: 'rgba(0, 0, 0, 0.25)',
     opacity: animValue,
   };
 
-  // Calculate expanded highlight area with padding
+  // Calculate expanded highlight area based on the raw highlightLayout and padding
   const expandedHighlight = highlightLayout ? {
     x: highlightLayout.x - HIGHLIGHT_PADDING,
     y: highlightLayout.y - HIGHLIGHT_PADDING,
@@ -126,109 +132,61 @@ const GuidedPopup = ({ visible, text, targetLayout, onClose, forcePositionBelow 
     height: highlightLayout.height + (HIGHLIGHT_PADDING * 2),
   } : null;
 
+  const cornerEaterStyle = {
+      position: 'absolute',
+      width: HIGHLIGHT_BORDER_RADIUS,
+      height: HIGHLIGHT_BORDER_RADIUS,
+      backgroundColor: screenBackgroundColor, // Use the screen's actual background
+      opacity: animValue,
+  };
+
   return (
     <Modal transparent visible={isPopupVisible} animationType="none" onRequestClose={onClose}>
       <Pressable style={styles.fullScreenContainerForPressable} onPress={onClose}>
-        {/* Spotlight Effect with rounded corners */}
         {expandedHighlight ? (
           <>
-            {/* Top overlay */}
-            <Animated.View style={[overlayStyle, { 
-              top: 0, 
-              left: 0, 
-              width: screenDims.width, 
-              height: expandedHighlight.y 
-            }]} />
-            
-            {/* Bottom overlay */}
-            <Animated.View style={[overlayStyle, { 
-              top: expandedHighlight.y + expandedHighlight.height, 
-              left: 0, 
-              width: screenDims.width, 
-              height: screenDims.height - (expandedHighlight.y + expandedHighlight.height) 
-            }]} />
-            
-            {/* Left overlay */}
-            <Animated.View style={[overlayStyle, { 
-              top: expandedHighlight.y, 
-              left: 0, 
-              width: expandedHighlight.x, 
-              height: expandedHighlight.height 
-            }]} />
-            
-            {/* Right overlay */}
-            <Animated.View style={[overlayStyle, { 
-              top: expandedHighlight.y, 
-              left: expandedHighlight.x + expandedHighlight.width, 
-              width: screenDims.width - (expandedHighlight.x + expandedHighlight.width), 
-              height: expandedHighlight.height 
-            }]} />
-            
-            {/* Rounded corner masks for spotlight effect */}
-            {/* Top-left corner */}
-            <Animated.View style={[overlayStyle, {
-              top: expandedHighlight.y,
-              left: expandedHighlight.x,
-              width: HIGHLIGHT_BORDER_RADIUS,
-              height: HIGHLIGHT_BORDER_RADIUS,
-              borderTopLeftRadius: HIGHLIGHT_BORDER_RADIUS,
-            }]} />
-            
-            {/* Top-right corner */}
-            <Animated.View style={[overlayStyle, {
-              top: expandedHighlight.y,
-              left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS,
-              width: HIGHLIGHT_BORDER_RADIUS,
-              height: HIGHLIGHT_BORDER_RADIUS,
-              borderTopRightRadius: HIGHLIGHT_BORDER_RADIUS,
-            }]} />
-            
-            {/* Bottom-left corner */}
-            <Animated.View style={[overlayStyle, {
-              top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS,
-              left: expandedHighlight.x,
-              width: HIGHLIGHT_BORDER_RADIUS,
-              height: HIGHLIGHT_BORDER_RADIUS,
-              borderBottomLeftRadius: HIGHLIGHT_BORDER_RADIUS,
-            }]} />
-            
-            {/* Bottom-right corner */}
-            <Animated.View style={[overlayStyle, {
-              top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS,
-              left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS,
-              width: HIGHLIGHT_BORDER_RADIUS,
-              height: HIGHLIGHT_BORDER_RADIUS,
-              borderBottomRightRadius: HIGHLIGHT_BORDER_RADIUS,
-            }]} />
+            {/* Main overlay parts forming a rectangle around expandedHighlight */}
+            <Animated.View style={[overlayPartStyle, { top: 0, left: 0, width: screenDims.width, height: expandedHighlight.y }]} />
+            <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y + expandedHighlight.height, left: 0, width: screenDims.width, height: screenDims.height - (expandedHighlight.y + expandedHighlight.height) }]} />
+            <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y, left: 0, width: expandedHighlight.x, height: expandedHighlight.height }]} />
+            <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y, left: expandedHighlight.x + expandedHighlight.width, width: screenDims.width - (expandedHighlight.x + expandedHighlight.width), height: expandedHighlight.height }]} />
+
+            {/* "Corner Eaters" to create the rounded spotlight illusion */}
+            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y, left: expandedHighlight.x, borderBottomRightRadius: HIGHLIGHT_BORDER_RADIUS }]} />
+            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y, left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS, borderBottomLeftRadius: HIGHLIGHT_BORDER_RADIUS }]} />
+            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS, left: expandedHighlight.x, borderTopRightRadius: HIGHLIGHT_BORDER_RADIUS }]} />
+            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS, left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS, borderTopLeftRadius: HIGHLIGHT_BORDER_RADIUS }]} />
           </>
         ) : (
           <Animated.View style={[styles.fullScreenTouchableOverlay, { opacity: animValue }]} />
         )}
 
-        {/* Popup Content */}
-        <Animated.View 
-          style={[
-            styles.popupContainerAdvanced,
-            {
-              top: popupPosition.top,
-              left: popupPosition.left,
-              width: popupPosition.width,
-              opacity: animValue,
-              transform: [
-                { scale: animValue.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) },
-                { translateY: animValue.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }
-              ],
-            },
-          ]}
-        >
-          <View style={[styles.popupArrowAdvanced, arrowStyle]} />
-          <View style={styles.popupBodyAdvanced}>
-            <Text style={styles.popupTextAdvanced}>{text}</Text>
-            <TouchableOpacity onPress={onClose} style={styles.popupDismissButtonAdvanced}>
-              <Text style={styles.popupDismissButtonTextAdvanced}>Got it!</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
+        {/* Popup Content (only render if targetLayout for the box itself is present) */}
+        {targetLayout && (
+            <Animated.View 
+              style={[
+                styles.popupContainerAdvanced,
+                {
+                  top: popupPosition.top,
+                  left: popupPosition.left,
+                  width: popupPosition.width,
+                  opacity: animValue,
+                  transform: [
+                    { scale: animValue.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) },
+                    { translateY: animValue.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }
+                  ],
+                },
+              ]}
+            >
+              <View style={[styles.popupArrowAdvanced, arrowStyle]} />
+              <View style={styles.popupBodyAdvanced}>
+                <Text style={styles.popupTextAdvanced}>{text}</Text>
+                <TouchableOpacity onPress={onClose} style={styles.popupDismissButtonAdvanced}>
+                  <Text style={styles.popupDismissButtonTextAdvanced}>Got it!</Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+        )}
       </Pressable>
     </Modal>
   );
@@ -450,29 +408,25 @@ export default function VideoReviewScreen({ navigation, route }) {
     checkTooltipsSeen();
   }, []);
   
-  // Enhanced effect to measure the loading container with better positioning
+  // Effect to measure the loading container when it becomes visible
   useEffect(() => {
     if (isLoadingExercise && exerciseLoadingRef.current && !exerciseLoadingLayout) {
-      // Increased delay to ensure proper layout
       const timer = setTimeout(() => {
         if (exerciseLoadingRef.current) {
           exerciseLoadingRef.current.measureInWindow((x, y, width, height) => {
             if (!isNaN(x) && !isNaN(y) && width > 0 && height > 0) {
-              // Adjust the measurement to include more vertical space
-              const adjustedLayout = {
-                x: x - 5, // Slight horizontal adjustment
-                y: y - 8, // Move up to better center the content
-                width: width + 10, // Add horizontal padding
-                height: height + 16, // Increase height for better coverage
-              };
-              debugLog('Measured and adjusted loading container:', adjustedLayout);
-              setExerciseLoadingLayout(adjustedLayout);
+              // Store the RAW layout. Padding will be handled by GuidedPopup.
+              debugLog('Measured RAW loading container:', { x, y, width, height });
+              setExerciseLoadingLayout({ x, y, width, height });
             }
           });
         }
-      }, 150); // Slightly longer delay for stability
-      
+      }, 150); // Delay for layout stability
       return () => clearTimeout(timer);
+    }
+    // If no longer loading, clear the layout so it can be remeasured next time
+    if (!isLoadingExercise && exerciseLoadingLayout) {
+        setExerciseLoadingLayout(null);
     }
   }, [isLoadingExercise, exerciseLoadingLayout]);
 
@@ -1226,8 +1180,9 @@ export default function VideoReviewScreen({ navigation, route }) {
       <GuidedPopup
         visible={tooltipStep === 1}
         text="Our AI will find & select the exercise for you!"
-        targetLayout={exerciseCardLayout}
-        highlightLayout={exerciseLoadingLayout}
+        targetLayout={exerciseCardLayout}      // For positioning the popup box
+        highlightLayout={exerciseLoadingLayout} // For the spotlight hole
+        screenBackgroundColor={colors.background} // Pass screen background for corner-eaters
         onClose={handleDismissTooltip}
         forcePositionBelow={true}
       />
@@ -1235,7 +1190,8 @@ export default function VideoReviewScreen({ navigation, route }) {
         visible={tooltipStep === 2}
         text="You can enter in the weight and reps while you wait and then tap the tick to log your first set."
         targetLayout={inputsRowLayout}
-        highlightLayout={null}
+        highlightLayout={null} // No spotlight for the second popup
+        screenBackgroundColor={colors.background}
         onClose={handleDismissTooltip}
       />
       
