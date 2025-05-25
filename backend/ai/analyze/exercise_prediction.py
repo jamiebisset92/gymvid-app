@@ -3,14 +3,13 @@ import base64
 import json
 import time
 from dotenv import load_dotenv
-import anthropic
-from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
+from anthropic import Client  # ✅ This is the correct import in 0.23.0+
 
-# ✅ Load API key
+# ✅ Load environment variables
 load_dotenv()
-client = anthropic.Anthropic(
-    api_key=os.getenv("CLAUDE_API_KEY"),
-)
+
+# ✅ Initialize Claude client
+client = Client(api_key=os.getenv("CLAUDE_API_KEY"))
 
 def predict_exercise(image_path: str, model: str = "claude-3-haiku-20240307") -> dict:
     with open(image_path, "rb") as f:
@@ -20,9 +19,9 @@ def predict_exercise(image_path: str, model: str = "claude-3-haiku-20240307") ->
     print("🖼️ Image size (base64):", len(b64), "characters")
     print(f"🤖 Using Claude model: {model}")
 
-    # ✅ Streaming prompt
+    # ✅ Construct prompt
     prompt = f"""
-{HUMAN_PROMPT} You are a fitness AI analyzing gym exercise keyframes.
+You are a fitness AI analyzing gym exercise keyframes.
 
 You must ALWAYS return a prediction in this strict JSON format:
 
@@ -40,32 +39,29 @@ RULES:
 - Always return valid JSON.
 
 Analyze this image: data:image/jpeg;base64,{b64}
-{AI_PROMPT}
 """
 
     try:
         start = time.time()
-
-        stream = client.completions.create(
+        response = client.messages.create(
             model=model,
-            max_tokens_to_sample=500,
-            stream=True,
-            prompt=prompt
+            max_tokens=500,
+            temperature=0,
+            system="You are a helpful AI fitness assistant.",
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
         )
 
-        content = ""
-        for event in stream:
-            if event.completion:
-                content += event.completion
-
+        message = response.content[0].text.strip("`").strip()
         print(f"⏱️ Claude call duration: {round(time.time() - start, 2)} seconds")
-        print("🧠 Raw Claude response:", content)
+        print("🧠 Raw Claude response:", message)
 
-        return json.loads(content.strip("`").strip())
+        return json.loads(message)
 
     except Exception as e:
-        print("❌ Claude Streaming Error:", str(e))
+        print("❌ Claude API Error:", str(e))
         return {
-            "error": "Streaming failed or Claude could not return valid JSON.",
+            "error": "Claude failed or returned invalid JSON.",
             "details": str(e)
         }

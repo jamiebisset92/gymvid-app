@@ -42,33 +42,39 @@ const VIDEO_HEIGHT = SCREEN_WIDTH * 1.5; // 3:2 aspect ratio
 const GuidedPopup = ({ 
   visible, 
   text, 
-  targetLayout, // For positioning the popup box itself
+  targetLayout, 
   onClose, 
   forcePositionBelow = false, 
-  highlightLayout, // For the spotlight hole (raw layout of content to highlight)
-  screenBackgroundColor = colors.background // Screen's actual background color
+  highlightLayout, 
+  screenBackgroundColor = colors.background,
+  showIconButton = false,
+  verticalOffset = 0
 }) => {
   const animValue = useRef(new Animated.Value(0)).current;
   const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0, width: 0 });
   const [arrowStyle, setArrowStyle] = useState({});
-
+  
   const ARROW_SIZE = 10;
   const POPUP_MARGIN_FROM_TARGET = 15;
   const SCREEN_PADDING = 15;
   const HIGHLIGHT_PADDING = 12; 
-  const HIGHLIGHT_BORDER_RADIUS = 16; // Increased for more pronounced rounding
-  const HIGHLIGHT_VERTICAL_OFFSET = -15; // Adjusted for higher positioning
+  const HIGHLIGHT_BORDER_RADIUS = 16;
+  const HIGHLIGHT_VERTICAL_OFFSET = -15;
   const screenDims = Dimensions.get('window');
 
+  debugLog(`GuidedPopup RENDER: text="${text}" visible_PROP=${visible} targetLayout_EXISTS=${!!targetLayout} animValue=${animValue._value}`);
+
   useEffect(() => {
+    debugLog(`GuidedPopup useEffect: text="${text}" visible_PROP=${visible} targetLayout_EXISTS=${!!targetLayout}`);
     if (visible && targetLayout) {
+      debugLog(`GuidedPopup useEffect INSIDE IF: text="${text}" - Calculating position...`);
       const popupWidth = screenDims.width - (2 * SCREEN_PADDING);
-      const estimatedPopupHeight = text.length > 70 ? 100 : 85;
+      const estimatedPopupHeight = text.length > 70 ? (showIconButton ? 70 : 100) : (showIconButton ? 55 : 85);
       let pTop, pLeft = SCREEN_PADDING;
       let arrStyleLocal = {};
 
       if (forcePositionBelow) {
-        pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET;
+        pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET + verticalOffset;
         arrStyleLocal = {
           bottom: '100%',
           left: targetLayout.x + targetLayout.width / 2 - pLeft - ARROW_SIZE,
@@ -77,7 +83,7 @@ const GuidedPopup = ({
           borderRightWidth: ARROW_SIZE, borderRightColor: 'transparent',
         };
       } else {
-        pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET;
+        pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET + verticalOffset;
         arrStyleLocal = {
           bottom: '100%',
           left: (popupWidth / 2) - ARROW_SIZE,
@@ -86,7 +92,7 @@ const GuidedPopup = ({
           borderRightWidth: ARROW_SIZE, borderRightColor: 'transparent',
         };
         if (pTop + estimatedPopupHeight > screenDims.height - SCREEN_PADDING) {
-          pTop = targetLayout.y - estimatedPopupHeight - POPUP_MARGIN_FROM_TARGET;
+          pTop = targetLayout.y - estimatedPopupHeight - POPUP_MARGIN_FROM_TARGET + verticalOffset;
           arrStyleLocal = {
             top: '100%',
             left: (popupWidth / 2) - ARROW_SIZE,
@@ -107,19 +113,28 @@ const GuidedPopup = ({
 
       Animated.spring(animValue, {
         toValue: 1, tension: 60, friction: 7, useNativeDriver: true,
-      }).start();
+      }).start(() => {
+        debugLog(`GuidedPopup ANIMATION IN COMPLETE for text="${text}"`);
+      });
     } else {
+      debugLog(`GuidedPopup useEffect ELSE: text="${text}" - Animating out or not showing (visible=${visible}, targetLayout=${!!targetLayout}).`);
       Animated.timing(animValue, {
         toValue: 0, duration: 200, easing: Easing.ease, useNativeDriver: true,
-      }).start();
+      }).start(() => {
+         debugLog(`GuidedPopup ANIMATION OUT COMPLETE for text="${text}"`);
+      });
     }
-  }, [visible, targetLayout, text, forcePositionBelow, screenDims]);
+  }, [visible, targetLayout, text, forcePositionBelow, screenDims, showIconButton, verticalOffset]);
 
-  if (!visible && animValue._value === 0) {
-    return null;
+  if (!targetLayout && visible) { 
+      debugLog(`GuidedPopup PRE-RETURN: text="${text}" IS visible but targetLayout is MISSING. Returning null.`);
+      return null; 
   }
-  if (!targetLayout && visible) {
-    debugLog("GuidedPopup: visible but targetLayout not ready for text:", text)
+  
+  // Only render the modal if visible is true. If visible is false, animations will drive opacity to 0.
+  // The modal itself being removed from tree is handled by parent not rendering this component OR Modal visible=false.
+  if (!visible && animValue._value === 0) {
+    debugLog(`GuidedPopup OPTIMIZED RETURN: text="${text}" - Not visible and animation value is 0.`);
     return null;
   }
 
@@ -150,48 +165,28 @@ const GuidedPopup = ({
       <Pressable style={styles.fullScreenContainerForPressable} onPress={onClose}>
         {expandedHighlight ? (
           <>
-            {/* Main overlay parts forming a rectangle around expandedHighlight */}
+            {/* Main overlay parts */}
             <Animated.View style={[overlayPartStyle, { top: 0, left: 0, width: screenDims.width, height: expandedHighlight.y }]} />
             <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y + expandedHighlight.height, left: 0, width: screenDims.width, height: screenDims.height - (expandedHighlight.y + expandedHighlight.height) }]} />
             <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y, left: 0, width: expandedHighlight.x, height: expandedHighlight.height }]} />
             <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y, left: expandedHighlight.x + expandedHighlight.width, width: screenDims.width - (expandedHighlight.x + expandedHighlight.width), height: expandedHighlight.height }]} />
-
-            {/* Corrected "Corner Eaters" for smooth rounded spotlight edges */}
-            <Animated.View style={[cornerEaterStyle, {
-              top: expandedHighlight.y,
-              left: expandedHighlight.x,
-              borderTopLeftRadius: HIGHLIGHT_BORDER_RADIUS // Corrected
-            }]} />
-            <Animated.View style={[cornerEaterStyle, {
-              top: expandedHighlight.y,
-              left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS,
-              borderTopRightRadius: HIGHLIGHT_BORDER_RADIUS // Corrected
-            }]} />
-            <Animated.View style={[cornerEaterStyle, {
-              top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS,
-              left: expandedHighlight.x,
-              borderBottomLeftRadius: HIGHLIGHT_BORDER_RADIUS // Corrected
-            }]} />
-            <Animated.View style={[cornerEaterStyle, {
-              top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS,
-              left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS,
-              borderBottomRightRadius: HIGHLIGHT_BORDER_RADIUS // Corrected
-            }]} />
+            
+            {/* Corner eaters for rounded effect */}
+            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y, left: expandedHighlight.x, borderTopLeftRadius: HIGHLIGHT_BORDER_RADIUS }]} />
+            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y, left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS, borderTopRightRadius: HIGHLIGHT_BORDER_RADIUS }]} />
+            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS, left: expandedHighlight.x, borderBottomLeftRadius: HIGHLIGHT_BORDER_RADIUS }]} />
+            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS, left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS, borderBottomRightRadius: HIGHLIGHT_BORDER_RADIUS }]} />
           </>
         ) : (
           <Animated.View style={[styles.fullScreenTouchableOverlay, { opacity: animValue }]} />
         )}
-
-        {/* Popup Content (only render if targetLayout for the box itself is present) */}
         {targetLayout && (
             <Animated.View 
               style={[
                 styles.popupContainerAdvanced,
                 {
-                  top: popupPosition.top,
-                  left: popupPosition.left,
-                  width: popupPosition.width,
-                  opacity: animValue,
+                  top: popupPosition.top, left: popupPosition.left, width: popupPosition.width,
+                  opacity: animValue, 
                   transform: [
                     { scale: animValue.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) },
                     { translateY: animValue.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }
@@ -200,11 +195,17 @@ const GuidedPopup = ({
               ]}
             >
               <View style={[styles.popupArrowAdvanced, arrowStyle]} />
-              <View style={styles.popupBodyAdvanced}>
-                <Text style={styles.popupTextAdvanced}>{text}</Text>
-                <TouchableOpacity onPress={onClose} style={styles.popupDismissButtonAdvanced}>
-                  <Text style={styles.popupDismissButtonTextAdvanced}>Got it!</Text>
-                </TouchableOpacity>
+              <View style={[styles.popupBodyAdvanced, showIconButton && styles.popupBodyIconButtonLayout]}>
+                <Text style={[styles.popupTextAdvanced, showIconButton && styles.popupTextIconButtonLayout]}>{text}</Text>
+                {showIconButton ? (
+                  <TouchableOpacity onPress={onClose} style={styles.popupIconDismissButton}>
+                    <Ionicons name="arrow-forward" size={28} color={colors.primary} />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity onPress={onClose} style={styles.popupDismissButtonAdvanced}>
+                    <Text style={styles.popupDismissButtonTextAdvanced}>Got it!</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </Animated.View>
         )}
@@ -374,11 +375,17 @@ export default function VideoReviewScreen({ navigation, route }) {
   const [inputsRowLayout, setInputsRowLayout] = useState(null);
   const [exerciseCardLayout, setExerciseCardLayout] = useState(null);
   const [exerciseHeaderLayout, setExerciseHeaderLayout] = useState(null);
-  const [hasSeenTooltips, setHasSeenTooltips] = useState(true);
+  const [tableAreaLayout, setTableAreaLayout] = useState(null);
+  const [hasSeenTooltips, setHasSeenTooltips] = useState(false);
+
+  // New state and ref for more robust tooltip triggering
+  const [canShowLoadingTooltip, setCanShowLoadingTooltip] = useState(false);
+  const initialLoadingRelevantActionDoneRef = useRef(false); // Tracks if video analysis has started
 
   const inputsRowRef = useRef(null);
   const exerciseCardRef = useRef(null);
   const exerciseHeaderRef = useRef(null);
+  const tableAreaRef = useRef(null);
   const thumbnailRef = useRef(null);
 
   // Add ellipsis animation effect
@@ -416,54 +423,59 @@ export default function VideoReviewScreen({ navigation, route }) {
     };
   }, [isLoadingExercise]);
 
+  // useEffect to check AsyncStorage for tooltip preference
   useEffect(() => {
     const checkTooltipsSeen = async () => {
       try {
         const seen = await AsyncStorage.getItem('hasSeenVideoReviewTooltips_v2');
-        if (seen === null) setHasSeenTooltips(false);
-        else setHasSeenTooltips(true);
+        if (seen === null) {
+          debugLog("TOOLTIP_DEBUG: No tooltip preference found, showing tooltips.");
+          setHasSeenTooltips(false);
+        } else {
+          debugLog("TOOLTIP_DEBUG: Tooltips have been seen before, not showing.");
+          setHasSeenTooltips(true);
+        }
       } catch (e) {
-        debugLog('Error reading tooltip pref', e); setHasSeenTooltips(false);
+        debugLog('Error reading tooltip pref', e); 
+        setHasSeenTooltips(false); // Default to showing tooltips if error
       }
     };
     checkTooltipsSeen();
   }, []);
   
-  // REVISED useEffect for triggering the first tooltip
+  // REVISED useEffect for triggering the first tooltip with DETAILED LOGGING
   useEffect(() => {
-    if (
-      !hasSeenTooltips &&
-      tooltipStep === 0 &&    // No tooltip currently active
-      isLoadingExercise &&    // AI is currently finding exercise
-      exerciseCardLayout &&   // Main card is laid out (for popup box positioning)
-      exerciseHeaderLayout && // Header (target for spotlight) is laid out
-      inputsRowLayout       // Inputs row (for ensuring next tooltip can be positioned) is laid out
-    ) {
-      // Double-check for valid dimensions to prevent issues with premature measurement
-      if (
-        exerciseCardLayout.width > 0 && exerciseCardLayout.height > 0 &&
-        inputsRowLayout.width > 0 && inputsRowLayout.height > 0 &&
-        exerciseHeaderLayout.width > 0 && exerciseHeaderLayout.height > 0
-      ) {
-        debugLog('Conditions met for FIRST tooltip. Setting tooltipStep to 1.');
-        // Set directly, no timeout needed as this effect runs when conditions are met
+    const cardReady = exerciseCardLayout && exerciseCardLayout.width > 0 && exerciseCardLayout.height > 0;
+    const headerReady = exerciseHeaderLayout && exerciseHeaderLayout.width > 0 && exerciseHeaderLayout.height > 0;
+    const inputsReady = inputsRowLayout && inputsRowLayout.width > 0 && inputsRowLayout.height > 0;
+
+    if (tooltipStep === 0 && !hasSeenTooltips) {
+      if (cardReady && headerReady && inputsReady) {
+        debugLog('VideoReviewScreen TOOLTIP_DEBUG: ALL LAYOUTS READY & VALID. Showing first tooltip.', 
+          { layoutCard: exerciseCardLayout, layoutHeader: exerciseHeaderLayout, layoutInputs: inputsRowLayout }
+        );
         setTooltipStep(1);
       } else {
-        debugLog('Tooltip 1 Trigger: Layouts available but dimensions might be invalid/zero. Waiting for re-measure.', 
-                  { exerciseCardLayout, inputsRowLayout, exerciseHeaderLayout });
+        // Log which specific layouts are not ready or have invalid dimensions
+        debugLog('VideoReviewScreen TOOLTIP_DEBUG: Waiting for all valid layouts. Current states:', {
+          tooltipStep,
+          hasSeenTooltips,
+          isCardLayoutValid: cardReady,
+          isHeaderLayoutValid: headerReady,
+          isInputsLayoutValid: inputsReady,
+          // Log raw values if they exist to see dimensions
+          cardDims: exerciseCardLayout ? {w: exerciseCardLayout.width, h: exerciseCardLayout.height} : null,
+          headerDims: exerciseHeaderLayout ? {w: exerciseHeaderLayout.width, h: exerciseHeaderLayout.height} : null,
+          inputsDims: inputsRowLayout ? {w: inputsRowLayout.width, h: inputsRowLayout.height} : null,
+        });
       }
+    } else if (hasSeenTooltips) {
+      debugLog('VideoReviewScreen TOOLTIP_DEBUG: Tooltips have been seen before, not showing.');
+    } else {
+      // This log helps see if tooltipStep changed from 0 for other reasons or if it's stuck
+      debugLog('VideoReviewScreen TOOLTIP_DEBUG: tooltipStep is not 0, current value is:', tooltipStep);
     }
-    // If isLoadingExercise becomes false while tooltipStep is 1 (e.g., user dismissed it fast or loading finished),
-    // we don't want to automatically hide it here. Dismissal is handled by `handleDismissTooltip`.
-    // If the conditions are no longer met for showing tooltip 1 *before it was ever shown* (tooltipStep still 0), it just won't show.
-  }, [
-    hasSeenTooltips, 
-    tooltipStep, 
-    isLoadingExercise, 
-    exerciseCardLayout, 
-    exerciseHeaderLayout, 
-    inputsRowLayout
-  ]);
+  }, [tooltipStep, exerciseCardLayout, exerciseHeaderLayout, inputsRowLayout, hasSeenTooltips]);
 
   // Function to get the current user ID
   const getCurrentUserId = async () => {
@@ -755,7 +767,14 @@ export default function VideoReviewScreen({ navigation, route }) {
   const analyzeVideo = async (videoUri) => {
     if (!videoUri) return;
 
-    // Start exercise loading animation
+    // Reset tooltip flags for new video analysis if tooltips haven't been globally dismissed
+    if (!hasSeenTooltips) { // Only reset if they might show again
+        debugLog('analyzeVideo: Resetting tooltip trigger flags for new video.');
+        initialLoadingRelevantActionDoneRef.current = false;
+        setCanShowLoadingTooltip(false); 
+        // setTooltipStep(0); // Optional: if you want to ensure all tooltips restart from scratch per video
+    }
+
     setIsLoadingExercise(true);
     setEllipsisCount(0); // Reset ellipsis animation
     
@@ -924,34 +943,28 @@ export default function VideoReviewScreen({ navigation, route }) {
     setIsEditingExercise(false);
   };
 
-  // handleDismissTooltip (remains similar)
+  // handleDismissTooltip (fixed to prevent premature marking as seen)
   const handleDismissTooltip = async () => {
+    debugLog('handleDismissTooltip called with tooltipStep:', tooltipStep);
+    
     if (tooltipStep === 1) {
-      debugLog('Dismissing tooltip 1. Current step:', tooltipStep);
-      // Start fade-out for popup 1 by setting its visible prop (via tooltipStep) to false indirectly
-      // The GuidedPopup's useEffect will handle the animation.
-      setTooltipStep(0); // Set to a neutral step to hide popup 1
-
-      // Use requestAnimationFrame to delay setting state for the next popup
-      // This allows React to process the current state update and for animations to start
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => { // Double rAF for more robustness across platforms/devices
-            debugLog('Setting tooltipStep to 2 after rAFs.');
-            setTooltipStep(2); // Show popup 2
-        });
-      });
-
+      // First popup dismissed -> show second popup
+      debugLog('Dismissing first popup, showing second popup');
+      setTooltipStep(2);
     } else if (tooltipStep === 2) {
-      debugLog('Dismissing tooltip 2. Current step:', tooltipStep);
-      setTooltipStep(0); 
+      // Second popup dismissed -> close all tooltips and mark as seen
+      debugLog('Dismissing second popup, closing all tooltips');
+      setTooltipStep(0);
       setHasSeenTooltips(true);
       try { 
         await AsyncStorage.setItem('hasSeenVideoReviewTooltips_v2', 'true'); 
-        debugLog('Tooltips marked as seen.');
+        debugLog('Tooltips marked as seen after completing both popups.');
       } 
       catch (e) { debugLog('Error saving tooltip_v2 pref', e); }
     } else {
-      debugLog('handleDismissTooltip called with unexpected step:', tooltipStep);
+      // Fallback - close tooltips but don't mark as seen (so they can show again)
+      debugLog('Unexpected tooltipStep, closing tooltips without marking as seen');
+      setTooltipStep(0);
     }
   };
   
@@ -977,14 +990,69 @@ export default function VideoReviewScreen({ navigation, route }) {
   const onInputsRowLayout = () => measureElement(inputsRowRef, setInputsRowLayout);
   const onExerciseCardLayout = () => measureElement(exerciseCardRef, setExerciseCardLayout);
   const onExerciseHeaderLayout = () => measureElement(exerciseHeaderRef, setExerciseHeaderLayout);
+  const onTableAreaLayout = () => measureElement(tableAreaRef, setTableAreaLayout);
+
+  // Custom spotlight configuration - EASY TO EDIT
+  const CUSTOM_SPOTLIGHT_CONFIG = {
+    // Position adjustments
+    offsetX: 0,        // Move left/right (negative = left, positive = right)
+    offsetY: 60,      // Move up/down (negative = up, positive = down)
+    
+    // Size adjustments  
+    paddingTop: 22,    // Space above the target area
+    paddingBottom: -3, // Space below the target area
+    paddingLeft: -93,   // Space to the left of target area
+    paddingRight: -5,  // Space to the right of target area
+    
+    // Enable/disable
+    enabled: true      // Set to false to disable custom spotlight
+  };
+
+  // First popup spotlight configuration - EASY TO EDIT
+  const FIRST_POPUP_SPOTLIGHT_CONFIG = {
+    // Position adjustments
+    offsetX: 0,        // Move left/right (negative = left, positive = right)
+    offsetY: 57,        // Move up/down (negative = up, positive = down)
+    
+    // Size adjustments  
+    paddingTop: -5,    // Space above the target area
+    paddingBottom: 0, // Space below the target area
+    paddingLeft: 0,   // Space to the left of target area
+    paddingRight: 0,  // Space to the right of target area
+    
+    // Enable/disable
+    enabled: true      // Set to false to disable custom spotlight
+  };
+
+  // Function to calculate custom spotlight area - EASY TO EDIT
+  const getCustomSpotlightArea = (baseLayout) => {
+    if (!baseLayout || !CUSTOM_SPOTLIGHT_CONFIG.enabled) return null;
+    
+    return {
+      x: baseLayout.x + CUSTOM_SPOTLIGHT_CONFIG.offsetX - CUSTOM_SPOTLIGHT_CONFIG.paddingLeft,
+      y: baseLayout.y + CUSTOM_SPOTLIGHT_CONFIG.offsetY - CUSTOM_SPOTLIGHT_CONFIG.paddingTop,
+      width: baseLayout.width + CUSTOM_SPOTLIGHT_CONFIG.paddingLeft + CUSTOM_SPOTLIGHT_CONFIG.paddingRight,
+      height: baseLayout.height + CUSTOM_SPOTLIGHT_CONFIG.paddingTop + CUSTOM_SPOTLIGHT_CONFIG.paddingBottom,
+    };
+  };
+
+  // Function to calculate first popup spotlight area - EASY TO EDIT
+  const getFirstPopupSpotlightArea = (baseLayout) => {
+    if (!baseLayout || !FIRST_POPUP_SPOTLIGHT_CONFIG.enabled) return null;
+    
+    return {
+      x: baseLayout.x + FIRST_POPUP_SPOTLIGHT_CONFIG.offsetX - FIRST_POPUP_SPOTLIGHT_CONFIG.paddingLeft,
+      y: baseLayout.y + FIRST_POPUP_SPOTLIGHT_CONFIG.offsetY - FIRST_POPUP_SPOTLIGHT_CONFIG.paddingTop,
+      width: baseLayout.width + FIRST_POPUP_SPOTLIGHT_CONFIG.paddingLeft + FIRST_POPUP_SPOTLIGHT_CONFIG.paddingRight,
+      height: baseLayout.height + FIRST_POPUP_SPOTLIGHT_CONFIG.paddingTop + FIRST_POPUP_SPOTLIGHT_CONFIG.paddingBottom,
+    };
+  };
 
   return (
     <Animated.View 
       style={[
         styles.container, 
-        { 
-          opacity: fadeAnim,
-        }
+        { opacity: fadeAnim }
       ]}
     >
       <SafeAreaView style={styles.safeContainer}>
@@ -1223,20 +1291,23 @@ export default function VideoReviewScreen({ navigation, route }) {
       
       <GuidedPopup
         visible={tooltipStep === 1}
-        text="Our AI will find & select the exercise for you!"
+        text="Our AI will select the exercise for you!"
         targetLayout={exerciseCardLayout}
-        highlightLayout={exerciseHeaderLayout}
+        highlightLayout={getFirstPopupSpotlightArea(exerciseHeaderLayout)}
         screenBackgroundColor={colors.background}
         onClose={handleDismissTooltip}
         forcePositionBelow={true}
+        showIconButton={true}
       />
       <GuidedPopup
         visible={tooltipStep === 2}
-        text="You can enter in the weight and reps while you wait and then tap the tick to log your first set."
+        text="Enter the weight & reps while you wait! Then tap the tick button to log your set."
         targetLayout={inputsRowLayout}
-        highlightLayout={null} 
+        highlightLayout={getCustomSpotlightArea(inputsRowLayout)} 
         screenBackgroundColor={colors.background}
         onClose={handleDismissTooltip}
+        showIconButton={true}
+        verticalOffset={90}
       />
       
       {/* Video Preview Modal */}
@@ -1609,7 +1680,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     backgroundColor: colors.white,
     borderRadius: 12,
-    paddingVertical: 15,
+    paddingVertical: 12,
     paddingHorizontal: 20, 
     elevation: 12,
     shadowColor: '#000',
@@ -1620,16 +1691,58 @@ const styles = StyleSheet.create({
   popupArrowAdvanced: {
     position: 'absolute', width: 0, height: 0, borderStyle: 'solid',
   },
-  popupBodyAdvanced: { alignItems: 'center' },
+  popupBodyAdvanced: { 
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+  },
   popupTextAdvanced: {
-    fontSize: 15, color: colors.darkGray, textAlign: 'center',
-    marginBottom: 18, lineHeight: 22, fontWeight: '400',
+    fontSize: 15, 
+    color: colors.darkGray, 
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 20, 
+    fontWeight: '400',
   },
   popupDismissButtonAdvanced: {
     backgroundColor: colors.primary,
-    paddingVertical: 10, paddingHorizontal: 25, borderRadius: 25, alignSelf: 'center',
+    paddingVertical: 8, 
+    paddingHorizontal: 20, 
+    borderRadius: 20, 
+    alignSelf: 'center',
   },
   popupDismissButtonTextAdvanced: {
-    color: colors.white, fontSize: 15, fontWeight: '600',
+    color: colors.white, fontSize: 14, fontWeight: '600',
+  },
+  popupBodyIconButtonLayout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    minHeight: 40,
+  },
+  popupTextIconButtonLayout: {
+    textAlign: 'center',
+    marginRight: 8,
+    marginBottom: 0,
+    flex: 1,
+  },
+  popupIconDismissButton: {
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  popupTextWithIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  inlineIconWrapper: {
+    marginHorizontal: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 1,
   },
 }); 
