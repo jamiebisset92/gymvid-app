@@ -52,29 +52,41 @@ export default function DateOfBirthScreen({ navigation, route }) {
   useEffect(() => {
     const loadUserDateOfBirth = async () => {
       try {
-        // Get current user
         const user = supabase.auth.user();
-        if (!user) return;
+        if (!user) {
+          debugLog('No user found, cannot load DOB.');
+          return;
+        } 
 
-        // Try to fetch existing profile
+        debugLog('Loading user DOB for userId:', user.id);
         const { data: profile, error } = await supabase
           .from('users')
           .select('date_of_birth')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
-        // If we have a date of birth, set it in the state
-        if (!error && profile && profile.date_of_birth) {
+        if (error) {
+          console.error('Error fetching user profile in DateOfBirthScreen:', error.message);
+          return;
+        }
+
+        if (profile && profile.date_of_birth) {
           debugLog('Loaded existing date of birth:', profile.date_of_birth);
           setDateOfBirth(new Date(profile.date_of_birth));
+        } else {
+          debugLog('No existing date of birth found for user.');
+          // Keep default dateOfBirth (today) or set to a sensible default if desired
         }
       } catch (err) {
-        console.error('Error loading user date of birth:', err);
+        console.error('Unexpected error in loadUserDateOfBirth (DateOfBirthScreen):', err);
       }
     };
 
-    loadUserDateOfBirth();
-  }, []);
+    // Only load if focused to prevent unnecessary calls during navigation
+    if (isFocused) {
+        loadUserDateOfBirth();
+    }
+  }, [isFocused]);
 
   // Calculate age whenever date changes
   useEffect(() => {

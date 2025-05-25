@@ -93,16 +93,27 @@ export default function UserWeightScreen({ navigation, route }) {
     const loadUserData = async () => {
       try {
         const user = supabase.auth.user();
-        if (!user) return;
+        if (!user) {
+          debugLog('No user found, cannot load data.');
+          setSelectedUnit('kg'); // Default if no user
+          return;
+        }
 
-        debugLog('Loading user weight data...');
+        debugLog('Loading user weight data for userId:', user.id);
         const { data: profile, error } = await supabase
           .from('users')
           .select('bodyweight, unit_pref')
           .eq('id', user.id)
-          .single();
+          .maybeSingle(); // Changed from .single() to .maybeSingle()
 
-        if (!error && profile) {
+        if (error) {
+          // Handle actual errors, but not PGRST116 as .maybeSingle() won't throw it for 0 rows
+          console.error('Error fetching user profile in UserWeightScreen:', error.message);
+          setSelectedUnit('kg'); // Default on error
+          return;
+        }
+
+        if (profile) { // Profile exists
           if (profile.bodyweight) {
             setWeight(profile.bodyweight.toString());
             debugLog('Loaded existing bodyweight:', profile.bodyweight);
@@ -111,27 +122,25 @@ export default function UserWeightScreen({ navigation, route }) {
             setSelectedUnit(profile.unit_pref);
             debugLog('Loaded existing unit_pref:', profile.unit_pref);
           } else {
-             // Default to 'kg' if no preference is stored
             setSelectedUnit('kg');
             debugLog('No unit_pref found, defaulting to kg');
           }
-        } else if (error) {
-          debugLog('Error loading user data, or no data found:', error.message);
-           setSelectedUnit('kg'); // Default if error or no profile
-        } else {
-          setSelectedUnit('kg'); // Default if no profile
+        } else { // No profile found (profile is null)
+          debugLog('No profile data found for user, defaulting unit to kg.');
+          setSelectedUnit('kg');
+          setWeight(''); // Ensure weight is empty if no profile
         }
       } catch (err) {
-        console.error('Error loading user weight data:', err);
+        console.error('Unexpected error in loadUserData (UserWeightScreen):', err);
         setSelectedUnit('kg'); // Default on catch
       }
     };
 
-    if (isFocused) { // Load data when screen is focused
+    if (isFocused) { 
         loadUserData();
-        updateProgress('UserWeight'); // Update progress
+        updateProgress('UserWeight');
     }
-  }, [isFocused, updateProgress]); // Added updateProgress to dependencies
+  }, [isFocused, updateProgress]);
 
   const handleContinue = async () => {
     const numWeight = parseFloat(weight);

@@ -211,9 +211,6 @@ export default function SignUpScreen({ navigation }) {
       // Log the userId for debugging
       console.log('Starting onboarding with userId:', userId);
       
-      // Show success toast
-      toast.success('Account created! Setting up your profile...', { position: 'top' });
-      
       // Mark this as a fresh signup to prevent ProfileScreen flash
       await AsyncStorage.setItem('freshSignup', 'true');
       

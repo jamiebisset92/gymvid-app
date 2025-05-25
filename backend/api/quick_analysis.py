@@ -26,8 +26,10 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
         # ✅ Predict exercise from collage
         prediction = predict_exercise(collage_paths[0])
 
-        # ✅ Flatten prediction name for frontend use
-        exercise_name = prediction.get("movement", "Unknown")
+        # ✅ Combine equipment and movement name for frontend use
+        equipment = prediction.get("equipment", "")
+        movement = prediction.get("movement", "Unknown")
+        exercise_name = f"{equipment} {movement}".strip()
 
         return {"exercise_name": exercise_name}
 

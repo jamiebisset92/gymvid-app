@@ -4,19 +4,16 @@ import json
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# ✅ Load environment variables
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def predict_exercise(image_path: str) -> dict:
-    # ✅ Read collage image as base64
     with open(image_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode("utf-8")
 
     print("📸 Using 1 collage image for prediction.")
     print("🖼️ Image size (base64):", len(b64), "characters")
 
-    # ✅ System prompt for GPT
     system_prompt = """
 You are a fitness AI analyzing gym exercise keyframes.
 
@@ -52,14 +49,17 @@ RULES:
         )
 
         raw = response.choices[0].message.content.strip()
-        print("🧠 Raw GPT response:", repr(raw))
+        print("🧠 Raw GPT response:", raw)
+
+        # ✅ Strip triple backticks if present
+        if raw.startswith("```"):
+            raw = raw.strip("`").strip("json").strip()
 
         return json.loads(raw)
 
     except Exception as e:
         print("❌ GPT Error:", str(e))
         return {
-            "error": "Failed to parse GPT response",
-            "details": str(e),
-            "raw_response": raw if 'raw' in locals() else None
+            "error": "Prediction failed due to GPT error or format issue.",
+            "details": str(e)
         }

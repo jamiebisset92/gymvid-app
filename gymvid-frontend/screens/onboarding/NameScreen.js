@@ -41,7 +41,7 @@ export default function NameScreen({ navigation, route }) {
     }, []);
     
     // Get progress context
-    const { updateProgress } = useContext(ProgressContext);
+    const { updateProgress, setProgress } = useContext(ProgressContext);
     
     // Animations for original content
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -65,21 +65,33 @@ export default function NameScreen({ navigation, route }) {
     const isFocused = useIsFocused();
     const inputRef = useRef(null);
 
-    // Update progress tracking when screen comes into focus
+    // Update progress tracking and bar visibility when screen focus or reveal state changes
     useEffect(() => {
-      console.log('📱 Focused state changed:', isFocused);
+      console.log('📱 NameScreen Focus/Reveal Effect: isFocused:', isFocused, 'isRevealed:', isRevealed);
       if (isFocused) {
-        console.log('📱 Updating progress for Name screen');
-        updateProgress('Name');
+        if (!isRevealed) {
+          // Pre-reveal: Explicitly hide the progress bar by setting isOnboarding to false.
+          // Keep currentScreen as 'Name' so context knows where we are logically.
+          console.log('📱 NameScreen PRE-REVEAL: Hiding progress bar.');
+          setProgress(prev => ({ 
+            ...prev, 
+            isOnboarding: false, 
+            currentScreen: 'Name' 
+          }));
+        } else {
+          // Post-reveal: Show progress bar immediately when revealed
+          console.log('📱 NameScreen POST-REVEAL: Showing progress bar.');
+          // Call updateProgress immediately without timeout
+          updateProgress('Name');
+        }
       }
-    }, [isFocused]); // keep dependency array minimal to prevent loops
+    }, [isFocused, isRevealed, updateProgress, setProgress]); // setProgress is needed here
 
-    // Run entrance animation only after navigator transition is complete
+    // Run entrance animation logic (this effect mainly handles visual animations)
     useEffect(() => {
       let timer;
       if (isFocused) {
-        console.log('📱 Running entrance animation');
-        // Reset all animations immediately when the component mounts/focuses
+        // Reset animation values for entrance
         fadeAnim.setValue(0);
         slideAnim.setValue(30);
         titleAnim.setValue(20);
@@ -93,195 +105,107 @@ export default function NameScreen({ navigation, route }) {
         getStartedButtonScale.setValue(0.5);
         contentRevealAnim.setValue(0);
         welcomeContentFadeOut.setValue(1);
-        setIsRevealed(false);
+        // isRevealed state is NOT reset here. It's controlled by its initial state and handleGetStarted.
         
-        // Wait for the navigator transition to be fully complete
-        timer = setTimeout(() => {
-          // Show welcome screen first
-          Animated.sequence([
-            // Fade in welcome screen
-            Animated.timing(welcomeFadeAnim, {
-              toValue: 1,
-              duration: 800,
-              useNativeDriver: true,
-              easing: Easing.out(Easing.quad),
-            }),
-            
-            // Animate welcome content
-            Animated.parallel([
-              // Title animation
-              Animated.timing(welcomeTitleAnim, {
-                toValue: 1,
-                duration: 1000,
-                useNativeDriver: true,
-                easing: Easing.out(Easing.cubic),
-              }),
-              
-              // Logo animation with delay
-              Animated.sequence([
-                Animated.delay(150),
-                Animated.timing(welcomeLogoAnim, {
-                  toValue: 1,
-                  duration: 800,
-                  useNativeDriver: true,
-                  easing: Easing.out(Easing.cubic),
-                })
-              ]),
-              
-              // Subtitle animation with delay
-              Animated.sequence([
-                Animated.delay(300),
-                Animated.timing(welcomeSubtitleAnim, {
-                  toValue: 1,
-                  duration: 900,
-                  useNativeDriver: true,
-                  easing: Easing.out(Easing.cubic),
-                })
-              ]),
-              
-              // Arrow animation with slightly more delay
-              Animated.sequence([
-                Animated.delay(450), 
-                Animated.timing(welcomeArrowAnim, {
-                  toValue: 1,
-                  duration: 700,
-                  useNativeDriver: true,
-                  easing: Easing.out(Easing.back(1.5)),
-                })
-              ]),
-              
-              // Get Started button animation (delay further to appear after arrow)
-              Animated.sequence([
-                Animated.delay(600),
+        if (!isRevealed) {
+            console.log('📱 NameScreen Entrance: Animating WELCOME part.');
+            // timer = setTimeout(() => { ... welcome animations ... }, 100) // Full animation block here
+            timer = setTimeout(() => {
+            Animated.sequence([
+                Animated.timing(welcomeFadeAnim, { toValue: 1, duration: 800, useNativeDriver: true, easing: Easing.out(Easing.quad) }),
                 Animated.parallel([
-                  Animated.timing(getStartedButtonAnim, {
-                    toValue: 1,
-                    duration: 700,
-                    useNativeDriver: true,
-                    easing: Easing.out(Easing.cubic),
-                  }),
-                  Animated.sequence([
-                    Animated.spring(getStartedButtonScale, {
-                      toValue: 1.1,
-                      from: 0.5,
-                      tension: 100,
-                      friction: 8,
-                      useNativeDriver: true,
-                    }),
-                    Animated.spring(getStartedButtonScale, {
-                      toValue: 1,
-                      tension: 80,
-                      friction: 10,
-                      useNativeDriver: true,
-                    })
-                  ])
-                ])
-              ])
-            ])
-          ]).start(() => {
-            // Start pulse animation for Get Started button
-            if (!isRevealed) {
-              Animated.loop(
+                Animated.timing(welcomeTitleAnim, { toValue: 1, duration: 1000, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
                 Animated.sequence([
-                  Animated.timing(getStartedButtonPulse, {
-                    toValue: 1.05,
-                    duration: 1000,
-                    useNativeDriver: true,
-                    easing: Easing.inOut(Easing.sin),
-                  }),
-                  Animated.timing(getStartedButtonPulse, {
-                    toValue: 1,
-                    duration: 1000,
-                    useNativeDriver: true,
-                    easing: Easing.inOut(Easing.sin),
-                  })
-                ])
-              ).start();
-
-              // Start arrow bounce animation
-              Animated.loop(
+                    Animated.delay(150),
+                    Animated.timing(welcomeLogoAnim, { toValue: 1, duration: 800, useNativeDriver: true, easing: Easing.out(Easing.cubic) })
+                ]),
                 Animated.sequence([
-                  Animated.timing(arrowBounceAnim, {
-                    toValue: 1,
-                    duration: 800,
-                    useNativeDriver: true,
-                    easing: Easing.inOut(Easing.sin),
-                  }),
-                  Animated.timing(arrowBounceAnim, {
-                    toValue: 0,
-                    duration: 800,
-                    useNativeDriver: true,
-                    easing: Easing.inOut(Easing.sin),
-                  }),
+                    Animated.delay(300),
+                    Animated.timing(welcomeSubtitleAnim, { toValue: 1, duration: 900, useNativeDriver: true, easing: Easing.out(Easing.cubic) })
+                ]),
+                Animated.sequence([
+                    Animated.delay(450), 
+                    Animated.timing(welcomeArrowAnim, { toValue: 1, duration: 700, useNativeDriver: true, easing: Easing.out(Easing.back(1.5)) })
+                ]),
+                Animated.sequence([
+                    Animated.delay(600),
+                    Animated.parallel([
+                    Animated.timing(getStartedButtonAnim, { toValue: 1, duration: 700, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+                    Animated.sequence([
+                        Animated.spring(getStartedButtonScale, { toValue: 1.1, from: 0.5, tension: 100, friction: 8, useNativeDriver: true }),
+                        Animated.spring(getStartedButtonScale, { toValue: 1, tension: 80, friction: 10, useNativeDriver: true })
+                    ])
+                    ])
                 ])
-              ).start();
-            }
-          });
-        }, 100);
+                ])
+            ]).start(() => {
+                if (!isRevealed) { 
+                  Animated.loop(Animated.sequence([ Animated.timing(getStartedButtonPulse, { toValue: 1.05, duration: 1000, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }), Animated.timing(getStartedButtonPulse, { toValue: 1, duration: 1000, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }) ])).start();
+                  Animated.loop(Animated.sequence([ Animated.timing(arrowBounceAnim, { toValue: 1, duration: 800, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }), Animated.timing(arrowBounceAnim, { toValue: 0, duration: 800, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }) ])).start();
+                }
+            });
+            }, 100);
+        } else {
+            // If screen is focused and already revealed, ensure form elements are instantly visible.
+            console.log('📱 NameScreen Entrance: Form ALREADY REVEALED. Setting visuals.');
+            welcomeFadeAnim.setValue(0); 
+            welcomeContentFadeOut.setValue(0);
+            contentRevealAnim.setValue(1); 
+            titleAnim.setValue(0); 
+            slideAnim.setValue(0); 
+            inputAnim.setValue(1); 
+        }
       }
       
-      // Cleanup function - very important!
       return () => {
         clearTimeout(timer);
-        // Reset animations when component unmounts
-        fadeAnim.stopAnimation();
-        slideAnim.stopAnimation();
-        titleAnim.stopAnimation();
-        inputAnim.stopAnimation();
-        welcomeFadeAnim.stopAnimation();
-        welcomeTitleAnim.stopAnimation();
-        welcomeLogoAnim.stopAnimation();
-        welcomeSubtitleAnim.stopAnimation();
-        welcomeArrowAnim.stopAnimation();
-        arrowBounceAnim.stopAnimation();
-        getStartedButtonAnim.stopAnimation();
-        getStartedButtonScale.stopAnimation();
-        getStartedButtonPulse.stopAnimation();
+        // Stop all animations 
+        fadeAnim.stopAnimation(); slideAnim.stopAnimation(); titleAnim.stopAnimation(); inputAnim.stopAnimation();
+        welcomeFadeAnim.stopAnimation(); welcomeTitleAnim.stopAnimation(); welcomeLogoAnim.stopAnimation();
+        welcomeSubtitleAnim.stopAnimation(); welcomeArrowAnim.stopAnimation(); arrowBounceAnim.stopAnimation();
+        getStartedButtonAnim.stopAnimation(); getStartedButtonScale.stopAnimation(); getStartedButtonPulse.stopAnimation();
+        contentRevealAnim.stopAnimation(); welcomeContentFadeOut.stopAnimation();
       };
-    }, [isFocused]);
+    }, [isFocused, isRevealed]); 
     
     // Load existing name when the screen is focused
     useEffect(() => {
       const loadUserName = async () => {
         try {
-          console.log('📱 Loading user name for userId:', userId);
-          // First try to get user from route params (from signup flow)
+          debugLog('📱 Loading user name for userId:', userId);
           let userIdToUse = userId;
           
-          // If not available, try to get from auth
           if (!userIdToUse) {
-            console.log('📱 No userId from params, checking current session');
+            debugLog('📱 No userId from params, checking current session');
             const user = supabase.auth.user();
-            if (user) {
+            if (user && user.id) {
               userIdToUse = user.id;
-              console.log('📱 Found userId from session:', userIdToUse);
+              debugLog('📱 Found userId from session:', userIdToUse);
+            } else {
+              debugLog('📱 No current user session, cannot load name.');
+              return;
             }
           }
           
-          if (!userIdToUse) {
-            console.error('📱 No user ID available for fetching profile');
-            return;
-          }
-
-          // Try to fetch existing profile using available ID
           const { data: profile, error } = await supabase
             .from('users')
             .select('name')
             .eq('id', userIdToUse)
-            .maybeSingle(); // Use maybeSingle() instead of single() to avoid error when no rows found
+            .maybeSingle(); // Changed to maybeSingle()
 
-          // If we have name data, set it in the state
+          if (error) {
+            console.warn('📱 Error loading profile in NameScreen:', error.message);
+            return;
+          }
+
           if (profile && profile.name) {
-            console.log('📱 Loaded existing name:', profile.name);
+            debugLog('📱 Loaded existing name:', profile.name);
             setName(profile.name);
-          } else if (error && error.code !== 'PGRST116') {
-            // Only log non-"no rows found" errors
-            console.warn('📱 Error loading profile:', error.message);
           } else {
-            console.log('📱 No existing name found for user');
+            debugLog('📱 No existing name found for user (profile null or no name).');
           }
         } catch (err) {
-          console.error('📱 Error loading user name:', err);
+          console.error('📱 Unexpected error in loadUserName (NameScreen):', err);
         }
       };
 
@@ -290,65 +214,93 @@ export default function NameScreen({ navigation, route }) {
       }
     }, [userId, isFocused]);
 
-    // Handle Get Started button press - triggers the reveal sequence
+    // Handle Get Started button press
     const handleGetStarted = () => {
       if (isRevealed) return;
       
       getStartedButtonPulse.stopAnimation();
-      getStartedButtonPulse.setValue(1);
-      arrowBounceAnim.stopAnimation(); 
-      arrowBounceAnim.setValue(0); 
+      arrowBounceAnim.stopAnimation();
       
-      // Fade out welcome screen components
+      // Fade out welcome screen
       Animated.parallel([
-        Animated.timing(getStartedButtonScale, { toValue: 0.8, duration: 200, useNativeDriver: true, easing: Easing.in(Easing.cubic) }),
-        Animated.timing(getStartedButtonAnim, { toValue: 0, duration: 200, useNativeDriver: true, easing: Easing.in(Easing.cubic) }),
-        Animated.timing(welcomeContentFadeOut, { toValue: 0, duration: 400, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
-        Animated.timing(welcomeFadeAnim, { toValue: 0, duration: 400, useNativeDriver: true, easing: Easing.out(Easing.cubic) })
+        Animated.timing(getStartedButtonScale, { 
+          toValue: 0.8, 
+          duration: 150, 
+          useNativeDriver: true, 
+          easing: Easing.in(Easing.cubic) 
+        }),
+        Animated.timing(getStartedButtonAnim, { 
+          toValue: 0, 
+          duration: 300, 
+          useNativeDriver: true, 
+          easing: Easing.in(Easing.cubic) 
+        }),
+        Animated.timing(welcomeContentFadeOut, { 
+          toValue: 0, 
+          duration: 400, 
+          useNativeDriver: true, 
+          easing: Easing.out(Easing.cubic) 
+        }),
+        Animated.timing(welcomeFadeAnim, { 
+          toValue: 0, 
+          duration: 400, 
+          useNativeDriver: true, 
+          easing: Easing.out(Easing.cubic) 
+        })
       ]).start(() => {
-        // After welcome screen fades, THEN set isRevealed to true
-        // This will trigger the conditional rendering of the main content
-        setIsRevealed(true);
+        // Set isRevealed to true - this will trigger the progress bar to show
+        setIsRevealed(true); 
         
-        // Now, animate in the main content that has just been mounted
-        // Ensure contentRevealAnim is reset if it wasn't already 0
+        // Reset animation values for the form
         contentRevealAnim.setValue(0); 
-        titleAnim.setValue(20); // Reset to initial off-screen/invisible state
-        slideAnim.setValue(30); // Reset to initial off-screen/invisible state
-        inputAnim.setValue(0);  // Reset to initial invisible state
+        titleAnim.setValue(30); 
+        slideAnim.setValue(50); 
+        inputAnim.setValue(0);  
 
-        Animated.sequence([
+        // Animate in form elements with improved timing
+        Animated.parallel([
+          // Container fades in
           Animated.timing(contentRevealAnim, { 
-            toValue: 1,
-            duration: 300, 
-            useNativeDriver: true,
-            easing: Easing.out(Easing.quad),
-            delay: 50 // Small delay to ensure state update has propagated
+            toValue: 1, 
+            duration: 600, 
+            useNativeDriver: true, 
+            easing: Easing.out(Easing.cubic)
           }),
-          Animated.parallel([ 
+          // Title slides up and fades in
+          Animated.sequence([
+            Animated.delay(100),
             Animated.timing(titleAnim, { 
               toValue: 0, 
               duration: 700, 
               useNativeDriver: true, 
-              easing: Easing.out(Easing.cubic) 
-            }),
+              easing: Easing.out(Easing.cubic)
+            })
+          ]),
+          // Input container slides in from right
+          Animated.sequence([
+            Animated.delay(200),
             Animated.timing(slideAnim, { 
               toValue: 0, 
               duration: 700, 
               useNativeDriver: true, 
-              easing: Easing.out(Easing.cubic) 
-            }),
+              easing: Easing.out(Easing.cubic)
+            })
+          ]),
+          // Input fades in
+          Animated.sequence([
+            Animated.delay(300),
             Animated.timing(inputAnim, { 
               toValue: 1, 
               duration: 600, 
               useNativeDriver: true, 
-              easing: Easing.out(Easing.cubic) 
+              easing: Easing.out(Easing.cubic)
             })
           ])
         ]).start(() => {
-          if (inputRef.current) {
-            inputRef.current.focus();
-          }
+          // Focus input after all animations complete
+          setTimeout(() => {
+            if (inputRef.current) inputRef.current.focus();
+          }, 100);
         });
       });
     };
@@ -646,7 +598,7 @@ export default function NameScreen({ navigation, route }) {
                 style={[
                   styles.titleText,
                   { 
-                    opacity: titleAnim.interpolate({ inputRange: [0, 20], outputRange: [1, 0] }),
+                    opacity: inputAnim,
                     transform: [{ translateY: titleAnim }] 
                   }
                 ]}
