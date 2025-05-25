@@ -410,7 +410,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
             // Get user profile for raw data to calculate from
             const { data: profile, error } = await supabase
               .from('users')
-              .select('gender, bodyweight, date_of_birth')
+              .select('gender, bodyweight, date_of_birth, unit_pref')
               .eq('id', userId)
               .single();
               
@@ -457,33 +457,68 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
               if (needsWeightClass && profile.gender && profile.bodyweight) {
                 const gender = profile.gender;
                 const weight = profile.bodyweight;
+                const unitPref = profile.unit_pref || 'kg';
                 let weightClass = 'Open'; // Default
                 
-                // Very simplified weight class calculation
+                // Convert weight to kg if it's in lbs for calculation
+                let weightInKg = weight;
+                if (unitPref === 'lbs') {
+                  weightInKg = weight / 2.20462; // Convert lbs to kg
+                }
+                
+                // Weight class calculation based on kg
                 if (gender === 'Female') {
-                  if (weight <= 47) weightClass = '43–47kg';
-                  else if (weight <= 52) weightClass = '47–52kg';
-                  else if (weight <= 57) weightClass = '50–57kg';
-                  else if (weight <= 63) weightClass = '57–63kg';
-                  else if (weight <= 69) weightClass = '63–69kg';
-                  else if (weight <= 76) weightClass = '69–76kg';
-                  else if (weight <= 84) weightClass = '76–84kg';
+                  if (weightInKg <= 47) weightClass = '43–47kg';
+                  else if (weightInKg <= 52) weightClass = '47–52kg';
+                  else if (weightInKg <= 57) weightClass = '50–57kg';
+                  else if (weightInKg <= 63) weightClass = '57–63kg';
+                  else if (weightInKg <= 69) weightClass = '63–69kg';
+                  else if (weightInKg <= 76) weightClass = '69–76kg';
+                  else if (weightInKg <= 84) weightClass = '76–84kg';
                   else weightClass = '84kg+';
                 } else {
                   // For Male or other
-                  if (weight <= 59) weightClass = '53–59kg';
-                  else if (weight <= 66) weightClass = '59–66kg';
-                  else if (weight <= 74) weightClass = '66–74kg';
-                  else if (weight <= 83) weightClass = '74–83kg';
-                  else if (weight <= 93) weightClass = '83–93kg';
-                  else if (weight <= 105) weightClass = '93–105kg';
-                  else if (weight <= 120) weightClass = '105–120kg';
+                  if (weightInKg <= 59) weightClass = '53–59kg';
+                  else if (weightInKg <= 66) weightClass = '59–66kg';
+                  else if (weightInKg <= 74) weightClass = '66–74kg';
+                  else if (weightInKg <= 83) weightClass = '74–83kg';
+                  else if (weightInKg <= 93) weightClass = '83–93kg';
+                  else if (weightInKg <= 105) weightClass = '93–105kg';
+                  else if (weightInKg <= 120) weightClass = '105–120kg';
                   else weightClass = '120kg+';
+                }
+                
+                // If user prefers lbs, convert the weight class display to lbs
+                if (unitPref === 'lbs') {
+                  // Convert kg ranges to lbs for display
+                  const kgToLbsRanges = {
+                    // Female weight classes
+                    '43–47kg': '95–104lbs',
+                    '47–52kg': '104–115lbs',
+                    '50–57kg': '110–126lbs',
+                    '57–63kg': '126–139lbs',
+                    '63–69kg': '139–152lbs',
+                    '69–76kg': '152–168lbs',
+                    '76–84kg': '168–185lbs',
+                    '84kg+': '185lbs+',
+                    // Male weight classes
+                    '53–59kg': '117–130lbs',
+                    '59–66kg': '130–146lbs',
+                    '66–74kg': '146–163lbs',
+                    '74–83kg': '163–183lbs',
+                    '83–93kg': '183–205lbs',
+                    '93–105kg': '205–231lbs',
+                    '105–120kg': '231–265lbs',
+                    '120kg+': '265lbs+'
+                  };
+                  
+                  weightClass = kgToLbsRanges[weightClass] || weightClass;
                 }
                 
                 finalData.weightClass = weightClass;
                 await AsyncStorage.setItem('userWeightClass', weightClass);
                 debugLog('Calculated and stored weight class as fallback:', weightClass);
+                debugLog('Weight:', weight, unitPref, '-> Weight in kg:', weightInKg, '-> Class:', weightClass);
                 
                 // Update Supabase
                 await supabase

@@ -346,6 +346,9 @@ export default function GenderScreen({ navigation, route }) {
                   <Text style={[styles.genderButtonText, gender === 'Female' && styles.selectedButtonText]}>Female</Text>
                 </TouchableOpacity>
               </Animated.View>
+              <Text style={styles.genderHelper}>
+                Your details will help us grade your lifts in the GymVid Games if you decide to play!
+              </Text>
             </View>
           </Animated.View>
         </View>
@@ -413,7 +416,7 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: 32, // Increased size
     fontWeight: '700', // Made font slightly heavier
-    marginBottom: 40,
+    marginBottom: 20, // Reduced from 40 to decrease space
     textAlign: 'center',
     letterSpacing: -0.5, // Tighter letter spacing for modern look
     color: '#1A1A1A', // Slightly softer than pure black
@@ -514,5 +517,12 @@ const styles = StyleSheet.create({
   nextButtonIcon: {
     color: '#FFFFFF',
     fontSize: 20,
+  },
+  genderHelper: {
+    marginTop: 40,
+    textAlign: 'center',
+    color: colors.gray,
+    fontSize: 16,
+    paddingHorizontal: 20,
   },
 }); 

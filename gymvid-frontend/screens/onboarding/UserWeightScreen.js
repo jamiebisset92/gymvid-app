@@ -10,7 +10,9 @@ import {
   Dimensions,
   Keyboard,
   Animated,
-  Easing
+  Easing,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
@@ -75,9 +77,11 @@ export default function UserWeightScreen({ navigation, route }) {
           titleAnim,
           elementsAnim: [switchAnim, inputAnim] 
         });
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
+        setTimeout(() => {
+          if (inputRef.current && isFocused) {
+            inputRef.current.focus();
+          }
+        }, 600);
       }, 100);
     }
     return () => {
@@ -253,7 +257,6 @@ export default function UserWeightScreen({ navigation, route }) {
                   placeholderTextColor={colors.mediumGray} // Changed for better visibility
                   returnKeyType="done"
                   onSubmitEditing={handleContinue}
-                  autoFocus={true}
                 />
                 <Text style={styles.weightUnitTextInline}>{selectedUnit}</Text>
               </View>
@@ -270,7 +273,7 @@ export default function UserWeightScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
             <Text style={styles.weightHelper}>
-              This helps us personalize your experience.
+              Your weight will help us grade your lifts in the GymVid Games if you decide to play!
             </Text>
           </Animated.View>
         </View>
@@ -337,11 +340,11 @@ const styles = StyleSheet.create({
   },
   switchContainer: { // Redesigned for a more polished, segmented control look
     flexDirection: 'row',
-    marginBottom: 40, 
+    marginBottom: 25, // Reduced from 40
     backgroundColor: colors.lightBackground, // A very light, almost white-ish gray or a subtle off-white
-    borderRadius: 16, 
-    padding: 6, 
-    width: '70%', // Make it wide but not full screen width
+    borderRadius: 12, // Reduced from 16
+    padding: 4, // Reduced from 6
+    width: '60%', // Reduced from 70%
     alignSelf: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -351,9 +354,9 @@ const styles = StyleSheet.create({
   },
   switchButton: {
     flex: 1, // Each button takes half the space
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderRadius: 12, 
+    paddingVertical: 8, // Reduced from 12
+    paddingHorizontal: 12, // Reduced from 15
+    borderRadius: 10, // Reduced from 12
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -366,7 +369,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   switchButtonText: {
-    fontSize: 18, // Larger, clearer text
+    fontSize: 16, // Reduced from 18
     fontWeight: '600',
     color: colors.mediumGray, 
   },
@@ -399,13 +402,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'center', 
-    marginRight: 48, // Ensure space for the absolutely positioned arrow button
+    marginRight: 0, // Changed from 48 to 0 - no need for margin since we're centering
   },
   weightInput: {
     fontSize: 28, 
     fontWeight: '600',
     color: colors.darkGray,
-    textAlign: 'right',
+    textAlign: 'center', // Changed from 'right' to 'center'
     minWidth: 60, 
     paddingRight: 8, // Add padding to separate from unit
   },

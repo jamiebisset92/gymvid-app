@@ -12,7 +12,8 @@ import {
   Keyboard,
   Easing,
   Platform,
-  Pressable
+  Pressable,
+  ActivityIndicator
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
@@ -23,6 +24,7 @@ import CountryFlag from 'react-native-country-flag';
 import { useIsFocused } from '@react-navigation/native';
 import { runWorldClassEntranceAnimation, ANIMATION_CONFIG } from '../../utils/animationUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 
 // Create a debug logging function that only logs in development
 const debugLog = (...args) => {
@@ -235,6 +237,8 @@ export default function CountryScreen({ navigation, route }) {
   const [filteredCountries, setFilteredCountries] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationUsed, setLocationUsed] = useState(false);
   const { updateProfile } = useAuth();
   const inputRef = useRef(null); // Add ref for text input
   const inputContainerRef = useRef(null); // Add ref for the input container
@@ -264,6 +268,12 @@ export default function CountryScreen({ navigation, route }) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const inputAnim = useRef(new Animated.Value(0)).current;
   const dropdownAnim = useRef(new Animated.Value(0)).current;
+  const locationButtonAnim = useRef(new Animated.Value(0)).current;
+  const locationButtonScale = useRef(new Animated.Value(0.8)).current;
+  const locationIconRotate = useRef(new Animated.Value(0)).current;
+  const locationElementsOpacity = useRef(new Animated.Value(1)).current;
+  const locationElementsHeight = useRef(new Animated.Value(1)).current;
+  const inputSlideUp = useRef(new Animated.Value(0)).current;
 
   // Add isFocused hook
   const isFocused = useIsFocused();
@@ -291,6 +301,8 @@ export default function CountryScreen({ navigation, route }) {
       titleAnim.setValue(0);
       inputAnim.setValue(0);
       dropdownAnim.setValue(0);
+      locationButtonAnim.setValue(0);
+      locationButtonScale.setValue(0.8);
       
       // Wait for the navigator transition to be fully complete
       timer = setTimeout(() => {
@@ -323,6 +335,22 @@ export default function CountryScreen({ navigation, route }) {
             duration: 300,
             useNativeDriver: true,
           }),
+          
+          // Animate location button
+          Animated.parallel([
+            Animated.timing(locationButtonAnim, {
+              toValue: 1,
+              duration: 400,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
+            Animated.spring(locationButtonScale, {
+              toValue: 1,
+              tension: 100,
+              friction: 8,
+              useNativeDriver: true,
+            })
+          ])
         ]);
         
         animationSequence.start(() => {
@@ -343,6 +371,9 @@ export default function CountryScreen({ navigation, route }) {
       titleAnim.stopAnimation();
       inputAnim.stopAnimation();
       dropdownAnim.stopAnimation();
+      locationButtonAnim.stopAnimation();
+      locationButtonScale.stopAnimation();
+      locationIconRotate.stopAnimation();
     };
   }, [isFocused]); // Only re-run when focused state changes
 
@@ -478,6 +509,167 @@ export default function CountryScreen({ navigation, route }) {
     }
     
     setCountry(text);
+    
+    // If user clears the field after using location, show location button again
+    if (text === '' && locationUsed) {
+      setLocationUsed(false);
+      
+      // Reset animations for next use
+      locationElementsOpacity.setValue(1);
+      locationElementsHeight.setValue(1);
+      inputSlideUp.setValue(0);
+    }
+  };
+
+  // Handle location-based country detection
+  const handleUseLocation = async () => {
+    try {
+      setLocationLoading(true);
+      
+      // Animate the location icon
+      Animated.loop(
+        Animated.timing(locationIconRotate, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      ).start();
+      
+      // Request location permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Please enable location services to automatically detect your country.',
+          [{ text: 'OK' }]
+        );
+        setLocationLoading(false);
+        locationIconRotate.stopAnimation();
+        locationIconRotate.setValue(0);
+        return;
+      }
+      
+      // Get current location
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      
+      // Reverse geocode to get country
+      const [address] = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+      
+      if (address && address.country) {
+        // Find the country in our list
+        const foundCountry = COUNTRIES.find(c => 
+          c.name.toLowerCase() === address.country.toLowerCase() ||
+          c.name.toLowerCase().includes(address.country.toLowerCase())
+        );
+        
+        if (foundCountry) {
+          // Animate the selection
+          Animated.sequence([
+            Animated.timing(locationButtonScale, {
+              toValue: 1.2,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(locationButtonScale, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            })
+          ]).start();
+          
+          // Set the country
+          setCountry(foundCountry.name);
+          setCountryCode(foundCountry.code);
+          setShowDropdown(false);
+          
+          // Dismiss keyboard if open
+          Keyboard.dismiss();
+          
+          // Trigger elegant hide animation
+          setLocationUsed(true);
+          
+          // Create a beautiful staggered animation sequence
+          Animated.sequence([
+            // First, pulse the location button as feedback
+            Animated.sequence([
+              Animated.timing(locationButtonScale, {
+                toValue: 1.1,
+                duration: 150,
+                easing: Easing.out(Easing.cubic),
+                useNativeDriver: true,
+              }),
+              Animated.timing(locationButtonScale, {
+                toValue: 1,
+                duration: 150,
+                easing: Easing.in(Easing.cubic),
+                useNativeDriver: true,
+              })
+            ]),
+            // Then fade out and scale down with elegant timing
+            Animated.parallel([
+              // Fade out location elements
+              Animated.timing(locationElementsOpacity, {
+                toValue: 0,
+                duration: 300,
+                easing: Easing.in(Easing.quad),
+                useNativeDriver: true,
+              }),
+              // Scale down vertically for collapse effect
+              Animated.timing(locationElementsHeight, {
+                toValue: 0.01, // Not 0 to avoid animation issues
+                duration: 350,
+                easing: Easing.inOut(Easing.cubic),
+                useNativeDriver: true,
+              }),
+              // Start sliding input up slightly delayed
+              Animated.sequence([
+                Animated.delay(150),
+                Animated.spring(inputSlideUp, {
+                  toValue: -30,
+                  tension: 60,
+                  friction: 10,
+                  useNativeDriver: true,
+                })
+              ])
+            ])
+          ]).start(() => {
+            // Don't focus the input - we want the keyboard to stay dismissed
+            // since the country has already been auto-filled
+          });
+          
+          debugLog('Location detected country:', foundCountry.name);
+        } else {
+          Alert.alert(
+            'Country Not Found',
+            `We detected "${address.country}" but couldn't match it to our list. Please select manually.`,
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
+        Alert.alert(
+          'Location Error',
+          'Could not determine your country from your location. Please select manually.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error getting location:', error);
+      Alert.alert(
+        'Location Error',
+        'Failed to get your location. Please select your country manually.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setLocationLoading(false);
+      locationIconRotate.stopAnimation();
+      locationIconRotate.setValue(0);
+    }
   };
 
   // Improve submit handling from input
@@ -586,11 +778,11 @@ export default function CountryScreen({ navigation, route }) {
 
   const handleBack = () => {
     // Log navigation attempt
-    console.log('CountryScreen: handleBack called, navigating to BodyWeight screen');
+    console.log('CountryScreen: handleBack called, navigating to UserWeight screen');
 
     // Instead of animating, simply navigate and let the Navigator handle the transition
     // This prevents timing issues and double animations
-    navigation.navigate('BodyWeight', { 
+    navigation.navigate('UserWeight', { 
       userId,
       email: userEmail,
       fromSignUp
@@ -657,10 +849,145 @@ export default function CountryScreen({ navigation, route }) {
             Where do you live?
           </Animated.Text>
           
+          {/* Location Button */}
+          {!locationUsed && (
+            <Animated.View
+              style={[
+                styles.locationButtonContainer,
+                {
+                  opacity: Animated.multiply(locationButtonAnim, locationElementsOpacity),
+                  transform: [
+                    {
+                      scale: Animated.multiply(locationButtonScale, 
+                        locationElementsHeight.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.8, 1],
+                        })
+                      )
+                    },
+                    {
+                      translateY: Animated.add(
+                        locationButtonAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [20, 0],
+                        }),
+                        locationElementsHeight.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-10, 0],
+                        })
+                      )
+                    }
+                  ],
+                }
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.locationButton,
+                  locationLoading && styles.locationButtonLoading
+                ]}
+                onPress={handleUseLocation}
+                disabled={locationLoading}
+                activeOpacity={0.8}
+              >
+                <Animated.View
+                  style={{
+                    transform: [{
+                      rotate: locationIconRotate.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['0deg', '360deg']
+                      })
+                    }]
+                  }}
+                >
+                  <Ionicons 
+                    name={locationLoading ? "navigate" : "location"} 
+                    size={20} 
+                    color={locationLoading ? colors.white : colors.primary} 
+                  />
+                </Animated.View>
+                <Text style={[
+                  styles.locationButtonText,
+                  locationLoading && styles.locationButtonTextLoading
+                ]}>
+                  {locationLoading ? 'Detecting...' : 'Use my location'}
+                </Text>
+                {locationLoading && (
+                  <ActivityIndicator 
+                    size="small" 
+                    color={colors.white} 
+                    style={styles.locationLoader}
+                  />
+                )}
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+          
+          {/* OR Divider */}
+          {!locationUsed && (
+            <Animated.View 
+              style={[
+                styles.divider,
+                {
+                  opacity: Animated.multiply(
+                    locationButtonAnim, 
+                    locationElementsOpacity.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 0.8], // Slightly less opacity for divider
+                    })
+                  ),
+                  transform: [
+                    {
+                      translateY: Animated.add(
+                        locationButtonAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [10, 0],
+                        }),
+                        locationElementsHeight.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-5, 0],
+                        })
+                      )
+                    },
+                    {
+                      scaleX: locationElementsHeight.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.7, 1],
+                      })
+                    }
+                  ],
+                }
+              ]}
+            >
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </Animated.View>
+          )}
+          
           <Animated.View 
             style={{ 
               width: '100%', 
-              opacity: fadeAnim
+              opacity: Animated.add(
+                fadeAnim,
+                inputSlideUp.interpolate({
+                  inputRange: [-30, 0],
+                  outputRange: [0, 0],
+                  extrapolate: 'clamp',
+                })
+              ),
+              transform: [
+                {
+                  translateY: inputSlideUp
+                },
+                {
+                  scale: inputSlideUp.interpolate({
+                    inputRange: [-30, 0],
+                    outputRange: [1.02, 1], // Subtle scale up when sliding
+                    extrapolate: 'clamp',
+                  })
+                }
+              ]
             }}
           >
             <View style={styles.formContainer}>
@@ -754,7 +1081,7 @@ export default function CountryScreen({ navigation, route }) {
                 )}
                 
                 <Text style={styles.helperText}>
-                  This allows you to find and connect with others in your area.
+                  Your location will allow you to represent your country in the GymVid Games!
                 </Text>
               </Animated.View>
             </View>
@@ -812,13 +1139,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 40, // Reduced from 80 to move content higher
+    paddingTop: 20, // Reduced from 40 to move content higher
     paddingBottom: 20,
   },
   titleText: {
     fontSize: 32,
     fontWeight: '700',
-    marginBottom: 20, // Reduced from 40 to tighten spacing
+    marginBottom: 15, // Reduced from 20 to tighten spacing
     textAlign: 'center',
     letterSpacing: -0.5,
     color: '#1A1A1A',
@@ -836,7 +1163,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 15,
+    marginTop: 8,
     borderWidth: 1,
     borderColor: colors.lightGray,
     shadowColor: '#000',
@@ -904,7 +1231,7 @@ const styles = StyleSheet.create({
     } : {})
   },
   dropdown: {
-    maxHeight: 300, // Increased to accommodate the taller items
+    maxHeight: 250, // Reduced from 300 to fit better with keyboard
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     overflow: 'hidden',
@@ -1021,5 +1348,68 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 0,
     borderBottomColor: 'rgba(0, 0, 0, 0.06)', // Match dropdown border color
     shadowOpacity: 0, // Remove shadow when dropdown is showing
+  },
+  locationButtonContainer: {
+    marginTop: 5, // Reduced from 10
+    marginBottom: 10, // Reduced from 20 since we now have the divider
+    paddingHorizontal: 20,
+    width: '100%',
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    backgroundColor: '#F0F8FF', // Light blue background
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 123, 255, 0.2)',
+    shadowColor: '#007BFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  locationButtonLoading: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.2,
+  },
+  locationButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+    marginLeft: 8,
+    letterSpacing: -0.2,
+  },
+  locationButtonTextLoading: {
+    color: colors.white,
+  },
+  locationLoader: {
+    marginLeft: 8,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 5,
+    marginBottom: 8,
+    paddingHorizontal: 20,
+    width: '100%',
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#EEEEEE', // Lighter gray to match LoginScreen
+    maxWidth: 80, // Limit line width for better aesthetics
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.gray,
+    letterSpacing: -0.2,
   },
 }); 

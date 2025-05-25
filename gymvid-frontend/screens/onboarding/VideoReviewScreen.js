@@ -13,7 +13,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Modal
+  Modal,
+  Easing
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
@@ -80,6 +81,7 @@ export default function VideoReviewScreen({ navigation, route }) {
   debugLog('VideoReviewScreen params:', { isDemo, fromGallery, continueOnboarding, userId });
   
   const [weight, setWeight] = useState('');
+  const [reps, setReps] = useState('');
   const [loading, setLoading] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -111,11 +113,54 @@ export default function VideoReviewScreen({ navigation, route }) {
   const [isEditingExercise, setIsEditingExercise] = useState(false);
   const [tempExerciseName, setTempExerciseName] = useState('');
   
+  // Add state for animated ellipsis
+  const [ellipsisCount, setEllipsisCount] = useState(0);
+  
   // Animation values for smooth data transitions
   const exerciseOpacity = useRef(new Animated.Value(0)).current;
+  const exerciseTranslateY = useRef(new Animated.Value(5)).current;
+  const exerciseScale = useRef(new Animated.Value(0.98)).current;
   const loadingScale = useRef(new Animated.Value(0.8)).current;
   const loadingOpacity = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const pencilOpacity = useRef(new Animated.Value(0)).current;
+  const exerciseBlur = useRef(new Animated.Value(0.3)).current;
+
+  // Add ellipsis animation effect
+  useEffect(() => {
+    let interval;
+    if (isLoadingExercise) {
+      interval = setInterval(() => {
+        setEllipsisCount(prev => (prev + 1) % 4);
+      }, 500);
+      
+      // Start shimmer animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+            easing: Easing.inOut(Easing.ease),
+          }),
+          Animated.timing(shimmerAnim, {
+            toValue: 0,
+            duration: 1500,
+            useNativeDriver: true,
+            easing: Easing.inOut(Easing.ease),
+          }),
+        ])
+      ).start();
+    } else {
+      shimmerAnim.stopAnimation();
+      shimmerAnim.setValue(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+      shimmerAnim.stopAnimation();
+    };
+  }, [isLoadingExercise]);
 
   // Function to get the current user ID
   const getCurrentUserId = async () => {
@@ -409,61 +454,70 @@ export default function VideoReviewScreen({ navigation, route }) {
 
     // Start exercise loading animation
     setIsLoadingExercise(true);
+    setEllipsisCount(0); // Reset ellipsis animation
     
-    // Start pulse animation
-    const pulseAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.2,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulseAnimation.start();
-    
-    Animated.parallel([
-      Animated.timing(loadingOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.spring(loadingScale, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // Reset exercise animations
+    exerciseOpacity.setValue(0);
+    exerciseTranslateY.setValue(5);
+    exerciseScale.setValue(0.98);
+    pencilOpacity.setValue(0);
+    exerciseBlur.setValue(0.3);
 
     // Predict exercise
     const movement = await predictExercise(videoUri);
     setExerciseName(movement);
     setTempExerciseName(movement);
     
-    // Stop pulse animation
-    pulseAnimation.stop();
-    pulseAnim.setValue(1);
-    
-    // Fade out loading and fade in exercise name
+    // Elegant world-class transition animation
     Animated.sequence([
-      Animated.timing(loadingOpacity, {
+      // First, fade out loading state smoothly
+      Animated.timing(shimmerAnim, {
         toValue: 0,
         duration: 200,
         useNativeDriver: true,
+        easing: Easing.out(Easing.quad),
       }),
-      Animated.timing(exerciseOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
+      // Then reveal the exercise name with multiple effects
+      Animated.parallel([
+        // Fade in
+        Animated.timing(exerciseOpacity, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.cubic),
+        }),
+        // Subtle upward movement
+        Animated.timing(exerciseTranslateY, {
+          toValue: 0,
+          duration: 700,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.back(1.1)),
+        }),
+        // Gentle scale
+        Animated.spring(exerciseScale, {
+          toValue: 1,
+          tension: 120,
+          friction: 14,
+          useNativeDriver: true,
+        }),
+        // Blur effect (simulated with opacity layers)
+        Animated.timing(exerciseBlur, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+      ]),
     ]).start(() => {
       setIsLoadingExercise(false);
+      // Fade in pencil icon after exercise name appears
+      Animated.timing(pencilOpacity, {
+        toValue: 1,
+        duration: 400,
+        delay: 200,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }).start();
     });
   };
 
@@ -540,6 +594,12 @@ export default function VideoReviewScreen({ navigation, route }) {
 
   // Update the handleCompleteSet function
   const handleCompleteSet = () => {
+    // Validate that both weight and reps are entered
+    if (!weight || weight === '0' || !reps || reps === '0') {
+      toast.error('Please enter weight and reps');
+      return;
+    }
+    
     setIsSetCompleted(!isSetCompleted);
   };
 
@@ -629,32 +689,64 @@ export default function VideoReviewScreen({ navigation, route }) {
             >
               <View style={styles.exerciseTableCard}>
                 <View style={styles.exerciseTableHeader}>
-                  {isEditingExercise ? (
+                  {isLoadingExercise ? (
+                    <View style={styles.exerciseLoadingContainer}>
+                      <View style={styles.loadingSpinnerContainer}>
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      </View>
+                      <Animated.Text style={[
+                        styles.exerciseLoadingText,
+                        {
+                          opacity: shimmerAnim.interpolate({
+                            inputRange: [0, 0.5, 1],
+                            outputRange: [0.6, 1, 0.6]
+                          }),
+                          color: shimmerAnim.interpolate({
+                            inputRange: [0, 0.5, 1],
+                            outputRange: [colors.gray, colors.primary, colors.gray]
+                          })
+                        }
+                      ]}>
+                        AI Finding Exercise{'.'.repeat(ellipsisCount)}
+                      </Animated.Text>
+                    </View>
+                  ) : isEditingExercise ? (
                     <View style={styles.exerciseEditContainer}>
+                      <TouchableOpacity onPress={handleSaveExercise} style={styles.editButton}>
+                        <Ionicons name="checkmark" size={20} color={colors.primary} />
+                      </TouchableOpacity>
                       <TextInput
                         style={styles.exerciseEditInput}
                         value={tempExerciseName}
                         onChangeText={setTempExerciseName}
                         autoFocus
                         selectTextOnFocus
+                        onBlur={handleCancelEditExercise}
+                        onSubmitEditing={handleSaveExercise}
+                        returnKeyType="done"
                       />
-                      <TouchableOpacity onPress={handleSaveExercise} style={styles.editButton}>
-                        <Ionicons name="checkmark" size={20} color={colors.primary} />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={handleCancelEditExercise} style={styles.editButton}>
-                        <Ionicons name="close" size={20} color={colors.gray} />
-                      </TouchableOpacity>
                     </View>
                   ) : (
                     <View style={styles.exerciseNameContainer}>
-                      <Animated.Text style={[styles.exerciseTableTitle, { opacity: exerciseOpacity }]}>
+                      {exerciseName && !isLoadingExercise && (
+                        <Animated.View style={{ opacity: pencilOpacity }}>
+                          <TouchableOpacity onPress={handleStartEditExercise} style={styles.editButtonLeft}>
+                            <Ionicons name="pencil" size={16} color={colors.gray} />
+                          </TouchableOpacity>
+                        </Animated.View>
+                      )}
+                      <Animated.Text style={[
+                        styles.exerciseTableTitle, 
+                        { 
+                          opacity: Animated.multiply(exerciseOpacity, exerciseBlur),
+                          transform: [
+                            { translateY: exerciseTranslateY },
+                            { scale: exerciseScale }
+                          ]
+                        }
+                      ]}>
                         {exerciseName || ''}
                       </Animated.Text>
-                      {exerciseName && !isLoadingExercise && (
-                        <TouchableOpacity onPress={handleStartEditExercise} style={styles.editButton}>
-                          <Ionicons name="pencil" size={18} color={colors.gray} />
-                        </TouchableOpacity>
-                      )}
                     </View>
                   )}
                 </View>
@@ -670,6 +762,9 @@ export default function VideoReviewScreen({ navigation, route }) {
                     </View>
                     <View style={styles.tableCellHeaderInput}>
                       <Text style={styles.headerText}>Weight (kg)</Text>
+                    </View>
+                    <View style={styles.tableCellHeaderInput}>
+                      <Text style={styles.headerText}>Reps</Text>
                     </View>
                     <View style={styles.tableCellCheckHeader}>
                       <Text style={styles.headerText}></Text>
@@ -708,6 +803,14 @@ export default function VideoReviewScreen({ navigation, route }) {
                       value={weight}
                       onChangeText={setWeight}
                     />
+                    <TextInput 
+                      style={styles.tableCellInput}
+                      placeholder="0"
+                      placeholderTextColor="#AAAAAA"
+                      keyboardType="number-pad"
+                      value=""
+                      editable={false}
+                    />
                     <TouchableOpacity
                       style={styles.tableCellCheck}
                       onPress={handleCompleteSet}
@@ -725,56 +828,6 @@ export default function VideoReviewScreen({ navigation, route }) {
                     </TouchableOpacity>
                   </View>
                 </View>
-                
-                {/* Loading overlay for exercise detection */}
-                {isLoadingExercise && (
-                  <Animated.View 
-                    style={[
-                      styles.loadingOverlay,
-                      {
-                        opacity: loadingOpacity,
-                      }
-                    ]}
-                  >
-                    <View style={styles.loadingContent}>
-                      <Animated.View 
-                        style={[
-                          styles.loadingCircle,
-                          {
-                            transform: [{ scale: loadingScale }]
-                          }
-                        ]}
-                      >
-                        <Animated.View 
-                          style={[
-                            styles.pulse,
-                            {
-                              transform: [{ scale: pulseAnim }],
-                              opacity: 0.3
-                            }
-                          ]}
-                        />
-                        <ActivityIndicator size="large" color={colors.primary} />
-                      </Animated.View>
-                      <Animated.Text 
-                        style={[
-                          styles.loadingText,
-                          {
-                            opacity: loadingOpacity,
-                            transform: [{
-                              translateY: loadingOpacity.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [10, 0]
-                              })
-                            }]
-                          }
-                        ]}
-                      >
-                        Analyzing exercise...
-                      </Animated.Text>
-                    </View>
-                  </Animated.View>
-                )}
               </View>
               
               {/* Only show the Log Lift button if weight is entered and set is completed */}
@@ -907,6 +960,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: colors.darkGray,
+    lineHeight: 24,
+    textAlignVertical: 'center',
+    marginTop: Platform.OS === 'ios' ? -1 : 0, // Match loading text alignment
   },
   tableContainer: {
     width: '100%',
@@ -934,20 +990,28 @@ const styles = StyleSheet.create({
   tableCellSetHeader: {
     width: 20,
     marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tableCellIconHeader: {
     width: 48,
     marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tableCellHeaderInput: {
     flex: 1,
     marginHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerText: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.gray,
     textAlign: 'center',
     fontWeight: '500',
+    flexShrink: 1,
+    flexWrap: 'nowrap',
   },
   tableCellInput: {
     flex: 1,
@@ -971,6 +1035,8 @@ const styles = StyleSheet.create({
   tableCellCheckHeader: {
     width: 48,
     marginLeft: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkSquare: {
     width: 48,
@@ -1063,65 +1129,70 @@ const styles = StyleSheet.create({
   buttonIcon: {
     marginLeft: 5,
   },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingContent: {
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.gray,
-    marginTop: 12,
-  },
   exerciseEditContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    height: 24,
   },
   exerciseEditInput: {
     flex: 1,
     fontSize: 20,
     fontWeight: '700',
     color: colors.darkGray,
-    padding: 8,
+    padding: 0,
     marginRight: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primary,
+    height: 24,
+    lineHeight: 24,
+    textAlignVertical: 'center',
   },
   editButton: {
-    padding: 8,
-    marginLeft: 4,
+    width: 16,
+    height: 16,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
   },
   exerciseNameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    height: 24,
   },
-  loadingCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.lightGray,
+  exerciseLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    height: 24,
+  },
+  loadingSpinnerContainer: {
+    marginRight: 10,
+    width: 16,
+    height: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pulse: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 40,
-    backgroundColor: colors.lightGray,
+  exerciseLoadingText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.gray,
+    letterSpacing: -0.3,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    lineHeight: 24,
+    textAlignVertical: 'center',
+    marginTop: Platform.OS === 'ios' ? -1 : 0, // Fine-tune vertical alignment
+  },
+  editButtonLeft: {
+    width: 16,
+    height: 16,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editButtonPlaceholder: {
+    width: 16,
+    height: 16,
+    marginRight: 10,
   },
 }); 

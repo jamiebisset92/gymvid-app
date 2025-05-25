@@ -39,7 +39,6 @@ export default function UsernameScreen({ navigation, route }) {
   const [successMessage, setSuccessMessage] = useState(''); // Add success message state
   const [validating, setValidating] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false); // Track ongoing animations
   const { updateProfile, forceCompleteOnboarding } = useAuth();
   const inputRef = useRef(null); // Add ref for text input
   const isFocused = useIsFocused();
@@ -243,42 +242,38 @@ export default function UsernameScreen({ navigation, route }) {
 
   // Helper function to animate error message without duplication
   const animateErrorMessage = (message) => {
-    // Only set and animate if not already showing this message
-    if (errorMessage !== message && !isAnimating) {
-      setSuccessMessage(''); // Clear any success message
-      setErrorMessage(message);
-      setIsAnimating(true);
-      
-      // Animate the error message
-      messageAnim.setValue(0);
-      Animated.timing(messageAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
-        setIsAnimating(false);
-      });
-    }
+    // Only animate if the message is actually changing
+    if (errorMessage === message) return;
+    
+    setSuccessMessage(''); // Clear any success message
+    setErrorMessage(message);
+    
+    // Reset and animate
+    messageAnim.setValue(0);
+    Animated.timing(messageAnim, {
+      toValue: 1,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
   };
   
   // Helper function to animate success message
   const animateSuccessMessage = (message) => {
-    // Only set and animate if not already showing this message
-    if (successMessage !== message && !isAnimating) {
-      setErrorMessage(''); // Clear any error message
-      setSuccessMessage(message);
-      setIsAnimating(true);
-      
-      // Animate the success message
-      messageAnim.setValue(0);
-      Animated.timing(messageAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
-        setIsAnimating(false);
-      });
-    }
+    // Only animate if the message is actually changing
+    if (successMessage === message) return;
+    
+    setErrorMessage(''); // Clear any error message
+    setSuccessMessage(message);
+    
+    // Reset and animate
+    messageAnim.setValue(0);
+    Animated.timing(messageAnim, {
+      toValue: 1,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
   };
 
   // Custom handler for text input to immediately validate for invalid characters
@@ -288,35 +283,43 @@ export default function UsernameScreen({ navigation, route }) {
     // Clear previous timeout if exists
     if (debounceTimeout.current) {
       clearTimeout(debounceTimeout.current);
+      debounceTimeout.current = null;
     }
     
-    // Immediately check for invalid characters
-    if (text.length > 0) {
-      const validUsernameRegex = /^[a-zA-Z0-9_]+$/;
-      if (!validUsernameRegex.test(text)) {
-        setIsValid(false);
-        animateErrorMessage('Username can only contain letters, numbers, and underscores');
-        return; // Skip availability check for invalid usernames
-      }
-      
-      // Set to loading state for better UX
-      if (text.length >= 3) {
-        setValidating(true);
-      }
-    } else {
-      // Clear messages for empty input
+    // Clear messages if empty
+    if (!text) {
       setErrorMessage('');
       setSuccessMessage('');
       setIsValid(false);
+      setValidating(false);
+      return;
     }
+    
+    // Immediately check for invalid characters
+    const validUsernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!validUsernameRegex.test(text)) {
+      setIsValid(false);
+      setValidating(false);
+      animateErrorMessage('Username can only contain letters, numbers, and underscores');
+      return; // Skip availability check for invalid usernames
+    }
+    
+    // Check minimum length
+    if (text.length < 3) {
+      setIsValid(false);
+      setValidating(false);
+      animateErrorMessage('Username must be at least 3 characters');
+      return;
+    }
+    
+    // Set to validating state
+    setValidating(true);
+    setErrorMessage('');
+    setSuccessMessage('');
     
     // Debounce the availability check
     debounceTimeout.current = setTimeout(() => {
-      if (text.length >= 3) {
-        checkUsernameAvailable(text);
-      } else {
-        setValidating(false);
-      }
+      checkUsernameAvailable(text);
     }, 500);
   };
   
@@ -560,22 +563,6 @@ export default function UsernameScreen({ navigation, route }) {
       animateErrorMessage('Error checking username');
     }
   };
-  
-  // Debounced validation hook
-  useEffect(() => {
-    // Skip for empty usernames
-    if (!username || username.length < 3) {
-      return;
-    }
-    
-    // Debounce the validation
-    const timer = setTimeout(() => {
-      checkUsernameAvailable(username);
-    }, 500);
-    
-    // Clear timeout on cleanup
-    return () => clearTimeout(timer);
-  }, [username]);
 
   // Helper for Levenshtein distance calculation
   const levenshteinDistance = (a, b) => {
@@ -648,17 +635,13 @@ export default function UsernameScreen({ navigation, route }) {
 
   // Validate username when it changes (using the new function)
   useEffect(() => {
-    if (username && username.length >= 3) {
-      // The validation is now handled in the debounced handleUsernameChange
-      // This effect mainly serves to handle initial values or programmatic changes
-      
-      // Clear previous timeout if exists when component unmounts
-      return () => {
-        if (debounceTimeout.current) {
-          clearTimeout(debounceTimeout.current);
-        }
-      };
-    }
+    // Cleanup function to clear any pending debounce when component unmounts
+    return () => {
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+        debounceTimeout.current = null;
+      }
+    };
   }, []);
 
   const handleContinue = async () => {
@@ -1243,6 +1226,12 @@ export default function UsernameScreen({ navigation, route }) {
                   opacity: inputAnim
                 }}
               >
+                <View style={styles.infoContainer}>
+                  <Text style={styles.infoText}>
+                    Your username will be used to identify you on the app so you can connect with others using GymVid!
+                  </Text>
+                </View>
+                
                 <View style={[
                   styles.inputContainer,
                   isValid && username.length > 0 && styles.inputContainerValid,
@@ -1293,12 +1282,6 @@ export default function UsernameScreen({ navigation, route }) {
                     <Text style={styles.invisibleMessage}>{' '}</Text>
                   )}
                 </Animated.View>
-                
-                <View style={styles.infoContainer}>
-                  <Text style={styles.infoText}>
-                    Your username must be unique as it will be used for others to find you inside the app.
-                  </Text>
-                </View>
               </Animated.View>
             </View>
           </Animated.View>
@@ -1388,7 +1371,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 15,
+    marginTop: 0,
     borderWidth: 1,
     borderColor: colors.lightGray,
     shadowColor: '#000',
@@ -1463,8 +1446,9 @@ const styles = StyleSheet.create({
     height: 36, // Match the height of the visible messages
   },
   infoContainer: {
-    marginTop: 20,
+    marginTop: 0,
     paddingHorizontal: 8,
+    marginBottom: 26,
   },
   infoText: {
     color: colors.gray,

@@ -26,9 +26,9 @@ def export_evenly_spaced_collage(video_path: str, total_frames: int = 6, output_
         raise ValueError("No frames could be extracted")
 
     # Create a collage image (1 row)
-    resized = [cv2.resize(f, (256, 256)) for f in selected_frames]
+    resized = [cv2.resize(f, (192, 192)) for f in selected_frames]
     collage = np.hstack(resized)
     collage_path = os.path.join(output_dir, "quick_collage.jpg")
-    cv2.imwrite(collage_path, collage)
+    cv2.imwrite(path, collage, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
 
     return [collage_path]
