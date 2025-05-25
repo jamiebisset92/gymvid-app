@@ -36,16 +36,16 @@ Make sure to set these environment variables in your Render service:
 ## Troubleshooting
 
 ### "Client.__init__() got an unexpected keyword argument 'proxies'" Error
-This error was fixed by changing:
-```python
-from anthropic import Client
-client = Client(api_key=...)
-```
-to:
-```python
-from anthropic import Anthropic
-client = Anthropic(api_key=...)
-```
+This error occurs due to incompatibility between Anthropic SDK and httpx version 0.28.0+.
+
+**Solution**: The httpx library must be pinned to version 0.27.2:
+- This is already fixed in requirements.txt: `httpx==0.27.2`
+- If you still see this error, ensure your deployment is using the updated requirements.txt
+
+The error was caused by:
+1. httpx 0.28.0 removed the deprecated `proxies` argument
+2. Anthropic SDK 0.23.0 was still using this argument
+3. Pinning httpx to 0.27.2 maintains compatibility
 
 ### Missing Environment Variables
 - Check `/debug/env` endpoint to see which variables are missing
