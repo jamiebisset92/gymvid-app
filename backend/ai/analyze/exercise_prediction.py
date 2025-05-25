@@ -10,7 +10,6 @@ from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
 load_dotenv()
 client = anthropic.Anthropic(
     api_key=os.getenv("CLAUDE_API_KEY"),
-    base_url="https://api.anthropic.com"  # Optional but safe
 )
 
 def predict_exercise(image_path: str, model: str = "claude-3-haiku-20240307") -> dict:

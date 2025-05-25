@@ -135,7 +135,7 @@ export default function GenderScreen({ navigation, route }) {
           .from('users')
           .select('gender')
           .eq('id', userIdToUse)
-          .single();
+          .maybeSingle();
 
         // If we have a gender, set it in the state
         if (!error && profile && profile.gender) {

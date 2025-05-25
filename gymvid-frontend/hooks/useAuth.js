@@ -287,7 +287,6 @@ export const useAuth = () => {
       setLoading(true);
       debugLog('updateProfile called with:', profile);
       
-      // Use the current user session to ensure proper authentication
       const session = supabase.auth.session();
       const user = session?.user;
       
@@ -298,7 +297,6 @@ export const useAuth = () => {
       
       debugLog('Current user ID:', user.id);
 
-      // Clean any malformed data
       let cleanProfile = { ...profile };
       
       // Make sure gender is a simple string, not a complex/formatted value
@@ -326,14 +324,12 @@ export const useAuth = () => {
         .from('users')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
         
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found
-        console.error('Error fetching existing profile:', fetchError);
-        throw fetchError;
+      if (fetchError) { 
+        console.error('Error fetching existing profile (and not PGRST116):', fetchError);
       }
       
-      // Create update object, starting with a clean slate
       const updateData = { 
         id: user.id, 
         email: user.email
@@ -356,66 +352,60 @@ export const useAuth = () => {
       if (cleanProfile.gender) updateData.gender = cleanProfile.gender;
       if (cleanProfile.date_of_birth) updateData.date_of_birth = cleanProfile.date_of_birth;
       
-      // Explicitly handle onboarding_complete flag - IMPORTANT: this must override existing value
+      // Explicitly handle onboarding_complete flag
       if (cleanProfile.onboarding_complete !== undefined) {
-        // Ensure onboarding_complete is stored as a boolean
         updateData.onboarding_complete = cleanProfile.onboarding_complete === true;
-        debugLog('Setting onboarding_complete to:', updateData.onboarding_complete, '(boolean)');
+      } else if (existingProfile && existingProfile.onboarding_complete !== undefined) {
+        // Preserve existing if not explicitly passed in cleanProfile
+        updateData.onboarding_complete = existingProfile.onboarding_complete;
+      } else {
+        // Default if not present anywhere, though this should ideally be set explicitly
+        updateData.onboarding_complete = false; 
       }
       
-      debugLog('Final update data:', updateData);
+      debugLog('Final update data for upsert:', updateData);
 
-      // First try a direct update - this is most reliable with RLS
-      const { error: updateError } = await supabase
+      // Use upsert to handle both insert and update cases cleanly.
+      const { data, error: upsertError } = await supabase
         .from('users')
-        .update(updateData)
-        .eq('id', user.id);
-        
-      if (!updateError) {
-        debugLog('Profile updated successfully via update');
-        return { error: null };
-      }
-      
-      debugLog('Update failed, trying insert:', updateError);
-      
-      // Fallback to insert with upsert if update fails
-      const { data, error: insertError } = await supabase
-        .from('users')
-        .upsert([updateData], { 
-          onConflict: 'id',
-          returning: 'minimal' 
+        .upsert(updateData, {
+          onConflict: 'id', // Assumes 'id' is the primary key and has a unique constraint
+          returning: 'minimal' // Or 'representation' if you need the data back
         });
 
-      if (!insertError) {
-        debugLog('Profile updated successfully via insert');
-        return { error: null };
-      }
-      
-      debugLog('Insert failed too, trying RPC:', insertError);
-      
-      // Last resort: try using RPC (if available)
-      try {
-        const { error: rpcError } = await supabase.rpc('update_user_profile', {
-          user_id: user.id,
-          user_name: cleanProfile.name || updateData.name,
-          user_gender: cleanProfile.gender || updateData.gender,
-          user_date_of_birth: cleanProfile.date_of_birth || updateData.date_of_birth,
-          user_onboarding_complete: cleanProfile.onboarding_complete !== undefined ? cleanProfile.onboarding_complete : updateData.onboarding_complete
-        });
-        
-        if (!rpcError) {
-          debugLog('Profile updated successfully via RPC');
-          return { error: null };
+      if (upsertError) {
+        console.error('Error upserting profile:', upsertError);
+        // Attempt RPC as a last resort only if upsert fails and an RPC is defined
+        if (supabase.rpc) { // Check if rpc method exists
+            try {
+                const { error: rpcError } = await supabase.rpc('update_user_profile', {
+                  user_id: user.id,
+                  user_name: cleanProfile.name || updateData.name,
+                  user_gender: cleanProfile.gender || updateData.gender,
+                  user_date_of_birth: cleanProfile.date_of_birth || updateData.date_of_birth,
+                  user_onboarding_complete: updateData.onboarding_complete
+                });
+                if (!rpcError) {
+                  debugLog('Profile updated successfully via RPC after upsert failed');
+                  return { error: null };
+                } else {
+                  debugLog('RPC failed after upsert failed:', rpcError);
+                  throw rpcError; // Throw the RPC error if it also fails
+                }
+            } catch (rpcCatchError) {
+                console.error('Error attempting RPC function after upsert failed:', rpcCatchError);
+                throw upsertError; // Re-throw the original upsertError if RPC path fails
+            }
         } else {
-          debugLog('RPC failed:', rpcError);
-          throw rpcError;
+            throw upsertError; // Re-throw if RPC is not available/configured
         }
-      } catch (rpcError) {
-        console.error('Error using RPC function:', rpcError);
-        throw rpcError;
       }
+
+      debugLog('Profile upserted successfully');
+      return { error: null };
+
     } catch (error) {
-      console.error('Error updating profile:', error);
+      console.error('Error in updateProfile catch block:', error);
       return { error };
     } finally {
       setLoading(false);

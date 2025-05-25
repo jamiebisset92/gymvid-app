@@ -51,7 +51,6 @@ const GuidedPopup = ({
   const animValue = useRef(new Animated.Value(0)).current;
   const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0, width: 0 });
   const [arrowStyle, setArrowStyle] = useState({});
-  const [isPopupVisible, setIsPopupVisible] = useState(false);
 
   const ARROW_SIZE = 10;
   const POPUP_MARGIN_FROM_TARGET = 15;
@@ -66,11 +65,11 @@ const GuidedPopup = ({
       const popupWidth = screenDims.width - (2 * SCREEN_PADDING);
       const estimatedPopupHeight = text.length > 70 ? 100 : 85;
       let pTop, pLeft = SCREEN_PADDING;
-      let arrStyle = {};
+      let arrStyleLocal = {};
 
       if (forcePositionBelow) {
         pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET;
-        arrStyle = {
+        arrStyleLocal = {
           bottom: '100%',
           left: targetLayout.x + targetLayout.width / 2 - pLeft - ARROW_SIZE,
           borderBottomWidth: ARROW_SIZE, borderBottomColor: colors.white,
@@ -79,18 +78,18 @@ const GuidedPopup = ({
         };
       } else {
         pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET;
-        arrStyle = {
+        arrStyleLocal = {
           bottom: '100%',
-          left: (popupPosition.width || popupWidth) / 2 - ARROW_SIZE, 
+          left: (popupWidth / 2) - ARROW_SIZE,
           borderBottomWidth: ARROW_SIZE, borderBottomColor: colors.white,
           borderLeftWidth: ARROW_SIZE, borderLeftColor: 'transparent',
           borderRightWidth: ARROW_SIZE, borderRightColor: 'transparent',
         };
         if (pTop + estimatedPopupHeight > screenDims.height - SCREEN_PADDING) {
           pTop = targetLayout.y - estimatedPopupHeight - POPUP_MARGIN_FROM_TARGET;
-          arrStyle = {
+          arrStyleLocal = {
             top: '100%',
-            left: (popupPosition.width || popupWidth) / 2 - ARROW_SIZE,
+            left: (popupWidth / 2) - ARROW_SIZE,
             borderTopWidth: ARROW_SIZE, borderTopColor: colors.white,
             borderLeftWidth: ARROW_SIZE, borderLeftColor: 'transparent',
             borderRightWidth: ARROW_SIZE, borderRightColor: 'transparent',
@@ -104,8 +103,7 @@ const GuidedPopup = ({
       }
 
       setPopupPosition({ top: pTop, left: pLeft, width: popupWidth });
-      setArrowStyle(arrStyle);
-      setIsPopupVisible(true);
+      setArrowStyle(arrStyleLocal);
 
       Animated.spring(animValue, {
         toValue: 1, tension: 60, friction: 7, useNativeDriver: true,
@@ -113,11 +111,17 @@ const GuidedPopup = ({
     } else {
       Animated.timing(animValue, {
         toValue: 0, duration: 200, easing: Easing.ease, useNativeDriver: true,
-      }).start(() => setIsPopupVisible(false));
+      }).start();
     }
-  }, [visible, targetLayout, text, forcePositionBelow, screenDims]); // Removed popupPosition.width from deps
+  }, [visible, targetLayout, text, forcePositionBelow, screenDims]);
 
-  if (!isPopupVisible) return null; // Only check isPopupVisible now
+  if (!visible && animValue._value === 0) {
+    return null;
+  }
+  if (!targetLayout && visible) {
+    debugLog("GuidedPopup: visible but targetLayout not ready for text:", text)
+    return null;
+  }
 
   const overlayPartStyle = {
     position: 'absolute',
@@ -142,7 +146,7 @@ const GuidedPopup = ({
   };
 
   return (
-    <Modal transparent visible={isPopupVisible} animationType="none" onRequestClose={onClose}>
+    <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
       <Pressable style={styles.fullScreenContainerForPressable} onPress={onClose}>
         {expandedHighlight ? (
           <>
@@ -907,11 +911,32 @@ export default function VideoReviewScreen({ navigation, route }) {
 
   // handleDismissTooltip (remains similar)
   const handleDismissTooltip = async () => {
-    if (tooltipStep === 1) setTooltipStep(2);
-    else if (tooltipStep === 2) {
-      setTooltipStep(0); setHasSeenTooltips(true);
-      try { await AsyncStorage.setItem('hasSeenVideoReviewTooltips_v2', 'true'); } 
+    if (tooltipStep === 1) {
+      debugLog('Dismissing tooltip 1. Current step:', tooltipStep);
+      // Start fade-out for popup 1 by setting its visible prop (via tooltipStep) to false indirectly
+      // The GuidedPopup's useEffect will handle the animation.
+      setTooltipStep(0); // Set to a neutral step to hide popup 1
+
+      // Use requestAnimationFrame to delay setting state for the next popup
+      // This allows React to process the current state update and for animations to start
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { // Double rAF for more robustness across platforms/devices
+            debugLog('Setting tooltipStep to 2 after rAFs.');
+            setTooltipStep(2); // Show popup 2
+        });
+      });
+
+    } else if (tooltipStep === 2) {
+      debugLog('Dismissing tooltip 2. Current step:', tooltipStep);
+      setTooltipStep(0); 
+      setHasSeenTooltips(true);
+      try { 
+        await AsyncStorage.setItem('hasSeenVideoReviewTooltips_v2', 'true'); 
+        debugLog('Tooltips marked as seen.');
+      } 
       catch (e) { debugLog('Error saving tooltip_v2 pref', e); }
+    } else {
+      debugLog('handleDismissTooltip called with unexpected step:', tooltipStep);
     }
   };
   
@@ -1125,14 +1150,16 @@ export default function VideoReviewScreen({ navigation, route }) {
                       keyboardType="decimal-pad"
                       value={weight}
                       onChangeText={setWeight}
+                      maxLength={5}
                     />
                     <TextInput 
                       style={styles.tableCellInput}
                       placeholder="0"
                       placeholderTextColor="#AAAAAA"
                       keyboardType="number-pad"
-                      value="" // Reps input is not directly handled here yet, assuming from original code
-                      editable={false} // Assuming reps come from somewhere else or this is a placeholder
+                      value={reps}
+                      onChangeText={setReps}
+                      maxLength={3}
                     />
                     <TouchableOpacity
                       style={styles.tableCellCheck}

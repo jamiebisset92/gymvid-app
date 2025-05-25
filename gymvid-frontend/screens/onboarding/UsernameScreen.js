@@ -737,7 +737,7 @@ export default function UsernameScreen({ navigation, route }) {
         .from('users')
         .select('name')
         .eq('id', currentUserId)
-        .single();
+        .maybeSingle();
         
       if (!userError && userData && userData.name) {
         userName = userData.name.split(' ')[0]; // Get first name
@@ -769,7 +769,7 @@ export default function UsernameScreen({ navigation, route }) {
               .from('users')
               .select('gender, country, date_of_birth, bodyweight, unit_pref')
               .eq('id', currentUserId)
-              .single();
+              .maybeSingle();
               
             if (!error && dbProfile) {
               logToConsole('Retrieved data from Supabase:', dbProfile);
