@@ -164,6 +164,7 @@ async def analyze_feedback(request: FeedbackRequest):
 def debug_env():
     return {
         "openai": os.getenv("OPENAI_API_KEY") is not None,
+        "claude": os.getenv("CLAUDE_API_KEY") is not None,
         "aws": os.getenv("AWS_ACCESS_KEY_ID") is not None,
         "bucket": os.getenv("S3_BUCKET_NAME"),
     }

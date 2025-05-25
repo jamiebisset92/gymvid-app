@@ -3,13 +3,13 @@ import base64
 import json
 import time
 from dotenv import load_dotenv
-from anthropic import Client  # ✅ This is the correct import in 0.23.0+
+from anthropic import Anthropic  # ✅ Correct import for 0.23.0+
 
 # ✅ Load environment variables
 load_dotenv()
 
-# ✅ Initialize Claude client
-client = Client(api_key=os.getenv("CLAUDE_API_KEY"))
+# ✅ Initialize Claude client with correct class name
+client = Anthropic(api_key=os.getenv("CLAUDE_API_KEY"))
 
 def predict_exercise(image_path: str, model: str = "claude-3-haiku-20240307") -> dict:
     with open(image_path, "rb") as f:
