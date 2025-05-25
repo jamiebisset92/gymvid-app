@@ -58,6 +58,7 @@ const GuidedPopup = ({
   const SCREEN_PADDING = 15;
   const HIGHLIGHT_PADDING = 12; 
   const HIGHLIGHT_BORDER_RADIUS = 16; // Increased for more pronounced rounding
+  const HIGHLIGHT_VERTICAL_OFFSET = -15; // Adjusted for higher positioning
   const screenDims = Dimensions.get('window');
 
   useEffect(() => {
@@ -124,10 +125,10 @@ const GuidedPopup = ({
     opacity: animValue,
   };
 
-  // Calculate expanded highlight area based on the raw highlightLayout and padding
+  // Calculate expanded highlight area with padding AND vertical offset
   const expandedHighlight = highlightLayout ? {
     x: highlightLayout.x - HIGHLIGHT_PADDING,
-    y: highlightLayout.y - HIGHLIGHT_PADDING,
+    y: highlightLayout.y - HIGHLIGHT_PADDING + HIGHLIGHT_VERTICAL_OFFSET,
     width: highlightLayout.width + (HIGHLIGHT_PADDING * 2),
     height: highlightLayout.height + (HIGHLIGHT_PADDING * 2),
   } : null;
@@ -136,7 +137,7 @@ const GuidedPopup = ({
       position: 'absolute',
       width: HIGHLIGHT_BORDER_RADIUS,
       height: HIGHLIGHT_BORDER_RADIUS,
-      backgroundColor: screenBackgroundColor, // Use the screen's actual background
+      backgroundColor: screenBackgroundColor,
       opacity: animValue,
   };
 
@@ -151,11 +152,27 @@ const GuidedPopup = ({
             <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y, left: 0, width: expandedHighlight.x, height: expandedHighlight.height }]} />
             <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y, left: expandedHighlight.x + expandedHighlight.width, width: screenDims.width - (expandedHighlight.x + expandedHighlight.width), height: expandedHighlight.height }]} />
 
-            {/* "Corner Eaters" to create the rounded spotlight illusion */}
-            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y, left: expandedHighlight.x, borderBottomRightRadius: HIGHLIGHT_BORDER_RADIUS }]} />
-            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y, left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS, borderBottomLeftRadius: HIGHLIGHT_BORDER_RADIUS }]} />
-            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS, left: expandedHighlight.x, borderTopRightRadius: HIGHLIGHT_BORDER_RADIUS }]} />
-            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS, left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS, borderTopLeftRadius: HIGHLIGHT_BORDER_RADIUS }]} />
+            {/* Corrected "Corner Eaters" for smooth rounded spotlight edges */}
+            <Animated.View style={[cornerEaterStyle, {
+              top: expandedHighlight.y,
+              left: expandedHighlight.x,
+              borderTopLeftRadius: HIGHLIGHT_BORDER_RADIUS // Corrected
+            }]} />
+            <Animated.View style={[cornerEaterStyle, {
+              top: expandedHighlight.y,
+              left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS,
+              borderTopRightRadius: HIGHLIGHT_BORDER_RADIUS // Corrected
+            }]} />
+            <Animated.View style={[cornerEaterStyle, {
+              top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS,
+              left: expandedHighlight.x,
+              borderBottomLeftRadius: HIGHLIGHT_BORDER_RADIUS // Corrected
+            }]} />
+            <Animated.View style={[cornerEaterStyle, {
+              top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS,
+              left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS,
+              borderBottomRightRadius: HIGHLIGHT_BORDER_RADIUS // Corrected
+            }]} />
           </>
         ) : (
           <Animated.View style={[styles.fullScreenTouchableOverlay, { opacity: animValue }]} />
@@ -352,12 +369,12 @@ export default function VideoReviewScreen({ navigation, route }) {
   const [tooltipStep, setTooltipStep] = useState(0);
   const [inputsRowLayout, setInputsRowLayout] = useState(null);
   const [exerciseCardLayout, setExerciseCardLayout] = useState(null);
-  const [exerciseLoadingLayout, setExerciseLoadingLayout] = useState(null);
+  const [exerciseHeaderLayout, setExerciseHeaderLayout] = useState(null);
   const [hasSeenTooltips, setHasSeenTooltips] = useState(true);
 
   const inputsRowRef = useRef(null);
   const exerciseCardRef = useRef(null);
-  const exerciseLoadingRef = useRef(null);
+  const exerciseHeaderRef = useRef(null);
   const thumbnailRef = useRef(null);
 
   // Add ellipsis animation effect
@@ -408,42 +425,26 @@ export default function VideoReviewScreen({ navigation, route }) {
     checkTooltipsSeen();
   }, []);
   
-  // Effect to measure the loading container when it becomes visible
+  // UPDATED: Effect to show tooltips - waits for exerciseHeaderLayout
   useEffect(() => {
-    if (isLoadingExercise && exerciseLoadingRef.current && !exerciseLoadingLayout) {
-      const timer = setTimeout(() => {
-        if (exerciseLoadingRef.current) {
-          exerciseLoadingRef.current.measureInWindow((x, y, width, height) => {
-            if (!isNaN(x) && !isNaN(y) && width > 0 && height > 0) {
-              // Store the RAW layout. Padding will be handled by GuidedPopup.
-              debugLog('Measured RAW loading container:', { x, y, width, height });
-              setExerciseLoadingLayout({ x, y, width, height });
-            }
-          });
-        }
-      }, 150); // Delay for layout stability
-      return () => clearTimeout(timer);
-    }
-    // If no longer loading, clear the layout so it can be remeasured next time
-    if (!isLoadingExercise && exerciseLoadingLayout) {
-        setExerciseLoadingLayout(null);
-    }
-  }, [isLoadingExercise, exerciseLoadingLayout]);
+    if (!hasSeenTooltips && 
+        exerciseCardLayout && 
+        inputsRowLayout && 
+        exerciseHeaderLayout && // Wait for the header layout
+        tooltipStep === 0 && 
+        isLoadingExercise) { // Only show when AI is finding exercise for the first tooltip
 
-  // Updated effect to show tooltips - now also checks isLoadingExercise
-  useEffect(() => {
-    // Only show tooltips when loading state is active and layouts are ready
-    if (!hasSeenTooltips && exerciseCardLayout && inputsRowLayout && exerciseLoadingLayout && 
-        tooltipStep === 0 && isLoadingExercise) {
       if (exerciseCardLayout.width > 0 && exerciseCardLayout.height > 0 && 
           inputsRowLayout.width > 0 && inputsRowLayout.height > 0 &&
-          exerciseLoadingLayout.width > 0 && exerciseLoadingLayout.height > 0) {
-        debugLog('All layouts ready with loading state active, showing first tooltip');
-        const timer = setTimeout(() => setTooltipStep(1), 300); // Shorter delay since we're already loaded
+          exerciseHeaderLayout.width > 0 && exerciseHeaderLayout.height > 0) {
+        debugLog('All layouts ready (Card, Inputs, Header), loading active, showing first tooltip');
+        const timer = setTimeout(() => setTooltipStep(1), 300);
         return () => clearTimeout(timer);
+      } else {
+        debugLog('Waiting for valid layout dimensions...', { exerciseCardLayout, inputsRowLayout, exerciseHeaderLayout });
       }
     }
-  }, [hasSeenTooltips, exerciseCardLayout, inputsRowLayout, exerciseLoadingLayout, tooltipStep, isLoadingExercise]);
+  }, [hasSeenTooltips, exerciseCardLayout, inputsRowLayout, exerciseHeaderLayout, tooltipStep, isLoadingExercise]);
 
   // Function to get the current user ID
   const getCurrentUserId = async () => {
@@ -935,6 +936,7 @@ export default function VideoReviewScreen({ navigation, route }) {
 
   const onInputsRowLayout = () => measureElement(inputsRowRef, setInputsRowLayout);
   const onExerciseCardLayout = () => measureElement(exerciseCardRef, setExerciseCardLayout);
+  const onExerciseHeaderLayout = () => measureElement(exerciseHeaderRef, setExerciseHeaderLayout);
 
   return (
     <Animated.View 
@@ -1003,12 +1005,9 @@ export default function VideoReviewScreen({ navigation, route }) {
               ]}
             >
               <View style={styles.exerciseTableCard} ref={exerciseCardRef} onLayout={onExerciseCardLayout}>
-                <View style={styles.exerciseTableHeader}>
+                <View style={styles.exerciseTableHeader} ref={exerciseHeaderRef} onLayout={onExerciseHeaderLayout}>
                   {isLoadingExercise ? (
-                    <View 
-                      style={styles.exerciseLoadingContainer} 
-                      ref={exerciseLoadingRef}
-                    >
+                    <View style={styles.exerciseLoadingContainer}>
                       <View style={styles.loadingSpinnerContainer}>
                         <ActivityIndicator size="small" color={colors.primary} />
                       </View>
@@ -1053,9 +1052,12 @@ export default function VideoReviewScreen({ navigation, route }) {
                           </TouchableOpacity>
                         </Animated.View>
                       )}
+                      {(!exerciseName || isLoadingExercise) && !isEditingExercise && (
+                        <View style={styles.editButtonPlaceholder} />
+                      )}
                       <Animated.Text style={[
-                        styles.exerciseTableTitle, 
-                        { 
+                        styles.exerciseTableTitle,
+                        {
                           opacity: Animated.multiply(exerciseOpacity, exerciseBlur),
                           transform: [
                             { translateY: exerciseTranslateY },
@@ -1180,9 +1182,9 @@ export default function VideoReviewScreen({ navigation, route }) {
       <GuidedPopup
         visible={tooltipStep === 1}
         text="Our AI will find & select the exercise for you!"
-        targetLayout={exerciseCardLayout}      // For positioning the popup box
-        highlightLayout={exerciseLoadingLayout} // For the spotlight hole
-        screenBackgroundColor={colors.background} // Pass screen background for corner-eaters
+        targetLayout={exerciseCardLayout}
+        highlightLayout={exerciseHeaderLayout}
+        screenBackgroundColor={colors.background}
         onClose={handleDismissTooltip}
         forcePositionBelow={true}
       />
@@ -1190,7 +1192,7 @@ export default function VideoReviewScreen({ navigation, route }) {
         visible={tooltipStep === 2}
         text="You can enter in the weight and reps while you wait and then tap the tick to log your first set."
         targetLayout={inputsRowLayout}
-        highlightLayout={null} // No spotlight for the second popup
+        highlightLayout={null} 
         screenBackgroundColor={colors.background}
         onClose={handleDismissTooltip}
       />
@@ -1292,8 +1294,8 @@ const styles = StyleSheet.create({
   exerciseTableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 15,
+    height: 24,
   },
   exerciseTableTitle: {
     fontSize: 20,
@@ -1301,7 +1303,8 @@ const styles = StyleSheet.create({
     color: colors.darkGray,
     lineHeight: 24,
     textAlignVertical: 'center',
-    marginTop: Platform.OS === 'ios' ? -1 : 0, // Match loading text alignment
+    marginTop: Platform.OS === 'ios' ? -1 : 0,
+    letterSpacing: -0.3,
   },
   tableContainer: {
     width: '100%',
@@ -1514,13 +1517,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    height: 24,
+    height: '100%',
   },
   exerciseLoadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    height: 24,
+    height: '100%',
   },
   loadingSpinnerContainer: {
     marginRight: 10,
@@ -1537,7 +1540,7 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
     lineHeight: 24,
     textAlignVertical: 'center',
-    marginTop: Platform.OS === 'ios' ? -1 : 0, // Fine-tune vertical alignment
+    marginTop: Platform.OS === 'ios' ? -1 : 0,
   },
   editButtonLeft: {
     width: 16,
@@ -1547,9 +1550,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   editButtonPlaceholder: {
-    width: 16,
+    width: 16 + 10,
     height: 16,
-    marginRight: 10,
   },
   // Styles for World-Class GuidedPopup
   fullScreenContainerForPressable: { // New style for the Pressable parent in Modal

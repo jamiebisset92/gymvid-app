@@ -3,11 +3,15 @@ import base64
 import json
 import time
 from dotenv import load_dotenv
+import anthropic
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
 
 # ✅ Load API key
 load_dotenv()
-client = Anthropic(api_key=os.getenv("CLAUDE_API_KEY"))
+client = anthropic.Anthropic(
+    api_key=os.getenv("CLAUDE_API_KEY"),
+    base_url="https://api.anthropic.com"  # Optional but safe
+)
 
 def predict_exercise(image_path: str, model: str = "claude-3-haiku-20240307") -> dict:
     with open(image_path, "rb") as f:
@@ -41,6 +45,8 @@ Analyze this image: data:image/jpeg;base64,{b64}
 """
 
     try:
+        start = time.time()
+
         stream = client.completions.create(
             model=model,
             max_tokens_to_sample=500,
@@ -53,7 +59,9 @@ Analyze this image: data:image/jpeg;base64,{b64}
             if event.completion:
                 content += event.completion
 
+        print(f"⏱️ Claude call duration: {round(time.time() - start, 2)} seconds")
         print("🧠 Raw Claude response:", content)
+
         return json.loads(content.strip("`").strip())
 
     except Exception as e:
