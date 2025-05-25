@@ -429,26 +429,41 @@ export default function VideoReviewScreen({ navigation, route }) {
     checkTooltipsSeen();
   }, []);
   
-  // UPDATED: Effect to show tooltips - waits for exerciseHeaderLayout
+  // REVISED useEffect for triggering the first tooltip
   useEffect(() => {
-    if (!hasSeenTooltips && 
-        exerciseCardLayout && 
-        inputsRowLayout && 
-        exerciseHeaderLayout && // Wait for the header layout
-        tooltipStep === 0 && 
-        isLoadingExercise) { // Only show when AI is finding exercise for the first tooltip
-
-      if (exerciseCardLayout.width > 0 && exerciseCardLayout.height > 0 && 
-          inputsRowLayout.width > 0 && inputsRowLayout.height > 0 &&
-          exerciseHeaderLayout.width > 0 && exerciseHeaderLayout.height > 0) {
-        debugLog('All layouts ready (Card, Inputs, Header), loading active, showing first tooltip');
-        const timer = setTimeout(() => setTooltipStep(1), 300);
-        return () => clearTimeout(timer);
+    if (
+      !hasSeenTooltips &&
+      tooltipStep === 0 &&    // No tooltip currently active
+      isLoadingExercise &&    // AI is currently finding exercise
+      exerciseCardLayout &&   // Main card is laid out (for popup box positioning)
+      exerciseHeaderLayout && // Header (target for spotlight) is laid out
+      inputsRowLayout       // Inputs row (for ensuring next tooltip can be positioned) is laid out
+    ) {
+      // Double-check for valid dimensions to prevent issues with premature measurement
+      if (
+        exerciseCardLayout.width > 0 && exerciseCardLayout.height > 0 &&
+        inputsRowLayout.width > 0 && inputsRowLayout.height > 0 &&
+        exerciseHeaderLayout.width > 0 && exerciseHeaderLayout.height > 0
+      ) {
+        debugLog('Conditions met for FIRST tooltip. Setting tooltipStep to 1.');
+        // Set directly, no timeout needed as this effect runs when conditions are met
+        setTooltipStep(1);
       } else {
-        debugLog('Waiting for valid layout dimensions...', { exerciseCardLayout, inputsRowLayout, exerciseHeaderLayout });
+        debugLog('Tooltip 1 Trigger: Layouts available but dimensions might be invalid/zero. Waiting for re-measure.', 
+                  { exerciseCardLayout, inputsRowLayout, exerciseHeaderLayout });
       }
     }
-  }, [hasSeenTooltips, exerciseCardLayout, inputsRowLayout, exerciseHeaderLayout, tooltipStep, isLoadingExercise]);
+    // If isLoadingExercise becomes false while tooltipStep is 1 (e.g., user dismissed it fast or loading finished),
+    // we don't want to automatically hide it here. Dismissal is handled by `handleDismissTooltip`.
+    // If the conditions are no longer met for showing tooltip 1 *before it was ever shown* (tooltipStep still 0), it just won't show.
+  }, [
+    hasSeenTooltips, 
+    tooltipStep, 
+    isLoadingExercise, 
+    exerciseCardLayout, 
+    exerciseHeaderLayout, 
+    inputsRowLayout
+  ]);
 
   // Function to get the current user ID
   const getCurrentUserId = async () => {
