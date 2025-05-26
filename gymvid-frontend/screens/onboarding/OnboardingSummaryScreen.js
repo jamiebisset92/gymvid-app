@@ -304,7 +304,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
     
     // Try to get user from Supabase auth
     try {
-      const user = supabase.auth.user();
+      const { data: { user } } = await supabase.auth.getUser();
       if (user && user.id) {
         debugLog('Using userId from Supabase auth:', user.id);
         return user.id;
@@ -315,7 +315,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
     
     // Try to get session from Supabase
     try {
-      const session = supabase.auth.session();
+      const { data: { session } } = await supabase.auth.getSession();
       if (session && session.user && session.user.id) {
         debugLog('Using userId from Supabase session:', session.user.id);
         return session.user.id;
@@ -412,7 +412,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
               .from('users')
               .select('gender, bodyweight, date_of_birth, unit_pref')
               .eq('id', userId)
-              .single();
+              .maybeSingle(); // Use maybeSingle() to handle no rows
               
             if (!error && profile) {
               // Calculate age category from date of birth if needed
@@ -588,10 +588,43 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
         .from('users')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle(); // Use maybeSingle() to handle no rows
         
-      if (error) {
+      if (error && error.code !== 'PGRST116') {
         throw error;
+      }
+      
+      // If no profile exists, create one
+      if (!profile) {
+        debugLog('No profile found, creating basic profile...');
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              id: userId,
+              email: user.email,
+              onboarding_complete: false
+            });
+          
+          if (insertError) {
+            console.error('Error creating user profile:', insertError);
+            throw insertError;
+          }
+          
+          // Return a basic profile object
+          return { 
+            data: {
+              id: userId,
+              email: user.email,
+              onboarding_complete: false
+            }, 
+            error: null 
+          };
+        }
+        
+        throw new Error('No user found to create profile');
       }
       
       // Log the Supabase data

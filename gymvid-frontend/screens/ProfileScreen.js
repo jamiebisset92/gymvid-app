@@ -237,8 +237,13 @@ export default function ProfileScreen({ mcp, user_id }) {
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        // Get current user using the v1 API method or use provided user_id prop
-        const currentUserId = user_id || (supabase.auth.user() ? supabase.auth.user().id : null);
+        // Get current user using the v2 API method or use provided user_id prop
+        let currentUserId = user_id;
+        
+        if (!currentUserId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          currentUserId = user?.id;
+        }
         
         if (!currentUserId) {
           setLoading(false);
@@ -252,10 +257,30 @@ export default function ProfileScreen({ mcp, user_id }) {
           .from('users')
           .select('username, name, email, profile_image_url, country, age_category, weight_class')
           .eq('id', currentUserId)
-          .single();
+          .maybeSingle(); // Use maybeSingle() to handle no rows
           
-        if (error) {
+        if (error && error.code !== 'PGRST116') {
           console.error('Error fetching user profile:', error);
+          setLoading(false);
+          return;
+        }
+        
+        if (!data) {
+          // Create a basic profile if it doesn't exist
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { error: insertError } = await supabase
+              .from('users')
+              .insert({
+                id: currentUserId,
+                email: user.email,
+                onboarding_complete: false
+              });
+            
+            if (insertError) {
+              console.error('Error creating user profile:', insertError);
+            }
+          }
           setLoading(false);
           return;
         }
@@ -348,7 +373,12 @@ export default function ProfileScreen({ mcp, user_id }) {
       setUploadingImage(true);
       
       // Get current user id (from props or auth)
-      const currentUserId = user_id || (supabase.auth.user() ? supabase.auth.user().id : null);
+      let currentUserId = user_id;
+      
+      if (!currentUserId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        currentUserId = user?.id;
+      }
       
       if (!currentUserId) {
         toast.error('You need to be logged in to upload a profile image');

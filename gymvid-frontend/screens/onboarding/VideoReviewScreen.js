@@ -15,7 +15,10 @@ import {
   Platform,
   Modal,
   Easing,
-  Pressable
+  Pressable,
+  Keyboard,
+  InputAccessoryView,
+  TouchableWithoutFeedback
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
@@ -28,6 +31,7 @@ import { supabase } from '../../config/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { useToast } from '../../components/ToastProvider';
+import CoachingFeedbackModal from '../../components/CoachingFeedbackModal';
 
 const debugLog = (...args) => {
   if (__DEV__) {
@@ -37,6 +41,26 @@ const debugLog = (...args) => {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const VIDEO_HEIGHT = SCREEN_WIDTH * 1.5; // 3:2 aspect ratio
+
+// InputAccessoryView ID for keyboard toolbar
+const inputAccessoryViewID = 'VideoReviewKeyboardToolbar';
+
+// Keyboard Toolbar Component
+const KeyboardToolbar = () => (
+  <InputAccessoryView nativeID={inputAccessoryViewID}>
+    <View style={styles.keyboardToolbar}>
+      <View style={styles.keyboardToolbarSpacer} />
+      <TouchableOpacity 
+        style={styles.keyboardDoneButton}
+        onPress={() => {
+          Keyboard.dismiss();
+        }}
+      >
+        <Text style={styles.keyboardDoneButtonText}>Done</Text>
+      </TouchableOpacity>
+    </View>
+  </InputAccessoryView>
+);
 
 // World-Class GuidedPopup Component Definition
 const GuidedPopup = ({ 
@@ -152,14 +176,6 @@ const GuidedPopup = ({
     height: highlightLayout.height + (HIGHLIGHT_PADDING * 2),
   } : null;
 
-  const cornerEaterStyle = {
-      position: 'absolute',
-      width: HIGHLIGHT_BORDER_RADIUS,
-      height: HIGHLIGHT_BORDER_RADIUS,
-      backgroundColor: screenBackgroundColor,
-      opacity: animValue,
-  };
-
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
       <Pressable style={styles.fullScreenContainerForPressable} onPress={onClose}>
@@ -170,12 +186,6 @@ const GuidedPopup = ({
             <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y + expandedHighlight.height, left: 0, width: screenDims.width, height: screenDims.height - (expandedHighlight.y + expandedHighlight.height) }]} />
             <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y, left: 0, width: expandedHighlight.x, height: expandedHighlight.height }]} />
             <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y, left: expandedHighlight.x + expandedHighlight.width, width: screenDims.width - (expandedHighlight.x + expandedHighlight.width), height: expandedHighlight.height }]} />
-            
-            {/* Corner eaters for rounded effect */}
-            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y, left: expandedHighlight.x, borderTopLeftRadius: HIGHLIGHT_BORDER_RADIUS }]} />
-            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y, left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS, borderTopRightRadius: HIGHLIGHT_BORDER_RADIUS }]} />
-            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS, left: expandedHighlight.x, borderBottomLeftRadius: HIGHLIGHT_BORDER_RADIUS }]} />
-            <Animated.View style={[cornerEaterStyle, { top: expandedHighlight.y + expandedHighlight.height - HIGHLIGHT_BORDER_RADIUS, left: expandedHighlight.x + expandedHighlight.width - HIGHLIGHT_BORDER_RADIUS, borderBottomRightRadius: HIGHLIGHT_BORDER_RADIUS }]} />
           </>
         ) : (
           <Animated.View style={[styles.fullScreenTouchableOverlay, { opacity: animValue }]} />
@@ -485,26 +495,19 @@ export default function VideoReviewScreen({ navigation, route }) {
         return userId;
       }
       
-      // Try to get user from Supabase auth
-      try {
-        const user = supabase.auth.user();
-        if (user && user.id) {
-          debugLog('Using userId from Supabase auth:', user.id);
-          return user.id;
-        }
-      } catch (err) {
-        console.error('Error getting user from Supabase auth:', err);
+      // Use Supabase v1 auth methods
+      // Method 1: Try user() method (Supabase v1)
+      const user = supabase.auth.user();
+      if (user && user.id) {
+        debugLog('Using userId from Supabase user():', user.id);
+        return user.id;
       }
       
-      // Try to get session from Supabase
-      try {
-        const session = supabase.auth.session();
-        if (session && session.user && session.user.id) {
-          debugLog('Using userId from Supabase session:', session.user.id);
-          return session.user.id;
-        }
-      } catch (err) {
-        console.error('Error getting session from Supabase:', err);
+      // Method 2: Try session() method (Supabase v1)
+      const session = supabase.auth.session();
+      if (session && session.user && session.user.id) {
+        debugLog('Using userId from Supabase session:', session.user.id);
+        return session.user.id;
       }
       
       // Last resort: try to get from AsyncStorage
@@ -601,6 +604,9 @@ export default function VideoReviewScreen({ navigation, route }) {
 
   // Run entrance animations
   useEffect(() => {
+    // Force dismiss keyboard on component mount to prevent stuck keyboard
+    Keyboard.dismiss();
+    
     const animationSequence = Animated.stagger(100, [
       // Fade in the entire view first
       Animated.timing(fadeAnim, {
@@ -644,6 +650,9 @@ export default function VideoReviewScreen({ navigation, route }) {
     
     // Set up a focus listener for when returning to this screen
     const unsubFocus = navigation.addListener('focus', () => {
+      // Force dismiss keyboard when screen comes into focus
+      Keyboard.dismiss();
+      
       // Reset animations
       fadeAnim.setValue(0);
       slideAnim.setValue(30);
@@ -661,6 +670,8 @@ export default function VideoReviewScreen({ navigation, route }) {
       if (videoRef.current) {
         videoRef.current.pauseAsync();
       }
+      // Force dismiss keyboard on cleanup
+      Keyboard.dismiss();
     };
   }, [navigation, videoUri]);
 
@@ -943,6 +954,98 @@ export default function VideoReviewScreen({ navigation, route }) {
     setIsEditingExercise(false);
   };
 
+  // Function to handle AI coaching feedback
+  const handleShowCoachingFeedback = async () => {
+    if (!videoUri) return;
+
+    // Dismiss the keyboard first to prevent it from getting stuck
+    Keyboard.dismiss();
+
+    // Show modal with loading state
+    setFeedbackModalVisible(true);
+    setFeedbackLoading(true);
+    setFeedbackData(null);
+    setFeedbackThumbnail(thumbnailUri);
+    setFeedbackVideoUrl(videoUri);
+
+    try {
+      // Use Supabase v1 auth methods
+      let user_id = 'demo-user';
+      
+      // Method 1: Try user() method (Supabase v1)
+      const user = supabase.auth.user();
+      if (user?.id) {
+        user_id = user.id;
+      } else {
+        // Method 2: Try session() method (Supabase v1)
+        const session = supabase.auth.session();
+        if (session?.user?.id) {
+          user_id = session.user.id;
+        }
+      }
+
+      debugLog('Sending coaching feedback request with user_id:', user_id);
+      debugLog('Video URI:', videoUri);
+      debugLog('Exercise name:', exerciseName || 'Unknown Exercise');
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      
+      // Add the video file
+      formData.append('video', {
+        uri: videoUri,
+        type: 'video/mp4',
+        name: 'workout_video.mp4',
+      });
+      
+      // Add other form fields
+      formData.append('user_id', user_id);
+      formData.append('movement', exerciseName || 'Unknown Exercise');
+
+      debugLog('FormData created, making request to backend...');
+
+      const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback_upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      debugLog('Response received, status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      debugLog('Response data:', data);
+      
+      if (!data.success) throw new Error('Failed to get coaching feedback');
+
+      setFeedbackLoading(false);
+      setFeedbackData(data.feedback);
+
+    } catch (error) {
+      console.error('Error getting coaching feedback:', error);
+      debugLog('Full error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      setFeedbackLoading(false);
+      setFeedbackData(null);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to get coaching feedback. Please try again.';
+      if (error.message.includes('Network request failed')) {
+        errorMessage = 'Network connection failed. Please check your internet connection and try again.';
+      } else if (error.message.includes('HTTP error')) {
+        errorMessage = 'Server error occurred. Please try again later.';
+      }
+      
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
   // handleDismissTooltip (fixed to prevent premature marking as seen)
   const handleDismissTooltip = async () => {
     debugLog('handleDismissTooltip called with tooltipStep:', tooltipStep);
@@ -1048,6 +1151,13 @@ export default function VideoReviewScreen({ navigation, route }) {
     };
   };
 
+  // Add states for AI coaching feedback
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackData, setFeedbackData] = useState(null);
+  const [feedbackThumbnail, setFeedbackThumbnail] = useState(null);
+  const [feedbackVideoUrl, setFeedbackVideoUrl] = useState(null);
+
   return (
     <Animated.View 
       style={[
@@ -1061,237 +1171,236 @@ export default function VideoReviewScreen({ navigation, route }) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
         >
-          {/* Header with back button */}
-          <View style={styles.header}>
-            <TouchableOpacity 
-              style={styles.backButton} 
-              onPress={() => navigation.goBack()}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="chevron-back" size={24} color={colors.gray} />
-            </TouchableOpacity>
-            <View style={styles.headerSpacer} />
-          </View>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.touchableContent}>
+              {/* Header with back button */}
+              <View style={styles.header}>
+                <TouchableOpacity 
+                  style={styles.backButton} 
+                  onPress={() => navigation.goBack()}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chevron-back" size={24} color={colors.gray} />
+                </TouchableOpacity>
+                <View style={styles.headerSpacer} />
+              </View>
 
-          <View style={styles.contentContainer}>
-            <Animated.Text
-              style={[
-                styles.titleText,
-                { 
-                  opacity: titleAnim,
-                  transform: [
+              <View style={styles.contentContainer}>
+                <Animated.Text
+                  style={[
+                    styles.titleText,
                     { 
-                      scale: titleAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.98, 1],
-                        extrapolate: 'clamp'
-                      })
-                    }
-                  ] 
-                }
-              ]}
-            >
-              How to Log Your Lifts:
-            </Animated.Text>
-            
-            {/* Remove Video Player section and only show Exercise Card */}
-            <Animated.View 
-              style={[
-                styles.formContainer, 
-                { 
-                  opacity: formAnim,
-                  transform: [
-                    { 
-                      translateY: formAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [15, 0],
-                        extrapolate: 'clamp'
-                      })
-                    }
-                  ]
-                }
-              ]}
-            >
-              <View style={styles.exerciseTableCard} ref={exerciseCardRef} onLayout={onExerciseCardLayout}>
-                <View style={styles.exerciseTableHeader} ref={exerciseHeaderRef} onLayout={onExerciseHeaderLayout}>
-                  {isLoadingExercise ? (
-                    <View style={styles.exerciseLoadingContainer}>
-                      <View style={styles.loadingSpinnerContainer}>
-                        <ActivityIndicator size="small" color={colors.primary} />
-                      </View>
-                      <Animated.Text style={[
-                        styles.exerciseLoadingText,
-                        {
-                          opacity: shimmerAnim.interpolate({
-                            inputRange: [0, 0.5, 1],
-                            outputRange: [0.6, 1, 0.6]
-                          }),
-                          color: shimmerAnim.interpolate({
-                            inputRange: [0, 0.5, 1],
-                            outputRange: [colors.gray, colors.primary, colors.gray]
+                      opacity: titleAnim,
+                      transform: [
+                        { 
+                          scale: titleAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.98, 1],
+                            extrapolate: 'clamp'
                           })
                         }
-                      ]}>
-                        AI Finding Exercise{'.'.repeat(ellipsisCount)}
-                      </Animated.Text>
-                    </View>
-                  ) : isEditingExercise ? (
-                    <View style={styles.exerciseEditContainer}>
-                      <TouchableOpacity onPress={handleSaveExercise} style={styles.editButton}>
-                        <Ionicons name="checkmark" size={20} color={colors.primary} />
-                      </TouchableOpacity>
-                      <TextInput
-                        style={styles.exerciseEditInput}
-                        value={tempExerciseName}
-                        onChangeText={setTempExerciseName}
-                        autoFocus
-                        selectTextOnFocus
-                        onBlur={handleCancelEditExercise}
-                        onSubmitEditing={handleSaveExercise}
-                        returnKeyType="done"
-                      />
-                    </View>
-                  ) : (
-                    <View style={styles.exerciseNameContainer}>
-                      {exerciseName && !isLoadingExercise && (
-                        <Animated.View style={{ opacity: pencilOpacity }}>
-                          <TouchableOpacity onPress={handleStartEditExercise} style={styles.editButtonLeft}>
-                            <Ionicons name="pencil" size={16} color={colors.gray} />
-                          </TouchableOpacity>
-                        </Animated.View>
-                      )}
-                      {(!exerciseName || isLoadingExercise) && !isEditingExercise && (
-                        <View style={styles.editButtonPlaceholder} />
-                      )}
-                      <Animated.Text style={[
-                        styles.exerciseTableTitle,
-                        {
-                          opacity: Animated.multiply(exerciseOpacity, exerciseBlur),
-                          transform: [
-                            { translateY: exerciseTranslateY },
-                            { scale: exerciseScale }
-                          ]
-                        }
-                      ]}>
-                        {exerciseName || ''}
-                      </Animated.Text>
-                    </View>
-                  )}
-                </View>
+                      ] 
+                    }
+                  ]}
+                >
+                  How to Log Your Lifts:
+                </Animated.Text>
                 
-                <View style={styles.tableContainer}>
-                  {/* Table header row */}
-                  <View style={styles.tableHeaderRow}>
-                    <View style={styles.tableCellSetHeader}>
-                      <Text style={styles.headerText}>#</Text>
+                {/* Remove Video Player section and only show Exercise Card */}
+                <Animated.View 
+                  style={[
+                    styles.formContainer, 
+                    { 
+                      opacity: formAnim,
+                      transform: [
+                        { 
+                          translateY: formAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [15, 0],
+                            extrapolate: 'clamp'
+                          })
+                        }
+                      ]
+                    }
+                  ]}
+                >
+                  <View style={styles.exerciseTableCard} ref={exerciseCardRef} onLayout={onExerciseCardLayout}>
+                    <View style={styles.exerciseTableHeader} ref={exerciseHeaderRef} onLayout={onExerciseHeaderLayout}>
+                      {isLoadingExercise ? (
+                        <View style={styles.exerciseLoadingContainer}>
+                          <View style={styles.loadingSpinnerContainer}>
+                            <ActivityIndicator size="small" color={colors.primary} />
+                          </View>
+                          <Animated.Text style={[
+                            styles.exerciseLoadingText,
+                            {
+                              opacity: shimmerAnim.interpolate({
+                                inputRange: [0, 0.5, 1],
+                                outputRange: [0.6, 1, 0.6]
+                              }),
+                              color: shimmerAnim.interpolate({
+                                inputRange: [0, 0.5, 1],
+                                outputRange: [colors.gray, colors.primary, colors.gray]
+                              })
+                            }
+                          ]}>
+                            AI Finding Exercise{'.'.repeat(ellipsisCount)}
+                          </Animated.Text>
+                        </View>
+                      ) : isEditingExercise ? (
+                        <View style={styles.exerciseEditContainer}>
+                          <TouchableOpacity onPress={handleSaveExercise} style={styles.editButton}>
+                            <Ionicons name="checkmark" size={20} color={colors.primary} />
+                          </TouchableOpacity>
+                          <TextInput
+                            style={styles.exerciseEditInput}
+                            value={tempExerciseName}
+                            onChangeText={setTempExerciseName}
+                            autoFocus
+                            selectTextOnFocus
+                            onBlur={handleCancelEditExercise}
+                            onSubmitEditing={handleSaveExercise}
+                            returnKeyType="done"
+                          />
+                        </View>
+                      ) : (
+                        <View style={styles.exerciseNameContainer}>
+                          {exerciseName && !isLoadingExercise && (
+                            <Animated.View style={{ opacity: pencilOpacity }}>
+                              <TouchableOpacity onPress={handleStartEditExercise} style={styles.editButtonLeft}>
+                                <Ionicons name="pencil" size={16} color={colors.gray} />
+                              </TouchableOpacity>
+                            </Animated.View>
+                          )}
+                          {(!exerciseName || isLoadingExercise) && !isEditingExercise && (
+                            <View style={styles.editButtonPlaceholder} />
+                          )}
+                          <Animated.Text style={[
+                            styles.exerciseTableTitle,
+                            {
+                              opacity: Animated.multiply(exerciseOpacity, exerciseBlur),
+                              transform: [
+                                { translateY: exerciseTranslateY },
+                                { scale: exerciseScale }
+                              ]
+                            }
+                          ]}>
+                            {exerciseName || ''}
+                          </Animated.Text>
+                        </View>
+                      )}
                     </View>
-                    <View style={styles.tableCellIconHeader}>
-                      <Text style={styles.headerText}>GymVid</Text>
-                    </View>
-                    <View style={styles.tableCellHeaderInput}>
-                      <Text style={styles.headerText}>Weight (kg)</Text>
-                    </View>
-                    <View style={styles.tableCellHeaderInput}>
-                      <Text style={styles.headerText}>Reps</Text>
-                    </View>
-                    <View style={styles.tableCellCheckHeader}>
-                      <Text style={styles.headerText}></Text>
+                    
+                    <View style={styles.tableContainer}>
+                      {/* Table header row */}
+                      <View style={styles.tableHeaderRow}>
+                        <View style={styles.tableCellSetHeader}>
+                          <Text style={styles.headerText}>#</Text>
+                        </View>
+                        <View style={styles.tableCellIconHeader}>
+                          <Text style={styles.headerText}>GymVid</Text>
+                        </View>
+                        <View style={styles.tableCellHeaderInput}>
+                          <Text style={styles.headerText}>Weight (kg)</Text>
+                        </View>
+                        <View style={styles.tableCellHeaderInput}>
+                          <Text style={styles.headerText}>Reps</Text>
+                        </View>
+                        <View style={styles.tableCellCheckHeader}>
+                          <Text style={styles.headerText}></Text>
+                        </View>
+                      </View>
+                      
+                      {/* Table data row - TARGET FOR TOOLTIP 2 */}
+                      <View style={styles.tableRow} ref={inputsRowRef} onLayout={onInputsRowLayout}>
+                        <Text style={styles.tableCellSet}>1</Text>
+                        {thumbnailUri ? (
+                          // TARGET FOR TOOLTIP 1
+                          <TouchableOpacity 
+                            ref={thumbnailRef}
+                            style={styles.thumbnailContainer}
+                            onPress={handleVideoPreview}
+                          >
+                            <Image 
+                              source={{ uri: thumbnailUri }} 
+                              style={styles.thumbnail}
+                              resizeMode="cover"
+                            />
+                          </TouchableOpacity>
+                        ) : (
+                          <TouchableOpacity 
+                            ref={thumbnailRef} // Also measure this as a fallback if no thumbnail
+                            style={styles.cameraButtonContainer}
+                            onPress={selectVideo}
+                          >
+                            <View style={styles.cameraButtonInner}>
+                              <Ionicons name="camera-outline" size={24} color={colors.gray} />
+                            </View>
+                          </TouchableOpacity>
+                        )}
+                        <TextInput 
+                          style={styles.tableCellInput}
+                          placeholder="0"
+                          placeholderTextColor="#AAAAAA"
+                          keyboardType="decimal-pad"
+                          value={weight}
+                          onChangeText={setWeight}
+                          maxLength={5}
+                          inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
+                          returnKeyType="done"
+                          onSubmitEditing={Keyboard.dismiss}
+                        />
+                        <TextInput 
+                          style={styles.tableCellInput}
+                          placeholder="0"
+                          placeholderTextColor="#AAAAAA"
+                          keyboardType="number-pad"
+                          value={reps}
+                          onChangeText={setReps}
+                          maxLength={3}
+                          inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
+                          returnKeyType="done"
+                          onSubmitEditing={Keyboard.dismiss}
+                        />
+                        <TouchableOpacity
+                          style={styles.tableCellCheck}
+                          onPress={handleCompleteSet}
+                        >
+                          <View style={[
+                            styles.checkSquare,
+                            isSetCompleted && styles.checkSquareCompleted
+                          ]}>
+                            <Ionicons 
+                              name="checkmark-sharp" 
+                              size={24} 
+                              color={isSetCompleted ? colors.white : colors.lightGray} 
+                            />
+                          </View>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                   
-                  {/* Table data row - TARGET FOR TOOLTIP 2 */}
-                  <View style={styles.tableRow} ref={inputsRowRef} onLayout={onInputsRowLayout}>
-                    <Text style={styles.tableCellSet}>1</Text>
-                    {thumbnailUri ? (
-                      // TARGET FOR TOOLTIP 1
-                      <TouchableOpacity 
-                        ref={thumbnailRef}
-                        style={styles.thumbnailContainer}
-                        onPress={handleVideoPreview}
-                      >
-                        <Image 
-                          source={{ uri: thumbnailUri }} 
-                          style={styles.thumbnail}
-                          resizeMode="cover"
-                        />
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity 
-                        ref={thumbnailRef} // Also measure this as a fallback if no thumbnail
-                        style={styles.cameraButtonContainer}
-                        onPress={selectVideo}
-                      >
-                        <View style={styles.cameraButtonInner}>
-                          <Ionicons name="camera-outline" size={24} color={colors.gray} />
-                        </View>
-                      </TouchableOpacity>
-                    )}
-                    <TextInput 
-                      style={styles.tableCellInput}
-                      placeholder="0"
-                      placeholderTextColor="#AAAAAA"
-                      keyboardType="decimal-pad"
-                      value={weight}
-                      onChangeText={setWeight}
-                      maxLength={5}
-                    />
-                    <TextInput 
-                      style={styles.tableCellInput}
-                      placeholder="0"
-                      placeholderTextColor="#AAAAAA"
-                      keyboardType="number-pad"
-                      value={reps}
-                      onChangeText={setReps}
-                      maxLength={3}
-                    />
+                  {/* AI Coaching Feedback Button */}
+                  {isSetCompleted && videoUri && (
                     <TouchableOpacity
-                      style={styles.tableCellCheck}
-                      onPress={handleCompleteSet}
+                      style={styles.aiCoachingButton}
+                      onPress={handleShowCoachingFeedback}
                     >
-                      <View style={[
-                        styles.checkSquare,
-                        isSetCompleted && styles.checkSquareCompleted
-                      ]}>
-                        <Ionicons 
-                          name="checkmark-sharp" 
-                          size={24} 
-                          color={isSetCompleted ? colors.white : colors.lightGray} 
-                        />
-                      </View>
+                      <Ionicons name="analytics-outline" size={18} color="#6C3EF6" />
+                      <Text style={styles.aiCoachingButtonText}>AI Coaching Feedback</Text>
                     </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-              
-              {/* Only show the Log Lift button if weight is entered and set is completed */}
-              {weight && isSetCompleted && (
-                <TouchableOpacity 
-                  style={[
-                    styles.logButton,
-                    loading && styles.logButtonDisabled
-                  ]}
-                  onPress={handleLogLift}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Text style={styles.logButtonText}>Log Lift</Text>
-                      <Ionicons name="checkmark" size={24} color={colors.white} style={styles.buttonIcon} />
-                    </>
                   )}
-                </TouchableOpacity>
-              )}
-            </Animated.View>
-          </View>
+                </Animated.View>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </SafeAreaView>
       
       <GuidedPopup
         visible={tooltipStep === 1}
-        text="Our AI will select the exercise for you!"
+        text="Our AI will detect the exercise for you!"
         targetLayout={exerciseCardLayout}
         highlightLayout={getFirstPopupSpotlightArea(exerciseHeaderLayout)}
         screenBackgroundColor={colors.background}
@@ -1301,7 +1410,7 @@ export default function VideoReviewScreen({ navigation, route }) {
       />
       <GuidedPopup
         visible={tooltipStep === 2}
-        text="Enter the weight & reps while you wait! Then tap the tick button to log your set."
+        text="You can enter the weight & reps while you wait - then tap the ✓ to log the set."
         targetLayout={inputsRowLayout}
         highlightLayout={getCustomSpotlightArea(inputsRowLayout)} 
         screenBackgroundColor={colors.background}
@@ -1316,6 +1425,56 @@ export default function VideoReviewScreen({ navigation, route }) {
         videoUri={videoUri}
         onClose={closePreview}
       />
+      
+      {/* AI Coaching Feedback Modal */}
+      <CoachingFeedbackModal
+        visible={feedbackModalVisible}
+        onClose={() => setFeedbackModalVisible(false)}
+        loading={feedbackLoading}
+        feedback={feedbackData}
+        videoThumbnail={feedbackThumbnail}
+        exerciseName={exerciseName || 'Unknown Exercise'}
+        setNumber={1}
+        customSubtitle={`Set 1: ${weight || '0'}kg x ${reps || '0'} Reps`}
+        metrics={{
+          form_rating: feedbackData?.form_rating ?? '',
+          weight: weight ?? '',
+          reps: reps ?? '',
+          rpe: '',
+          tut: '',
+        }}
+        set={{
+          weight: weight,
+          reps: reps,
+          video_url: feedbackVideoUrl,
+          thumbnail_url: feedbackThumbnail,
+        }}
+      />
+      
+      {/* Only show the Log Lift button if weight is entered and set is completed */}
+      {weight && isSetCompleted && (
+        <TouchableOpacity 
+          style={[
+            styles.logButton,
+            loading && styles.logButtonDisabled
+          ]}
+          onPress={handleLogLift}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <>
+              <Text style={styles.logButtonText}>Log Lift</Text>
+              <Ionicons name="checkmark" size={24} color={colors.white} style={styles.buttonIcon} />
+            </>
+          )}
+        </TouchableOpacity>
+      )}
+      
+      {/* Keyboard Toolbar */}
+      <KeyboardToolbar />
     </Animated.View>
   );
 }
@@ -1329,6 +1488,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   keyboardAvoidingView: {
+    flex: 1,
+  },
+  touchableContent: {
     flex: 1,
   },
   header: {
@@ -1744,5 +1906,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingBottom: 1,
+  },
+  aiCoachingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: -2,
+    marginHorizontal: 12,
+    marginBottom: 6,
+  },
+  aiCoachingButtonText: {
+    color: '#6C3EF6',
+    fontSize: 16,
+    fontFamily: 'DMSans-Bold',
+    marginLeft: 6,
+  },
+  keyboardToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    backgroundColor: '#F7F7F7',
+    borderTopWidth: 0.5,
+    borderTopColor: '#C6C6C8',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 44,
+  },
+  keyboardToolbarSpacer: {
+    flex: 1,
+  },
+  keyboardDoneButton: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+  },
+  keyboardDoneButtonText: {
+    color: '#007AFF',
+    fontSize: 17,
+    fontWeight: '400',
   },
 }); 

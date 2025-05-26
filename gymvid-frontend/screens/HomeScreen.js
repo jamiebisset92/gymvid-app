@@ -74,7 +74,7 @@ export default function HomeScreen({ navigation, route }) {
       
       // Check for first time user from completing onboarding
       const checkFirstTimeUser = async () => {
-        // Get the current user
+        // Get the current user using Supabase v1 method
         const currentUser = supabase.auth.user();
         if (!currentUser) return;
         
@@ -83,9 +83,9 @@ export default function HomeScreen({ navigation, route }) {
           .from('users')
           .select('name')
           .eq('id', currentUser.id)
-          .single();
+          .maybeSingle();
         
-        if (error) {
+        if (error && error.code !== 'PGRST116') {
           debugLog("Error fetching user profile:", error);
         } else if (profile && profile.name) {
           const firstName = profile.name.split(' ')[0]; // Use just the first name
@@ -95,6 +95,20 @@ export default function HomeScreen({ navigation, route }) {
           // If we still have global welcome info without a name, set it now
           if (global.welcomeInfo && !global.welcomeInfo.userName) {
             global.welcomeInfo.userName = firstName;
+          }
+        } else if (!profile) {
+          debugLog("No user profile found, creating one...");
+          // Create a basic profile if it doesn't exist
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              id: currentUser.id,
+              email: currentUser.email,
+              onboarding_complete: false
+            });
+          
+          if (insertError) {
+            debugLog("Error creating user profile:", insertError);
           }
         }
       };
@@ -122,9 +136,9 @@ export default function HomeScreen({ navigation, route }) {
           .from('users')
           .select('name')
           .eq('id', currentUser.id)
-          .single();
+          .maybeSingle();
         
-        if (error) {
+        if (error && error.code !== 'PGRST116') {
           debugLog("Error fetching user profile:", error);
         } else if (profile && profile.name) {
           const firstName = profile.name.split(' ')[0]; // Use just the first name

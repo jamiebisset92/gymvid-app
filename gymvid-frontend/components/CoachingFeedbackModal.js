@@ -3,7 +3,7 @@ import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Scr
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../config/colors';
 
-export default function CoachingFeedbackModal({ visible, onClose, loading, feedback, videoThumbnail, exerciseName, setNumber, metrics, set, parentExerciseName }) {
+export default function CoachingFeedbackModal({ visible, onClose, loading, feedback, videoThumbnail, exerciseName, setNumber, metrics, set, parentExerciseName, customSubtitle }) {
   let displayExerciseName = parentExerciseName || exerciseName;
   const isFallbackHeader = !displayExerciseName;
   if (isFallbackHeader) displayExerciseName = 'AI Form Analysis';
@@ -44,7 +44,23 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
           </View>
           <Text style={[styles.exerciseTitleTrue, isFallbackHeader && styles.exerciseTitleTrueFallback]}>{displayExerciseName}</Text>
           {!isFallbackHeader && (
-            <Text style={styles.setSubtitleTrue}>{`Set ${setNumber}: AI Form Analysis`}</Text>
+            <View style={styles.setSubtitleContainer}>
+              {customSubtitle ? (
+                <Text style={styles.setSubtitleTrue}>
+                  <Text style={styles.setSubtitleBold}>
+                    {customSubtitle.split(':')[0]}:
+                  </Text>
+                  <Text style={styles.setSubtitleRegular}>
+                    {customSubtitle.split(':').slice(1).join(':')}
+                  </Text>
+                </Text>
+              ) : (
+                <Text style={styles.setSubtitleTrue}>
+                  <Text style={styles.setSubtitleBold}>Set {setNumber}:</Text>
+                  <Text style={styles.setSubtitleRegular}> AI Form Analysis</Text>
+                </Text>
+              )}
+            </View>
           )}
           {loading ? (
             <View style={styles.loadingContainer}>
@@ -153,6 +169,9 @@ const styles = StyleSheet.create({
   exerciseTitleTrueFallback: {
     marginBottom: 18,
   },
+  setSubtitleContainer: {
+    marginBottom: 18,
+  },
   setSubtitleTrue: {
     fontSize: 15,
     fontFamily: 'DMSans-Regular',
@@ -160,6 +179,16 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     marginTop: 2,
     textAlign: 'left',
+  },
+  setSubtitleBold: {
+    fontSize: 15,
+    fontFamily: 'DMSans-Bold',
+    color: '#007AFF',
+  },
+  setSubtitleRegular: {
+    fontSize: 15,
+    fontFamily: 'DMSans-Regular',
+    color: '#007AFF',
   },
   metricsCardBlockFull: {
     width: '100%',

@@ -159,6 +159,50 @@ async def analyze_feedback(request: FeedbackRequest):
             }
         }
 
+# ✅ Coaching Feedback Endpoint with File Upload
+@app.post("/analyze/feedback_upload")
+async def analyze_feedback_upload(
+    video: UploadFile = File(...),
+    user_id: str = Form(...),
+    movement: str = Form(...)
+):
+    os.makedirs("temp_uploads", exist_ok=True)
+    temp_video_path = f"temp_uploads/{video.filename}"
+    
+    try:
+        # Save uploaded video to temporary file
+        with open(temp_video_path, "wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+        
+        # Analyze the video
+        video_data = analyze_video(temp_video_path)
+        rep_data = run_rep_detection_from_landmark_y(video_data["raw_y"], video_data["fps"])
+        export_keyframes(temp_video_path, rep_data)
+        feedback = generate_feedback(
+            video_data={ "predicted_exercise": movement },
+            rep_data=rep_data
+        )
+        
+        return { "success": True, "feedback": feedback }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "feedback": {
+                "form_rating": 0,
+                "observations": [{
+                    "observation": "👀 We couldn't process your video.",
+                    "tip": "🧠 Try uploading a different angle or clearer rep.",
+                    "summary": f"👉 Error: {str(e)}"
+                }]
+            }
+        }
+    finally:
+        # Clean up temporary file
+        if os.path.exists(temp_video_path):
+            os.remove(temp_video_path)
+
 # ✅ Debug
 @app.get("/debug/env")
 def debug_env():
