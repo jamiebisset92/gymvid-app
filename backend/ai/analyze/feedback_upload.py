@@ -8,7 +8,7 @@ import os
 
 router = APIRouter()
 
-@router.post("/analyze/feedback_upload")
+@router.post("/feedback_upload")
 async def feedback_upload(
     video: UploadFile = File(...),
     user_id: str = Form(...),
