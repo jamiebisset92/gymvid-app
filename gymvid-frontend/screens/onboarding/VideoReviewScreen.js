@@ -1158,6 +1158,20 @@ export default function VideoReviewScreen({ navigation, route }) {
   const [feedbackThumbnail, setFeedbackThumbnail] = useState(null);
   const [feedbackVideoUrl, setFeedbackVideoUrl] = useState(null);
 
+  // Function to handle weight input (allow numbers and one decimal)
+  const handleWeightChange = (text) => {
+    let newText = text.replace(/[^0-9.]/g, ''); // Remove invalid chars
+    const parts = newText.split('.');
+    if (parts.length > 2) { // More than one decimal point
+      newText = parts[0] + '.' + parts.slice(1).join('');
+    }
+    // Optional: Limit to 2 decimal places if needed
+    // if (parts[1] && parts[1].length > 2) {
+    //   newText = parts[0] + '.' + parts[1].substring(0, 2);
+    // }
+    setWeight(newText);
+  };
+
   return (
     <Animated.View 
       style={[
@@ -1342,9 +1356,9 @@ export default function VideoReviewScreen({ navigation, route }) {
                           style={styles.tableCellInput}
                           placeholder="0"
                           placeholderTextColor="#AAAAAA"
-                          keyboardType="decimal-pad"
+                          keyboardType="numeric"
                           value={weight}
-                          onChangeText={setWeight}
+                          onChangeText={handleWeightChange}
                           maxLength={5}
                           inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                           returnKeyType="done"

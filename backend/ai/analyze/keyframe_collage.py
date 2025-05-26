@@ -1,8 +1,6 @@
 import os
 import cv2
-import math
 import numpy as np
-
 
 def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = "keyframe_collages") -> list:
     """
@@ -10,8 +8,8 @@ def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = 
 
     Rules:
     - 1–4 reps: return 1 collage of all reps
-    - 5–7 reps: return 1 collage of reps 1–4
-    - 8+ reps: return 2 collages: reps 1–4 and last 4 reps
+    - 5–7 reps: return 2 collages (first 4 reps + final rep)
+    - 8+ reps: return 2 collages (first 4 reps + last 4 reps)
 
     Returns:
         List of saved collage file paths.
@@ -52,6 +50,7 @@ def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = 
         build_collage(rep_data, "full")
     elif total_reps <= 7:
         build_collage(rep_data[:4], "first4")
+        build_collage(rep_data[-1:], "last1")
     else:
         build_collage(rep_data[:4], "first4")
         build_collage(rep_data[-4:], "last4")

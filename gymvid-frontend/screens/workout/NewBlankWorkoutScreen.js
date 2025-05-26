@@ -471,8 +471,8 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
       return;
     }
     try {
-      const user = await supabase.auth.getUser();
-      const userId = user.data?.id;
+      const user = supabase.auth.user(); // V1 METHOD
+      const userId = user?.id; // V1 user object is directly the user, not user.data.user
       if (!userId) throw new Error('User not authenticated');
 
       const workoutName = workoutNameInput || new Date().toLocaleString();
@@ -914,7 +914,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
     
     try {
       // Fix for Supabase v1.x
-      const user = supabase.auth.user();
+      const user = supabase.auth.user(); // V1 METHOD
       const user_id = user?.id;
       if (!user_id) {
         Toast.show('User not authenticated.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
@@ -1040,7 +1040,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   // Handler for Add AI Video Set (below each exercise card)
   const handleAddAIVideoSet = async (exerciseIdx) => {
     try {
-      const user = supabase.auth.user();
+      const user = supabase.auth.user(); // V1 METHOD
       const user_id = user?.id;
       if (!user_id) {
         Toast.show('User not authenticated.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
@@ -1325,7 +1325,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
     setFeedbackVideoUrl(videoUrl);
 
     try {
-      const user = supabase.auth.user();
+      const user = supabase.auth.user(); // V1 METHOD
       const user_id = user?.id;
       if (!user_id) throw new Error('User not authenticated');
 

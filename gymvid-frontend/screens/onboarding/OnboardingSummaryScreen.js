@@ -304,7 +304,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
     
     // Try to get user from Supabase auth
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = supabase.auth.user(); // V1 METHOD
       if (user && user.id) {
         debugLog('Using userId from Supabase auth:', user.id);
         return user.id;
@@ -597,7 +597,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
       // If no profile exists, create one
       if (!profile) {
         debugLog('No profile found, creating basic profile...');
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = supabase.auth.user(); // V1 METHOD
         
         if (user) {
           const { error: insertError } = await supabase

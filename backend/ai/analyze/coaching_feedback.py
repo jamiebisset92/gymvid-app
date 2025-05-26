@@ -1,26 +1,23 @@
 import os
 import json
 import re
+import traceback
 import numpy as np
-from openai import OpenAI
 from dotenv import load_dotenv
+from anthropic import Anthropic
+from backend.ai.analyze.keyframe_collage import export_keyframe_collages
+from backend.utils.aws_utils import upload_file_to_s3
 
-# ✅ Load environment variables
+# ✅ Load environment variables and Claude client
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
+client = Anthropic(api_key=os.getenv("CLAUDE_API_KEY"))
+MODEL_NAME = os.getenv("GYMVID_AI_MODEL", "claude-3-haiku-20240307")
 IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
 
-def convert_numpy(obj):
-    if isinstance(obj, np.generic):
-        return obj.item()
-    return obj
 
-def extract_json_block(text):
-    match = re.search(r"```json\s*(.*?)```", text, re.DOTALL)
-    return match.group(1).strip() if match else text.strip()
-
-# ✅ New: Compress raw rep data into coaching summaries
+# ----------------------
+# 📊 Rep Data Formatting
+# ----------------------
 def compress_rep_data_for_gpt(rep_data: list, feedback_depth: str = "standard") -> list:
     summaries = []
 
@@ -29,9 +26,9 @@ def compress_rep_data_for_gpt(rep_data: list, feedback_depth: str = "standard") 
         rpe = rep.get("estimated_RPE")
         stall = rep.get("velocity_stall", False)
         rom = rep.get("range_of_motion_cm")
-        smooth = rep.get("smoothness_score")
-        path = rep.get("path_deviation_cm")
-        asym = rep.get("asymmetry_score")
+        smooth = min(rep.get("smoothness_score", 0), 100)
+        path = rep.get("path_deviation_cm", 0)
+        asym = rep.get("asymmetry_score", 100)
         tempo = rep.get("tempo", {})
         concentric = tempo.get("concentric_sec", 0)
         eccentric = tempo.get("eccentric_sec", 0)
@@ -71,71 +68,91 @@ def compress_rep_data_for_gpt(rep_data: list, feedback_depth: str = "standard") 
 
     return summaries
 
+
 def calculate_tut_and_rpe(rep_data):
     total_tut = sum([rep.get("duration_sec", 0) for rep in rep_data])
     last_rpe = rep_data[-1].get("estimated_RPE", None) if rep_data else None
     return round(total_tut, 2), last_rpe
 
-# ✅ Main GPT feedback generator
-def generate_feedback(video_data, rep_data):
-    exercise_name = video_data.get("predicted_exercise", "an exercise")
-    feedback_depth = video_data.get("feedback_depth", "standard")
-    total_tut, last_rpe = calculate_tut_and_rpe(rep_data)
 
-    # 🔄 Use compression layer
-    rep_summaries = compress_rep_data_for_gpt(rep_data, feedback_depth)
-    summaries_text = "\n".join(rep_summaries)
+# -----------------------------
+# 🎓 Claude Coaching Generator
+# -----------------------------
+def generate_feedback(video_path, user_id, video_data, rep_data) -> dict:
+    try:
+        # Step 1: Collage Generation
+        collage_paths = export_keyframe_collages(video_path, rep_data)
+        collage_urls = []
 
-    prompt = f"""
-You are a professional lifting coach. A user submitted a set of {exercise_name}.
-They've also provided a keyframe image grid (3x5 layout: each row = one rep, left to right).
+        for path in collage_paths:
+            s3_url = upload_file_to_s3(
+                file_path=path,
+                s3_path=f"collages/{user_id}/{os.path.basename(path)}"
+            )
+            collage_urls.append(s3_url)
 
-Here are the summarized rep observations:
+        # Step 2: GPT Prompt Construction
+        exercise_name = video_data.get("predicted_exercise", "an exercise")
+        feedback_depth = video_data.get("feedback_depth", "standard")
+        total_tut, last_rpe = calculate_tut_and_rpe(rep_data)
+        rep_summaries = compress_rep_data_for_gpt(rep_data, feedback_depth)
+        summaries_text = "\n".join(rep_summaries)
+
+        collage_descriptions = "\n".join([
+    f"- First collage shows reps 1–4: {collage_urls[0]}" if len(collage_urls) >= 1 else "",
+    f"- Second collage shows the final rep: {collage_urls[1]}" if len(rep_data) <= 7 and len(collage_urls) == 2 else "",
+    f"- Second collage shows the last 4 reps: {collage_urls[1]}" if len(rep_data) > 7 and len(collage_urls) == 2 else ""
+])
+
+        prompt = f"""
+Human:
+You're a professional lifting coach who provides clear, helpful, and friendly coaching feedback.
+
+A user just submitted a set of **{exercise_name}**. Below are the summaries of each rep:
 {summaries_text}
 
-Instructions:
-- Identify 1 general form comment about the set
-- Provide 2 specific, actionable coaching tips
-- Return valid JSON (see format below)
-- Use plain, confident language
-- No emojis
+They also submitted up to 2 collage images showing 3 keyframes per rep:
+{collage_descriptions}
 
-Respond in this JSON format only:
+Please:
+- Share a brief, general comment about their technique
+- Offer up to 4 specific coaching observations with actionable tips (fewer if not needed)
+- When relevant, reference the rep number (e.g. "In rep 3, the bar path shifts forward...")
+- Use plain, confident language (avoid sounding robotic or over-enthusiastic)
+- Keep it supportive — this is someone who wants to improve
+- Return only a valid JSON object (no Markdown, no extra text)
+
+Format:
 {{
   "coaching_feedback": {{
     "form_rating": integer (1–10),
     "observations": [
-      {{
-        "observation": "Your first point here.",
-        "tip": "Your tip for this observation."
-      }},
-      {{
-        "observation": "Second insight here.",
-        "tip": "Second coaching tip."
-      }}
+      {{ "observation": "...", "tip": "..." }}
+      // Up to 4 total
     ],
-    "summary": "Wrap up with encouragement or a focus area."
+    "summary": "A closing note of encouragement or a reminder of what to focus on."
   }}
 }}
-"""
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a professional lifting coach."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=800,
+Assistant:
+""".strip()
+
+        # Step 3: Claude API Call
+        response = client.messages.create(
+            model=MODEL_NAME,
+            max_tokens=1000,
+            temperature=0.4,
+            system="You are a world-class strength coach.",
+            messages=[{"role": "user", "content": prompt}]
         )
 
-        raw_text = response.choices[0].message.content
+        text = response.content[0].text
         if not IS_SUBPROCESS:
-            print("🧠 Raw GPT Coaching Response:\n", raw_text)
+            print("\U0001f9e0 Claude Coaching Response:\n", text)
 
-        json_text = extract_json_block(raw_text)
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        json_text = match.group(0) if match else text
         parsed = json.loads(json_text)
-
         result = parsed["coaching_feedback"]
         result["total_tut"] = total_tut
         result["rpe"] = last_rpe
@@ -143,14 +160,16 @@ Respond in this JSON format only:
 
     except Exception as e:
         if not IS_SUBPROCESS:
-            print("❌ Coaching GPT parsing error:", str(e))
+            print("❌ Claude coaching error:", str(e))
+            traceback.print_exc()
+
         return {
             "form_rating": 0,
             "rpe": None,
             "total_tut": None,
             "observations": [{
-                "observation": "Unable to evaluate form due to error.",
-                "tip": "Try uploading a different video or review your form manually."
+                "observation": "Unable to generate feedback due to a technical issue.",
+                "tip": "Please try uploading a different video or try again later."
             }],
-            "summary": f"Something went wrong generating your feedback: {str(e)}"
+            "summary": "We hit a snag processing your feedback — but we’re working on it!"
         }

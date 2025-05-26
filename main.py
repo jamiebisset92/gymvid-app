@@ -179,6 +179,8 @@ async def analyze_feedback_upload(
         rep_data = run_rep_detection_from_landmark_y(video_data["raw_y"], video_data["fps"])
         export_keyframes(temp_video_path, rep_data)
         feedback = generate_feedback(
+            video_path=temp_video_path,
+            user_id=user_id,
             video_data={ "predicted_exercise": movement },
             rep_data=rep_data
         )

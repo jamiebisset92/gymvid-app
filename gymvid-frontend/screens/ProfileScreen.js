@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -18,6 +18,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { uploadProfileImage } from '../utils/storageUtils';
 import { useToast } from '../components/ToastProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Animated from 'react-native-reanimated';
+import { useAuth } from '../context/AuthContext';
 
 // List of countries with ISO codes for flag display
 const COUNTRIES = [
@@ -217,253 +219,207 @@ const COUNTRIES = [
   { name: "Zimbabwe", code: "ZW" }
 ];
 
-export default function ProfileScreen({ mcp, user_id }) {
+const ProfileScreen = ({ navigation }) => {
+  const { session, setSession, loading: authLoading, updateProfileData, user: authContextUser } = useAuth();
+  const [profile, setProfile] = useState(null);
+  const [avatarUrl, setAvatarUrl] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [userData, setUserData] = useState(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [countryCode, setCountryCode] = useState('US'); // Default to US
-  const [userId, setUserId] = useState(null);
-  const [ageCategory, setAgeCategory] = useState('Open'); // Default fallback
-  const [weightClass, setWeightClass] = useState('60kg'); // Default fallback
+  const [uploading, setUploading] = useState(false);
+  const [editingField, setEditingField] = useState(null);
+  const [tempValue, setTempValue] = useState('');
+  const [showUnitPicker, setShowUnitPicker] = useState(false);
+
   const toast = useToast();
-  
-  // Stats data moved to state
-  const [stats, setStats] = useState({
-    workouts: 42,
-    videos: 128,
-    followers: 987
-  });
 
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        // Get current user using the v2 API method or use provided user_id prop
-        let currentUserId = user_id;
-        
-        if (!currentUserId) {
-          const { data: { user } } = await supabase.auth.getUser();
-          currentUserId = user?.id;
-        }
-        
-        if (!currentUserId) {
-          setLoading(false);
-          return;
-        }
-        
-        setUserId(currentUserId);
-        
-        // Fetch user profile from 'users' table
-        const { data, error } = await supabase
-          .from('users')
-          .select('username, name, email, profile_image_url, country, age_category, weight_class')
-          .eq('id', currentUserId)
-          .maybeSingle(); // Use maybeSingle() to handle no rows
-          
-        if (error && error.code !== 'PGRST116') {
-          console.error('Error fetching user profile:', error);
-          setLoading(false);
-          return;
-        }
-        
-        if (!data) {
-          // Create a basic profile if it doesn't exist
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            const { error: insertError } = await supabase
-              .from('users')
-              .insert({
-                id: currentUserId,
-                email: user.email,
-                onboarding_complete: false
-              });
-            
-            if (insertError) {
-              console.error('Error creating user profile:', insertError);
-            }
-          }
-          setLoading(false);
-          return;
-        }
-        
-        console.log('User country:', data.country);
-        
-        // Find country code if country is available
-        let countryIsoCode = 'US'; // Default
-        if (data.country) {
-          const countryObj = COUNTRIES.find(c => 
-            c.name.toLowerCase() === data.country.toLowerCase()
-          );
-          
-          if (countryObj) {
-            countryIsoCode = countryObj.code;
-            console.log('Found country code:', countryIsoCode);
-          } else {
-            console.log('Country not found in list:', data.country);
-          }
-        }
-        
-        setCountryCode(countryIsoCode);
-        
-        // Try to get age category and weight class from Supabase first
-        if (data.age_category) setAgeCategory(data.age_category);
-        if (data.weight_class) setWeightClass(data.weight_class);
-        
-        // If not available in Supabase, try AsyncStorage as fallback
-        try {
-          const storedAgeCategory = await AsyncStorage.getItem('userAgeCategory');
-          const storedWeightClass = await AsyncStorage.getItem('userWeightClass');
-          
-          if (!data.age_category && storedAgeCategory) {
-            setAgeCategory(storedAgeCategory);
-          }
-          
-          if (!data.weight_class && storedWeightClass) {
-            setWeightClass(storedWeightClass);
-          }
-        } catch (storageError) {
-          console.error('Error reading from AsyncStorage:', storageError);
-        }
-        
-        // Set user data with username from database
-        setUserData({
-          name: data.username || data.name || 'User',
-          profileImage: data.profile_image_url || 'https://randomuser.me/api/portraits/women/44.jpg',
-          country: data.country || 'United States'
-        });
-      } catch (error) {
-        console.error('Error in profile data fetching:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchUserProfile();
-  }, [user_id]);
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
-  const handleSelectProfileImage = async () => {
+  const fetchProfile = async () => {
+    setLoading(true);
     try {
-      // Request permissions
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (!permissionResult.granted) {
-        Alert.alert("Permission Denied", "You need to allow access to your photos to change your profile picture.");
+      const user = supabase.auth.user(); // V1 METHOD
+      if (!user) {
+        toast.error("Not authenticated. Please log in.");
+        setLoading(false);
+        navigation.navigate('Login'); // Redirect to login if not authenticated
         return;
       }
-      
-      // Launch image picker using the compatible format for this version
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-      
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const imageUri = result.assets[0].uri;
-        await handleProfileImageUpload(imageUri);
+
+      const { data, error, status } = await supabase
+        .from('users')
+        .select(`*`)
+        .eq('id', user.id)
+        .maybeSingle(); // Use maybeSingle to handle no profile yet
+
+      if (error && status !== 406) {
+        // 406 status means no rows found, which is fine for a new user
+        throw error;
+      }
+
+      if (data) {
+        setProfile(data);
+        if (data.avatar_url) {
+          // Construct full URL for avatar if it's just a path
+          if (data.avatar_url.startsWith('http')) {
+            setAvatarUrl(data.avatar_url);
+          } else {
+            // Assume it's a path in a public bucket
+            // You might need to adjust this based on your bucket structure
+            const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.avatar_url);
+            setAvatarUrl(publicUrlData?.publicUrl);
+          }
+        }
+        // Update auth context if needed, or ensure it's in sync
+        if (!authContextUser || authContextUser.id !== data.id) {
+          updateProfileData(data); // Make sure updateProfileData can handle this
+        }
+      } else {
+        // If no profile data, but user is authenticated, create a basic profile object
+        // or prompt for profile completion.
+        // For now, set a minimal profile or null and let UI handle it.
+        setProfile({ id: user.id, email: user.email }); // Basic profile from auth user
+        toast.info("Profile not fully set up yet.");
       }
     } catch (error) {
-      console.error('Error selecting image:', error);
-      Alert.alert('Error', 'Failed to select image. Please try again.');
+      toast.error(`Error fetching profile: ${error.message}`);
+      console.error("Error fetching profile:", error);
+      // If profile fetch fails critically, consider signing out or redirecting
+      // For now, just show error and stop loading
+    } finally {
+      setLoading(false);
+      // Start animations once loading is complete
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.spring(scaleAnim, { toValue: 1, tension: 60, friction: 7, useNativeDriver: true })
+      ]).start();
     }
   };
-  
-  const handleProfileImageUpload = async (imageUri) => {
+
+  useEffect(() => {
+    if (session) { // Only fetch if session is available
+      fetchProfile();
+    }
+  }, [session]); // Re-fetch if session changes
+
+  const handleSaveField = async (field) => {
+    if (!profile) return;
+    setLoading(true);
     try {
-      setUploadingImage(true);
-      
-      // Get current user id (from props or auth)
-      let currentUserId = user_id;
-      
-      if (!currentUserId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        currentUserId = user?.id;
-      }
-      
-      if (!currentUserId) {
-        toast.error('You need to be logged in to upload a profile image');
-        return;
-      }
-      
-      console.log('Starting profile image upload for user:', currentUserId);
-      
-      // Prepare FormData for the backend
-      const fileExt = imageUri.split('.').pop().toLowerCase();
-      const fileName = `${Date.now()}.${fileExt}`;
-      
-      const fileObject = {
-        uri: imageUri,
-        type: `image/${fileExt}`,
-        name: fileName
+      const user = supabase.auth.user(); // V1 METHOD
+      if (!user) throw new Error('User not authenticated');
+
+      const updates = {
+        id: user.id, // Ensure ID is part of updates for upsert logic
+        [field]: field === 'bodyweight' ? parseFloat(tempValue) : tempValue,
+        updated_at: new Date(),
       };
-      
-      // Create FormData
-      const formData = new FormData();
-      formData.append('file', fileObject);
-      formData.append('user_id', currentUserId);
-      
-      // Send direct request to backend API
-      const response = await fetch('https://gymvid-app.onrender.com/upload/profile-image', {
-        method: 'POST',
-        body: formData,
-        timeout: 30000,
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Backend error:', {
-          status: response.status,
-          text: errorText
-        });
-        throw new Error(`Upload failed: ${response.status}`);
-      }
-      
-      // Parse backend response
-      const data = await response.json();
-      console.log('Backend response:', data);
-      
-      // Check for success flag and image_url in response
-      if (!data.success || !data.image_url) {
-        throw new Error('Invalid response from server');
-      }
-      
-      const imageUrl = data.image_url;
-      console.log('Image uploaded successfully to S3, URL:', imageUrl);
-      
-      // Use the provided mcp client or fallback to standard supabase client
-      const dbClient = mcp || supabase;
-      
-      // Update user profile in Supabase - overwrite existing image URL
-      const updateResult = await dbClient
-        .from('users')
-        .update({ profile_image_url: imageUrl })
-        .eq('id', currentUserId);
-      
-      if (updateResult.error) {
-        console.error('Error updating user profile:', updateResult.error);
-        toast.error('Profile updated in S3 but database update failed');
-        throw new Error(`Failed to update profile in database: ${updateResult.error.message}`);
-      }
-      
-      console.log('Profile updated successfully in database');
-      
-      // Update state with new image
-      setUserData(prev => ({
-        ...prev,
-        profileImage: imageUrl
-      }));
-      
-      // Show success toast without tick emoji
-      toast.success('Profile image updated!');
-      
+
+      const { error } = await supabase.from('users').upsert(updates).select().single();
+      if (error) throw error;
+
+      setProfile(prev => ({ ...prev, [field]: tempValue }));
+      updateProfileData({ [field]: tempValue }); // Update auth context
+      toast.success("Profile updated!");
+      setEditingField(null);
     } catch (error) {
-      // Log the full error object for debugging
-      console.error('Error uploading image:', error);
-      
-      // Show error toast
-      toast.error(`Failed to update profile image: ${error.message || 'Unknown error'}`);
+      toast.error(`Error updating profile: ${error.message}`);
     } finally {
-      setUploadingImage(false);
+      setLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setSession(null); // Clear session in auth context
+      // navigation.replace('Login'); // Or your main auth flow start screen
+      // AsyncStorage.clear(); // Optional: clear all async storage on sign out
+      toast.success("Signed out successfully.");
+    } catch (error) {
+      toast.error(`Sign out failed: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to make this work!');
+      return;
+    }
+
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets[0].uri) {
+      uploadAvatar(result.assets[0].uri);
+    }
+  };
+
+  const uploadAvatar = async (uri) => {
+    try {
+      setUploading(true);
+      const user = supabase.auth.user(); // V1 METHOD
+      if (!user) throw new Error('User not authenticated for avatar upload.');
+
+      const fileExt = uri.split('.').pop();
+      const fileName = `${user.id}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      let formData = new FormData();
+      formData.append('file', {
+        uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
+        name: fileName,
+        type: `image/${fileExt}`,
+      });
+
+      // Check if avatar exists to decide on update or upload
+      // This might be tricky if old avatar has different extension
+      // Simpler: always use upsert or overwrite
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, formData, { upsert: true }); // Use upsert: true
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL (assuming your bucket is public or has RLS for public read)
+      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      const newAvatarUrl = publicUrlData?.publicUrl;
+
+      if (!newAvatarUrl) {
+        throw new Error("Could not get public URL for avatar.");
+      }
+
+      // Update user profile with new avatar_url
+      const updates = {
+        id: user.id,
+        avatar_url: newAvatarUrl, // Store the full public URL or just path based on preference
+        updated_at: new Date(),
+      };
+      const { error: dbError } = await supabase.from('users').upsert(updates);
+      if (dbError) throw dbError;
+
+      setAvatarUrl(newAvatarUrl);
+      setProfile(prev => ({ ...prev, avatar_url: newAvatarUrl }));
+      updateProfileData({ avatar_url: newAvatarUrl }); // Update auth context
+
+      toast.success("Avatar updated!");
+
+    } catch (error) {
+      console.error("Error uploading avatar:", error);
+      toast.error(`Upload failed: ${error.message}`);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -482,16 +438,16 @@ export default function ProfileScreen({ mcp, user_id }) {
         <View style={styles.headerRow}>
           <TouchableOpacity 
             activeOpacity={0.8}
-            onPress={handleSelectProfileImage}
+            onPress={pickImage}
             style={styles.profileImageContainer}
             className="relative rounded-full overflow-hidden shadow-md border-2 border-gray-100"
           >
             <Image 
-              source={{ uri: userData?.profileImage || 'https://randomuser.me/api/portraits/women/44.jpg' }} 
+              source={{ uri: avatarUrl || 'https://randomuser.me/api/portraits/women/44.jpg' }} 
               style={styles.profileImage} 
               className="w-20 h-20 rounded-full bg-gray-100"
             />
-            {uploadingImage ? (
+            {uploading ? (
               <View style={styles.uploadingOverlay} className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-full">
                 <ActivityIndicator size="small" color="#fff" />
               </View>
@@ -502,18 +458,18 @@ export default function ProfileScreen({ mcp, user_id }) {
             )}
           </TouchableOpacity>
           <View style={styles.nameStatsContainer}>
-            <Text style={styles.name}>{userData?.name || 'User'}</Text>
+            <Text style={styles.name}>{profile?.username || profile?.name || 'User'}</Text>
             <View style={styles.statsRow}>
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>{userData?.workouts || 0}</Text>
+                <Text style={styles.statNumber}>{profile?.workouts || 0}</Text>
                 <Text style={styles.statLabel}>Workouts</Text>
               </View>
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>{userData?.videos || 0}</Text>
+                <Text style={styles.statNumber}>{profile?.videos || 0}</Text>
                 <Text style={styles.statLabel}>Videos</Text>
               </View>
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>{userData?.followers || 0}</Text>
+                <Text style={styles.statNumber}>{profile?.followers || 0}</Text>
                 <Text style={styles.statLabel}>Followers</Text>
               </View>
             </View>
@@ -523,14 +479,14 @@ export default function ProfileScreen({ mcp, user_id }) {
         <View style={styles.badgesRow}>
           <View style={styles.badge}>
             <Text style={styles.badgeText}>Team </Text>
-            <CountryFlag isoCode={countryCode} size={20} />
+            <CountryFlag isoCode={profile?.country || 'US'} size={20} />
           </View>
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>{ageCategory}</Text>
+            <Text style={styles.badgeText}>{profile?.age_category || 'Open'}</Text>
             <Text style={[styles.badgeIcon, styles.trophyIcon]}>🏆</Text>
           </View>
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>{weightClass}</Text>
+            <Text style={styles.badgeText}>{profile?.weight_class || '60kg'}</Text>
             <Text style={[styles.badgeIcon, styles.flexIcon]}>💪</Text>
           </View>
         </View>
