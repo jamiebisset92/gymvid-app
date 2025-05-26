@@ -30,6 +30,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../config/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
+import * as FileSystem from 'expo-file-system';
 import { useToast } from '../../components/ToastProvider';
 import CoachingFeedbackModal from '../../components/CoachingFeedbackModal';
 
@@ -969,62 +970,83 @@ export default function VideoReviewScreen({ navigation, route }) {
     setFeedbackVideoUrl(videoUri);
 
     try {
-      // Use Supabase v1 auth methods
-      let user_id = 'demo-user';
-      
-      // Method 1: Try user() method (Supabase v1)
-      const user = supabase.auth.user();
-      if (user?.id) {
-        user_id = user.id;
-      } else {
-        // Method 2: Try session() method (Supabase v1)
-        const session = supabase.auth.session();
-        if (session?.user?.id) {
-          user_id = session.user.id;
-        }
+      // Get current user ID
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
+        throw new Error('User not authenticated');
       }
 
-      debugLog('Sending coaching feedback request with user_id:', user_id);
+      debugLog('Sending coaching feedback request with user_id:', currentUserId);
       debugLog('Video URI:', videoUri);
       debugLog('Exercise name:', exerciseName || 'Unknown Exercise');
 
-      // Create FormData for file upload
+      // Use expo-file-system to confirm the file exists and retrieve proper URI
+      const fileInfo = await FileSystem.getInfoAsync(videoUri);
+      if (!fileInfo.exists) {
+        throw new Error('Video file not found');
+      }
+
+      debugLog('File verified, exists:', fileInfo.exists, 'URI:', fileInfo.uri, 'Size:', fileInfo.size);
+
+      // Create FormData for file upload with proper React Native/Expo formatting
       const formData = new FormData();
       
-      // Add the video file
+      // Ensure proper URI format for iOS/Expo
+      let properUri = fileInfo.uri;
+      if (Platform.OS === 'ios' && !properUri.startsWith('file://')) {
+        properUri = `file://${properUri}`;
+      }
+      
+      // Add the video file with exact structure required for React Native FormData
       formData.append('video', {
-        uri: videoUri,
-        type: 'video/mp4',
+        uri: properUri,
         name: 'workout_video.mp4',
+        type: 'video/mp4',
       });
       
-      // Add other form fields
-      formData.append('user_id', user_id);
+      // Add other form fields as plain text
+      formData.append('user_id', currentUserId);
       formData.append('movement', exerciseName || 'Unknown Exercise');
 
-      debugLog('FormData created, making request to backend...');
+      debugLog('FormData created with proper URI:', properUri);
+      debugLog('Making request to backend...');
 
+      // Fetch without manual Content-Type header (React Native handles this automatically)
       const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback_upload', {
         method: 'POST',
-        body: formData
+        body: formData,
       });
 
       debugLog('Response received, status:', response.status);
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        debugLog('Response error text:', errorText);
+        throw new Error(`Upload failed with status: ${response.status}`);
       }
 
       const data = await response.json();
-      debugLog('Response data:', data);
+      debugLog('✅ Coaching feedback received:', data);
       
-      if (!data.success) throw new Error('Failed to get coaching feedback');
+      if (!data.success) {
+        throw new Error('Failed to get coaching feedback');
+      }
 
       setFeedbackLoading(false);
-      setFeedbackData(data.feedback);
+      
+      // Structure the feedback data with the specified fields
+      const feedbackResponse = {
+        form_rating: data.feedback?.form_rating || '',
+        observations: data.feedback?.observations || '',
+        summary: data.feedback?.summary || '',
+        // Keep other fields for compatibility
+        ...data.feedback
+      };
+      
+      setFeedbackData(feedbackResponse);
 
     } catch (error) {
-      console.error('Error getting coaching feedback:', error);
+      console.error('❌ Error uploading video for feedback:', error);
       debugLog('Full error details:', {
         message: error.message,
         stack: error.stack,
@@ -1033,16 +1055,10 @@ export default function VideoReviewScreen({ navigation, route }) {
       
       setFeedbackLoading(false);
       setFeedbackData(null);
+      setFeedbackModalVisible(false);
       
-      // Provide more specific error messages
-      let errorMessage = 'Failed to get coaching feedback. Please try again.';
-      if (error.message.includes('Network request failed')) {
-        errorMessage = 'Network connection failed. Please check your internet connection and try again.';
-      } else if (error.message.includes('HTTP error')) {
-        errorMessage = 'Server error occurred. Please try again later.';
-      }
-      
-      Alert.alert('Error', errorMessage);
+      // Show the specific error message as requested
+      toast.error("We couldn't generate feedback for this video. Try uploading a clearer angle or a different set.");
     }
   };
 

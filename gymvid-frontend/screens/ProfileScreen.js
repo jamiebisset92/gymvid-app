@@ -8,7 +8,8 @@ import {
   Platform, 
   ActivityIndicator,
   TouchableOpacity,
-  Alert 
+  Alert,
+  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../config/colors';
@@ -18,8 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { uploadProfileImage } from '../utils/storageUtils';
 import { useToast } from '../components/ToastProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Animated from 'react-native-reanimated';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 // List of countries with ISO codes for flag display
 const COUNTRIES = [
@@ -440,19 +440,17 @@ const ProfileScreen = ({ navigation }) => {
             activeOpacity={0.8}
             onPress={pickImage}
             style={styles.profileImageContainer}
-            className="relative rounded-full overflow-hidden shadow-md border-2 border-gray-100"
           >
             <Image 
               source={{ uri: avatarUrl || 'https://randomuser.me/api/portraits/women/44.jpg' }} 
               style={styles.profileImage} 
-              className="w-20 h-20 rounded-full bg-gray-100"
             />
             {uploading ? (
-              <View style={styles.uploadingOverlay} className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-full">
+              <View style={styles.uploadingOverlay}>
                 <ActivityIndicator size="small" color="#fff" />
               </View>
             ) : (
-              <View style={styles.editIconContainer} className="absolute bottom-0 right-0 bg-gray-800 w-7 h-7 rounded-full flex items-center justify-center border-2 border-white">
+              <View style={styles.editIconContainer}>
                 <Ionicons name="camera" size={18} color="#fff" />
               </View>
             )}
@@ -720,3 +718,5 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans-Medium',
   },
 }); 
+
+export default ProfileScreen; 

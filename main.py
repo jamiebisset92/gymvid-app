@@ -15,15 +15,17 @@ import re
 from backend.utils.aws_utils import download_file_from_s3
 from backend.utils.save_set_to_supabase import save_set_to_supabase
 from backend.api.manual_log import router as manual_log_router
-from backend.api.upload_profile_image import router as profile_image_router  # ✅ ADDED
+from backend.api.upload_profile_image import router as profile_image_router
+from backend.api.onboarding import router as onboarding_router
+from backend.api.check_username import router as check_username_router
+from backend.api.quick_analysis import app as quick_analysis_app
+from backend.ai.analyze import feedback_upload  # ✅ NEW: import feedback_upload router
 from backend.utils.download_from_s3 import download_video_from_url
 from backend.ai.analyze.video_analysis import analyze_video
 from backend.ai.analyze.rep_detection import run_rep_detection_from_landmark_y
 from backend.ai.analyze.keyframe_exporter import export_keyframes
 from backend.ai.analyze.coaching_feedback import generate_feedback
 from backend.ai.analyze import analyze_set
-from backend.api.check_username import router as check_username_router  # ✅ ADDED for username checking
-from backend.api.quick_analysis import app as quick_analysis_app  # ✅ Mount quick prediction endpoints
 
 # ✅ Load env
 load_dotenv()
@@ -50,11 +52,11 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 # ✅ Routers
 app.include_router(manual_log_router)
-app.include_router(profile_image_router)  # ✅ ADDED
-from backend.api.onboarding import router as onboarding_router  # ✅ NEW
-app.include_router(onboarding_router)  # ✅ NEW
-app.include_router(check_username_router)  # ✅ ADDED for username checking
-app.mount("/analyze", quick_analysis_app)  # ✅ Mount exercise + rep detection API
+app.include_router(profile_image_router)
+app.include_router(onboarding_router)
+app.include_router(check_username_router)
+app.mount("/analyze", quick_analysis_app)
+app.include_router(feedback_upload.router, prefix="/analyze")  # ✅ Register file-upload feedback route
 
 # ✅ AI set analysis
 @app.post("/analyze/log_set")
@@ -82,7 +84,7 @@ async def log_set(
         if os.path.exists(temp_video_path):
             os.remove(temp_video_path)
 
-# ✅ Legacy subprocess route with robust stdout JSON extraction
+# ✅ Legacy subprocess route
 @app.post("/process_set")
 async def process_set(
     video: UploadFile = File(None),
@@ -127,7 +129,7 @@ async def process_set(
     except subprocess.CalledProcessError as e:
         return JSONResponse(status_code=500, content={"success": False, "error": f"Subprocess failed with exit code {e.returncode}", "stdout": e.stdout, "stderr": e.stderr})
 
-# ✅ Coaching Feedback Endpoint
+# ✅ Coaching Feedback Endpoint with URL (still available)
 class FeedbackRequest(BaseModel):
     user_id: str
     movement: str
@@ -158,52 +160,6 @@ async def analyze_feedback(request: FeedbackRequest):
                 }]
             }
         }
-
-# ✅ Coaching Feedback Endpoint with File Upload
-@app.post("/analyze/feedback_upload")
-async def analyze_feedback_upload(
-    video: UploadFile = File(...),
-    user_id: str = Form(...),
-    movement: str = Form(...)
-):
-    os.makedirs("temp_uploads", exist_ok=True)
-    temp_video_path = f"temp_uploads/{video.filename}"
-    
-    try:
-        # Save uploaded video to temporary file
-        with open(temp_video_path, "wb") as buffer:
-            shutil.copyfileobj(video.file, buffer)
-        
-        # Analyze the video
-        video_data = analyze_video(temp_video_path)
-        rep_data = run_rep_detection_from_landmark_y(video_data["raw_y"], video_data["fps"])
-        export_keyframes(temp_video_path, rep_data)
-        feedback = generate_feedback(
-            video_path=temp_video_path,
-            user_id=user_id,
-            video_data={ "predicted_exercise": movement },
-            rep_data=rep_data
-        )
-        
-        return { "success": True, "feedback": feedback }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "feedback": {
-                "form_rating": 0,
-                "observations": [{
-                    "observation": "👀 We couldn't process your video.",
-                    "tip": "🧠 Try uploading a different angle or clearer rep.",
-                    "summary": f"👉 Error: {str(e)}"
-                }]
-            }
-        }
-    finally:
-        # Clean up temporary file
-        if os.path.exists(temp_video_path):
-            os.remove(temp_video_path)
 
 # ✅ Debug
 @app.get("/debug/env")
