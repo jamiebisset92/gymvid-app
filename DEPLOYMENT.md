@@ -62,3 +62,15 @@ python test_anthropic.py
 1. **API Key not found**: Make sure `CLAUDE_API_KEY` is set in Render environment
 2. **Import errors**: Ensure `anthropic==0.23.0` is in requirements.txt
 3. **Network errors**: Check if Render can access external APIs (Anthropic, AWS, etc.) 
+
+### Dependency Version Conflicts
+If you encounter dependency conflicts during deployment, ensure these versions are set correctly in requirements.txt:
+- `httpx==0.27.2` (NOT 0.28.0+)
+- `httpcore==1.0.9` (compatible with httpx 0.27.2)
+- `h11==0.16.0` (NOT 0.14.0, required by httpcore 1.0.9)
+- `jax==0.4.35` and `jaxlib==0.4.35` (version 0.6.0 doesn't exist)
+- `typing_extensions==4.13.2`
+- `certifi==2025.4.26`
+- `exceptiongroup==1.3.0`
+
+These versions have been tested to work together without conflicts. 
