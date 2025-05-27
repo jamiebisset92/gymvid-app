@@ -55,7 +55,7 @@ app.include_router(manual_log_router)
 app.include_router(profile_image_router)
 app.include_router(onboarding_router)
 app.include_router(check_username_router)
-app.mount("/analyze", quick_analysis_app)
+app.include_router(quick_analysis_app, prefix="/analyze")
 app.include_router(feedback_upload_router, prefix="/analyze")
 
 # ✅ AI set analysis
