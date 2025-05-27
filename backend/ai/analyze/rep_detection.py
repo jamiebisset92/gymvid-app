@@ -8,6 +8,9 @@ def run_rep_detection_from_landmark_y(
     raw_right_y: list = None
 ) -> list:
     raw_y = np.array(raw_y)
+    if len(raw_y) < 5:
+        return []
+
     smooth_y = np.convolve(raw_y, np.ones(5) / 5, mode="valid")
     rep_frames = []
     state = "down"
@@ -38,16 +41,21 @@ def run_rep_detection_from_landmark_y(
     for idx, rep in enumerate(rep_frames):
         if "start" in rep and "peak" in rep and "stop" in rep:
             start, peak, stop = rep["start"], rep["peak"], rep["stop"]
-            duration = abs(stop - start) / fps
             segment = smooth_y[start:stop]
 
-            # Detect if lift starts with concentric (e.g. deadlift)
+            # ✅ Skip short segments
+            if len(segment) < 3:
+                continue
+
+            duration = abs(stop - start) / fps
             first_delta = smooth_y[peak] - smooth_y[start]
             concentric_first = first_delta > 0
 
-            # Velocity and pause detection
-            velocities = np.gradient(segment)
-            abs_velocities = np.abs(velocities)
+            try:
+                velocities = np.gradient(segment)
+                abs_velocities = np.abs(velocities)
+            except Exception:
+                continue
 
             pause_idx = np.argmin(abs_velocities)
             pause_duration_frames = 3
@@ -63,13 +71,11 @@ def run_rep_detection_from_landmark_y(
                 time_pause = (stop - peak) / fps
                 time_concentric = 0.0
 
-            # Smoothness & ROM
             velocity_variance = np.var(velocities)
             smoothness_score = max(0, 100 - (velocity_variance * 10000))
             smoothness_score = round(min(smoothness_score, 100), 2)
             rom = round(abs(np.max(segment) - np.min(segment)) * 100, 2)
 
-            # Sticking Point Detection
             concentric_velocities = abs_velocities[pause_end:]
             stall = False
             if len(concentric_velocities) >= 3:
@@ -78,7 +84,6 @@ def run_rep_detection_from_landmark_y(
                 if peak_velocity > 0 and (mid_velocity / peak_velocity) < 0.5:
                     stall = True
 
-            # RPE Estimate
             if duration >= 3.50:
                 rpe = 10.0
             elif duration >= 3.00:
@@ -94,7 +99,6 @@ def run_rep_detection_from_landmark_y(
             else:
                 rpe = 7.0
 
-            # Base result
             rep_result = {
                 "rep": idx + 1,
                 "start_frame": start,
@@ -115,7 +119,6 @@ def run_rep_detection_from_landmark_y(
                 "velocity_stall": stall
             }
 
-            # Optional: Bar/Joint Path Deviation
             try:
                 if raw_x:
                     x_path = np.array(raw_x[start:stop])
@@ -130,7 +133,6 @@ def run_rep_detection_from_landmark_y(
                 rep_result["path_deviation_cm"] = None
                 rep_result["path_analysis_available"] = False
 
-            # Optional: Side-to-Side Asymmetry
             try:
                 if raw_left_y and raw_right_y:
                     left = np.array(raw_left_y[start:stop])

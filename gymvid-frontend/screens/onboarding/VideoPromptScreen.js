@@ -720,19 +720,19 @@ export default function VideoPromptScreen({ navigation, route }) {
     
     // Define the image sources based on gender
     if (showMaleImages) {
-      if (position === 'main') return require('../../assets/male-video-1.jpg');
-      if (position === 'left') return require('../../assets/male-video-2.jpg');
-      if (position === 'right') return require('../../assets/male-video-3.jpg');
+      if (position === 'main') return { uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Man doing deadlift
+      if (position === 'left') return { uri: 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Man with dumbbells
+      if (position === 'right') return { uri: 'https://images.unsplash.com/photo-1605296867304-46d5465a13f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Man squatting with barbell
     } else if (showFemaleImages) {
-      if (position === 'main') return require('../../assets/female-video-1.jpg');
-      if (position === 'left') return require('../../assets/female-video-2.jpg');
-      if (position === 'right') return require('../../assets/female-video-3.jpg');
+      if (position === 'main') return { uri: 'https://images.unsplash.com/photo-1594737625785-a6cbdabd333c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Woman doing barbell squats
+      if (position === 'left') return { uri: 'https://images.unsplash.com/photo-1550345332-09e3ac987658?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Woman lifting weights
+      if (position === 'right') return { uri: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Woman with dumbbells
     }
     
-    // Default fallback images if gender is not set or doesn't match
-    if (position === 'main') return require('../../assets/video-placeholder-1.jpg');
-    if (position === 'left') return require('../../assets/video-placeholder-2.jpg');
-    if (position === 'right') return require('../../assets/video-placeholder-3.jpg');
+    // Default fallback images if gender is not set or doesn't match - mixed gender lifting images
+    if (position === 'main') return { uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Man doing deadlift
+    if (position === 'left') return { uri: 'https://images.unsplash.com/photo-1594737625785-a6cbdabd333c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Woman doing barbell squats
+    if (position === 'right') return { uri: 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Man with dumbbells
   };
 
   // Video placeholder frames

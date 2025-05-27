@@ -50,12 +50,12 @@ const inputAccessoryViewID = 'VideoReviewKeyboardToolbar';
 const KeyboardToolbar = () => (
   <InputAccessoryView nativeID={inputAccessoryViewID}>
     <View style={styles.keyboardToolbar}>
-      <View style={styles.keyboardToolbarSpacer} />
       <TouchableOpacity 
         style={styles.keyboardDoneButton}
         onPress={() => {
           Keyboard.dismiss();
         }}
+        hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
       >
         <Text style={styles.keyboardDoneButtonText}>Done</Text>
       </TouchableOpacity>
@@ -76,6 +76,18 @@ const GuidedPopup = ({
   verticalOffset = 0
 }) => {
   const animValue = useRef(new Animated.Value(0)).current;
+  const spotlightScale = useRef(new Animated.Value(0.8)).current;
+  const popupScale = useRef(new Animated.Value(0.9)).current;
+  const popupTranslateY = useRef(new Animated.Value(20)).current;
+  const arrowScale = useRef(new Animated.Value(0)).current;
+  const glowPulse = useRef(new Animated.Value(0)).current;
+  const spotlightOpacity = useRef(new Animated.Value(0)).current;
+  
+  // Add animation values for each layer
+  const mainStrokeOpacity = useRef(new Animated.Value(0)).current;
+  const layer1Opacity = useRef(new Animated.Value(0)).current;
+  const layer2Opacity = useRef(new Animated.Value(0)).current;
+  
   const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0, width: 0 });
   const [arrowStyle, setArrowStyle] = useState({});
   
@@ -89,63 +101,157 @@ const GuidedPopup = ({
 
   debugLog(`GuidedPopup RENDER: text="${text}" visible_PROP=${visible} targetLayout_EXISTS=${!!targetLayout} animValue=${animValue._value}`);
 
+  // Start glow pulse animation
+  useEffect(() => {
+    if (visible) {
+      // Simple smooth flashing animation for the main stroke
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(mainStrokeOpacity, {
+            toValue: 1,
+            duration: 1000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(mainStrokeOpacity, {
+            toValue: 0.3,
+            duration: 1000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      // Reset stroke opacity
+      mainStrokeOpacity.setValue(0);
+    }
+  }, [visible]);
+
   useEffect(() => {
     debugLog(`GuidedPopup useEffect: text="${text}" visible_PROP=${visible} targetLayout_EXISTS=${!!targetLayout}`);
     if (visible && targetLayout) {
       debugLog(`GuidedPopup useEffect INSIDE IF: text="${text}" - Calculating position...`);
       const popupWidth = screenDims.width - (2 * SCREEN_PADDING);
       const estimatedPopupHeight = text.length > 70 ? (showIconButton ? 70 : 100) : (showIconButton ? 55 : 85);
-      let pTop, pLeft = SCREEN_PADDING;
-      let arrStyleLocal = {};
-
-      if (forcePositionBelow) {
-        pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET + verticalOffset;
-        arrStyleLocal = {
-          bottom: '100%',
-          left: targetLayout.x + targetLayout.width / 2 - pLeft - ARROW_SIZE,
-          borderBottomWidth: ARROW_SIZE, borderBottomColor: colors.white,
-          borderLeftWidth: ARROW_SIZE, borderLeftColor: 'transparent',
-          borderRightWidth: ARROW_SIZE, borderRightColor: 'transparent',
-        };
-      } else {
-        pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET + verticalOffset;
-        arrStyleLocal = {
-          bottom: '100%',
-          left: (popupWidth / 2) - ARROW_SIZE,
-          borderBottomWidth: ARROW_SIZE, borderBottomColor: colors.white,
-          borderLeftWidth: ARROW_SIZE, borderLeftColor: 'transparent',
-          borderRightWidth: ARROW_SIZE, borderRightColor: 'transparent',
-        };
-        if (pTop + estimatedPopupHeight > screenDims.height - SCREEN_PADDING) {
-          pTop = targetLayout.y - estimatedPopupHeight - POPUP_MARGIN_FROM_TARGET + verticalOffset;
-          arrStyleLocal = {
-            top: '100%',
-            left: (popupWidth / 2) - ARROW_SIZE,
-            borderTopWidth: ARROW_SIZE, borderTopColor: colors.white,
-            borderLeftWidth: ARROW_SIZE, borderLeftColor: 'transparent',
-            borderRightWidth: ARROW_SIZE, borderRightColor: 'transparent',
-          };
-        }
-      }
       
-      if (pTop < SCREEN_PADDING) pTop = SCREEN_PADDING;
-      if (!forcePositionBelow && (pTop + estimatedPopupHeight > screenDims.height - SCREEN_PADDING)){
-          pTop = screenDims.height - estimatedPopupHeight - SCREEN_PADDING;
-      }
+      // Position popup just below the target element with small gap
+      const pTop = targetLayout.y + targetLayout.height + POPUP_MARGIN_FROM_TARGET + verticalOffset;
+      const pLeft = SCREEN_PADDING;
+      
+      // Arrow points up to the target element
+      const arrStyleLocal = {
+        top: -ARROW_SIZE,
+        left: (popupWidth / 2) - ARROW_SIZE,
+        borderBottomWidth: ARROW_SIZE, 
+        borderBottomColor: colors.white,
+        borderLeftWidth: ARROW_SIZE, 
+        borderLeftColor: 'transparent',
+        borderRightWidth: ARROW_SIZE, 
+        borderRightColor: 'transparent',
+      };
 
       setPopupPosition({ top: pTop, left: pLeft, width: popupWidth });
       setArrowStyle(arrStyleLocal);
 
-      Animated.spring(animValue, {
-        toValue: 1, tension: 60, friction: 7, useNativeDriver: true,
-      }).start(() => {
+      // Elegant entrance animation sequence
+      Animated.sequence([
+        // First, fade in the spotlight
+        Animated.parallel([
+          Animated.timing(animValue, {
+            toValue: 1,
+            duration: 300,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.spring(spotlightScale, {
+            toValue: 1,
+            tension: 65,
+            friction: 8,
+            useNativeDriver: true,
+          }),
+          Animated.timing(spotlightOpacity, {
+            toValue: 1,
+            duration: 400,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+        // Then animate the popup content
+        Animated.parallel([
+          // Scale up the popup
+          Animated.spring(popupScale, {
+            toValue: 1,
+            tension: 80,
+            friction: 10,
+            delay: 100,
+            useNativeDriver: true,
+          }),
+          // Slide up the popup
+          Animated.timing(popupTranslateY, {
+            toValue: 0,
+            duration: 350,
+            delay: 100,
+            easing: Easing.out(Easing.back(1.2)),
+            useNativeDriver: true,
+          }),
+          // Animate arrow appearance
+          Animated.spring(arrowScale, {
+            toValue: 1,
+            tension: 100,
+            friction: 8,
+            delay: 250,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start(() => {
         debugLog(`GuidedPopup ANIMATION IN COMPLETE for text="${text}"`);
       });
     } else {
       debugLog(`GuidedPopup useEffect ELSE: text="${text}" - Animating out or not showing (visible=${visible}, targetLayout=${!!targetLayout}).`);
-      Animated.timing(animValue, {
-        toValue: 0, duration: 200, easing: Easing.ease, useNativeDriver: true,
-      }).start(() => {
+      // Elegant exit animation - fade out main stroke
+      Animated.timing(mainStrokeOpacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+      
+      // Also animate other elements
+      Animated.parallel([
+        Animated.timing(animValue, {
+          toValue: 0,
+          duration: 250,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(spotlightScale, {
+          toValue: 0.8,
+          duration: 250,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(popupScale, {
+          toValue: 0.9,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(popupTranslateY, {
+          toValue: 20, // Smaller slide down for nearby positioning
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(arrowScale, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(spotlightOpacity, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
          debugLog(`GuidedPopup ANIMATION OUT COMPLETE for text="${text}"`);
       });
     }
@@ -156,18 +262,11 @@ const GuidedPopup = ({
       return null; 
   }
   
-  // Only render the modal if visible is true. If visible is false, animations will drive opacity to 0.
-  // The modal itself being removed from tree is handled by parent not rendering this component OR Modal visible=false.
+  // Only render the modal if visible is true
   if (!visible && animValue._value === 0) {
     debugLog(`GuidedPopup OPTIMIZED RETURN: text="${text}" - Not visible and animation value is 0.`);
     return null;
   }
-
-  const overlayPartStyle = {
-    position: 'absolute',
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    opacity: animValue,
-  };
 
   // Calculate expanded highlight area with padding AND vertical offset
   const expandedHighlight = highlightLayout ? {
@@ -177,43 +276,98 @@ const GuidedPopup = ({
     height: highlightLayout.height + (HIGHLIGHT_PADDING * 2),
   } : null;
 
+  // Glow pulse effect
+  const glowOpacity = glowPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.6, 1],
+  });
+
+  const glowScale = glowPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.05],
+  });
+
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
       <Pressable style={styles.fullScreenContainerForPressable} onPress={onClose}>
-        {expandedHighlight ? (
-          <>
-            {/* Main overlay parts */}
-            <Animated.View style={[overlayPartStyle, { top: 0, left: 0, width: screenDims.width, height: expandedHighlight.y }]} />
-            <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y + expandedHighlight.height, left: 0, width: screenDims.width, height: screenDims.height - (expandedHighlight.y + expandedHighlight.height) }]} />
-            <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y, left: 0, width: expandedHighlight.x, height: expandedHighlight.height }]} />
-            <Animated.View style={[overlayPartStyle, { top: expandedHighlight.y, left: expandedHighlight.x + expandedHighlight.width, width: screenDims.width - (expandedHighlight.x + expandedHighlight.width), height: expandedHighlight.height }]} />
-          </>
-        ) : (
-          <Animated.View style={[styles.fullScreenTouchableOverlay, { opacity: animValue }]} />
+        {/* Subtle Glowing Spotlight Effect - No Background Overlay */}
+        {expandedHighlight && (
+          <Animated.View
+            style={{
+              position: 'absolute',
+              left: expandedHighlight.x,
+              top: expandedHighlight.y,
+              width: expandedHighlight.width,
+              height: expandedHighlight.height,
+              opacity: spotlightOpacity,
+              transform: [{ scale: spotlightScale }],
+            }}
+            pointerEvents="none"
+          >
+            {/* Main highlight stroke - simple blue border that flashes */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                width: expandedHighlight.width,
+                height: expandedHighlight.height,
+                borderRadius: HIGHLIGHT_BORDER_RADIUS,
+                borderWidth: 2,
+                borderColor: colors.primary,
+                backgroundColor: 'transparent',
+                opacity: mainStrokeOpacity,
+              }}
+            />
+          </Animated.View>
         )}
+        
+        {/* Popup with enhanced shadow */}
         {targetLayout && (
             <Animated.View 
               style={[
                 styles.popupContainerAdvanced,
                 {
-                  top: popupPosition.top, left: popupPosition.left, width: popupPosition.width,
+                  top: popupPosition.top, 
+                  left: popupPosition.left, 
+                  width: popupPosition.width,
                   opacity: animValue, 
                   transform: [
-                    { scale: animValue.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) },
-                    { translateY: animValue.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }
+                    { scale: popupScale },
+                    { translateY: popupTranslateY }
                   ],
+                  // Enhanced shadow for better visibility
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 16,
+                  elevation: 24,
+                  // Add subtle border for definition
+                  borderWidth: 0.5,
+                  borderColor: 'rgba(0, 0, 0, 0.05)',
                 },
               ]}
             >
-              <View style={[styles.popupArrowAdvanced, arrowStyle]} />
+              <Animated.View style={[styles.popupArrowAdvanced, arrowStyle, { 
+                transform: [{ scale: arrowScale }],
+              }]} />
               <View style={[styles.popupBodyAdvanced, showIconButton && styles.popupBodyIconButtonLayout]}>
                 <Text style={[styles.popupTextAdvanced, showIconButton && styles.popupTextIconButtonLayout]}>{text}</Text>
                 {showIconButton ? (
-                  <TouchableOpacity onPress={onClose} style={styles.popupIconDismissButton}>
+                  <TouchableOpacity onPress={onClose} style={[styles.popupIconDismissButton, {
+                    backgroundColor: 'rgba(0, 122, 255, 0.08)',
+                    borderRadius: 20,
+                  }]}>
                     <Ionicons name="arrow-forward" size={28} color={colors.primary} />
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity onPress={onClose} style={styles.popupDismissButtonAdvanced}>
+                  <TouchableOpacity onPress={onClose} style={[styles.popupDismissButtonAdvanced, {
+                    shadowColor: colors.primary,
+                    shadowOffset: { width: 0, height: 3 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 6,
+                    elevation: 6,
+                  }]}>
                     <Text style={styles.popupDismissButtonTextAdvanced}>Got it!</Text>
                   </TouchableOpacity>
                 )}
@@ -465,7 +619,11 @@ export default function VideoReviewScreen({ navigation, route }) {
         debugLog('VideoReviewScreen TOOLTIP_DEBUG: ALL LAYOUTS READY & VALID. Showing first tooltip.', 
           { layoutCard: exerciseCardLayout, layoutHeader: exerciseHeaderLayout, layoutInputs: inputsRowLayout }
         );
-        setTooltipStep(1);
+        
+        // Add elegant delay to let screen animations complete first
+        setTimeout(() => {
+          setTooltipStep(1);
+        }, 1200); // Delay to ensure screen entrance animations have completed
       } else {
         // Log which specific layouts are not ready or have invalid dimensions
         debugLog('VideoReviewScreen TOOLTIP_DEBUG: Waiting for all valid layouts. Current states:', {
@@ -802,6 +960,13 @@ export default function VideoReviewScreen({ navigation, route }) {
     setExerciseName(movement);
     setTempExerciseName(movement);
     
+    // Start preloading coaching feedback in the background (non-blocking)
+    if (movement && movement !== 'Unknown Exercise') {
+      preloadCoachingFeedback(videoUri, movement).catch(err => {
+        debugLog('Background feedback preload failed (non-critical):', err);
+      });
+    }
+    
     // Elegant world-class transition animation
     Animated.sequence([
       // First, fade out loading state smoothly
@@ -875,6 +1040,12 @@ export default function VideoReviewScreen({ navigation, route }) {
     if (videoUri) {
       generateThumbnail(videoUri);
       analyzeVideo(videoUri);
+      
+      // Clear all cached feedback when video changes
+      setCachedFeedback({});
+      setCurrentVideoFeedbackKey(null);
+      setIsPreloadingFeedback(false);
+      debugLog('Cleared all cached feedback for new video');
     }
   }, [videoUri]);
   
@@ -928,6 +1099,9 @@ export default function VideoReviewScreen({ navigation, route }) {
 
   // Update the handleCompleteSet function
   const handleCompleteSet = () => {
+    // Dismiss keyboard first
+    Keyboard.dismiss();
+    
     // Validate that both weight and reps are entered
     if (!weight || weight === '0' || !reps || reps === '0') {
       toast.error('Please enter weight and reps');
@@ -961,8 +1135,46 @@ export default function VideoReviewScreen({ navigation, route }) {
 
     // Dismiss the keyboard first to prevent it from getting stuck
     Keyboard.dismiss();
+    
+    // Create a unique key for this video + exercise + weight + reps combination
+    const feedbackKey = `${videoUri}_${exerciseName}_${weight}_${reps}`;
+    setCurrentVideoFeedbackKey(feedbackKey);
+    
+    // Check if we already have cached feedback for this exact combination
+    if (cachedFeedback[feedbackKey]) {
+      debugLog('Using cached feedback for:', feedbackKey);
+      
+      // Show modal with cached data
+      setFeedbackModalVisible(true);
+      setFeedbackLoading(false);
+      setFeedbackData(cachedFeedback[feedbackKey]);
+      setFeedbackThumbnail(thumbnailUri);
+      setFeedbackVideoUrl(videoUri);
+      return;
+    }
+    
+    // Check if we have preloaded feedback for this video + exercise (without weight/reps)
+    const preloadKey = `${videoUri}_${exerciseName}_preload`;
+    if (cachedFeedback[preloadKey]) {
+      debugLog('Using preloaded feedback for:', preloadKey);
+      
+      // Show modal with preloaded data
+      setFeedbackModalVisible(true);
+      setFeedbackLoading(false);
+      setFeedbackData(cachedFeedback[preloadKey]);
+      setFeedbackThumbnail(thumbnailUri);
+      setFeedbackVideoUrl(videoUri);
+      
+      // Cache it also under the specific weight/reps key for future use
+      setCachedFeedback(prev => ({
+        ...prev,
+        [feedbackKey]: cachedFeedback[preloadKey]
+      }));
+      
+      return;
+    }
 
-    // Show modal with loading state
+    // Show modal with loading state for new feedback
     setFeedbackModalVisible(true);
     setFeedbackLoading(true);
     setFeedbackData(null);
@@ -1044,6 +1256,14 @@ export default function VideoReviewScreen({ navigation, route }) {
       };
       
       setFeedbackData(feedbackResponse);
+      
+      // Cache the feedback for this specific combination
+      setCachedFeedback(prev => ({
+        ...prev,
+        [feedbackKey]: feedbackResponse
+      }));
+      
+      debugLog('Feedback cached for key:', feedbackKey);
 
     } catch (error) {
       console.error('❌ Error uploading video for feedback:', error);
@@ -1115,7 +1335,7 @@ export default function VideoReviewScreen({ navigation, route }) {
   const CUSTOM_SPOTLIGHT_CONFIG = {
     // Position adjustments
     offsetX: 0,        // Move left/right (negative = left, positive = right)
-    offsetY: 60,      // Move up/down (negative = up, positive = down)
+    offsetY: 0,      // Move up/down (negative = up, positive = down) - moved up from 60
     
     // Size adjustments  
     paddingTop: 22,    // Space above the target area
@@ -1173,6 +1393,11 @@ export default function VideoReviewScreen({ navigation, route }) {
   const [feedbackData, setFeedbackData] = useState(null);
   const [feedbackThumbnail, setFeedbackThumbnail] = useState(null);
   const [feedbackVideoUrl, setFeedbackVideoUrl] = useState(null);
+  
+  // Add state to cache feedback for current video
+  const [cachedFeedback, setCachedFeedback] = useState({});
+  const [currentVideoFeedbackKey, setCurrentVideoFeedbackKey] = useState(null);
+  const [isPreloadingFeedback, setIsPreloadingFeedback] = useState(false);
 
   // Function to handle weight input (allow numbers and one decimal)
   const handleWeightChange = (text) => {
@@ -1186,6 +1411,98 @@ export default function VideoReviewScreen({ navigation, route }) {
     //   newText = parts[0] + '.' + parts[1].substring(0, 2);
     // }
     setWeight(newText);
+  };
+
+  // Function to preload coaching feedback in the background
+  const preloadCoachingFeedback = async (videoUri, exerciseName) => {
+    if (!videoUri || !exerciseName || isPreloadingFeedback) return;
+    
+    try {
+      setIsPreloadingFeedback(true);
+      debugLog('Starting background coaching feedback preload for:', exerciseName);
+      
+      // Get current user ID
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
+        debugLog('Cannot preload feedback: User not authenticated');
+        return;
+      }
+
+      // Create a unique key for this video + exercise combination (without weight/reps for preload)
+      const preloadKey = `${videoUri}_${exerciseName}_preload`;
+      
+      // Check if we already have preloaded feedback for this combination
+      if (cachedFeedback[preloadKey]) {
+        debugLog('Feedback already preloaded for:', preloadKey);
+        return;
+      }
+
+      // Verify file exists
+      const fileInfo = await FileSystem.getInfoAsync(videoUri);
+      if (!fileInfo.exists) {
+        debugLog('Cannot preload feedback: Video file not found');
+        return;
+      }
+
+      // Create FormData
+      const formData = new FormData();
+      
+      // Ensure proper URI format for iOS/Expo
+      let properUri = fileInfo.uri;
+      if (Platform.OS === 'ios' && !properUri.startsWith('file://')) {
+        properUri = `file://${properUri}`;
+      }
+      
+      // Add the video file
+      formData.append('video', {
+        uri: properUri,
+        name: 'workout_video.mp4',
+        type: 'video/mp4',
+      });
+      
+      // Add other form fields
+      formData.append('user_id', currentUserId);
+      formData.append('movement', exerciseName);
+
+      debugLog('Making background request to feedback endpoint...');
+
+      // Make the request in the background
+      const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback_upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        debugLog('Background feedback request failed with status:', response.status);
+        return;
+      }
+
+      const data = await response.json();
+      debugLog('✅ Background coaching feedback received:', data);
+      
+      if (data.success && data.feedback) {
+        // Structure the feedback data
+        const feedbackResponse = {
+          form_rating: data.feedback?.form_rating || '',
+          observations: data.feedback?.observations || '',
+          summary: data.feedback?.summary || '',
+          ...data.feedback
+        };
+        
+        // Cache the preloaded feedback
+        setCachedFeedback(prev => ({
+          ...prev,
+          [preloadKey]: feedbackResponse
+        }));
+        
+        debugLog('Feedback preloaded and cached for key:', preloadKey);
+      }
+    } catch (error) {
+      // Silently fail - this is a background optimization
+      debugLog('Background feedback preload error (non-blocking):', error.message);
+    } finally {
+      setIsPreloadingFeedback(false);
+    }
   };
 
   return (
@@ -1379,6 +1696,7 @@ export default function VideoReviewScreen({ navigation, route }) {
                           inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                           returnKeyType="done"
                           onSubmitEditing={Keyboard.dismiss}
+                          editable={!isSetCompleted}
                         />
                         <TextInput 
                           style={styles.tableCellInput}
@@ -1391,6 +1709,7 @@ export default function VideoReviewScreen({ navigation, route }) {
                           inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                           returnKeyType="done"
                           onSubmitEditing={Keyboard.dismiss}
+                          editable={!isSetCompleted}
                         />
                         <TouchableOpacity
                           style={styles.tableCellCheck}
@@ -1430,7 +1749,7 @@ export default function VideoReviewScreen({ navigation, route }) {
       
       <GuidedPopup
         visible={tooltipStep === 1}
-        text="Our AI will detect the exercise for you!"
+        text="Our AI will detect the exercise that's being performed in the vid for you!"
         targetLayout={exerciseCardLayout}
         highlightLayout={getFirstPopupSpotlightArea(exerciseHeaderLayout)}
         screenBackgroundColor={colors.background}
@@ -1440,13 +1759,13 @@ export default function VideoReviewScreen({ navigation, route }) {
       />
       <GuidedPopup
         visible={tooltipStep === 2}
-        text="You can enter the weight & reps while you wait - then tap the ✓ to log the set."
+        text="Enter the weight & reps while you wait - then tap the ✓ to log the set."
         targetLayout={inputsRowLayout}
         highlightLayout={getCustomSpotlightArea(inputsRowLayout)} 
         screenBackgroundColor={colors.background}
         onClose={handleDismissTooltip}
         showIconButton={true}
-        verticalOffset={90}
+        verticalOffset={30}
       />
       
       {/* Video Preview Modal */}
@@ -1459,7 +1778,12 @@ export default function VideoReviewScreen({ navigation, route }) {
       {/* AI Coaching Feedback Modal */}
       <CoachingFeedbackModal
         visible={feedbackModalVisible}
-        onClose={() => setFeedbackModalVisible(false)}
+        onClose={() => {
+          // Only allow closing if not loading
+          if (!feedbackLoading) {
+            setFeedbackModalVisible(false);
+          }
+        }}
         loading={feedbackLoading}
         feedback={feedbackData}
         videoThumbnail={feedbackThumbnail}
@@ -1567,12 +1891,12 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   titleText: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: '700',
     marginBottom: 20,
     textAlign: 'center',
     letterSpacing: -0.5,
-    color: colors.darkGray,
+    color: '#1A1A1A',
     width: '100%',
   },
   formContainer: {
@@ -1672,6 +1996,11 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     paddingHorizontal: 4,
     marginHorizontal: 4,
+  },
+  tableCellInputDisabled: {
+    backgroundColor: '#F5F5F5',
+    color: '#999999',
+    opacity: 0.6,
   },
   tableCellCheck: {
     width: 48,
@@ -1861,27 +2190,30 @@ const styles = StyleSheet.create({
   // Styles for World-Class GuidedPopup
   fullScreenContainerForPressable: { // New style for the Pressable parent in Modal
     flex: 1, 
-    // No background color here, overlay parts will handle dimming
+    // No background color here, transparent to show app content
   },
-  fullScreenTouchableOverlay: { // Used as fallback when highlightLayout is null
+  fullScreenTouchableOverlay: { // No longer used - removed background overlay
     position: 'absolute',
     top: 0, bottom: 0, left: 0, right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    backgroundColor: 'transparent',
   },
   popupContainerAdvanced: {
     position: 'absolute',
     backgroundColor: colors.white,
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: 16,
+    paddingVertical: 16,
     paddingHorizontal: 20, 
     elevation: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
   },
   popupArrowAdvanced: {
-    position: 'absolute', width: 0, height: 0, borderStyle: 'solid',
+    position: 'absolute', 
+    width: 0, 
+    height: 0, 
+    borderStyle: 'solid',
   },
   popupBodyAdvanced: { 
     alignItems: 'center',
@@ -1889,38 +2221,44 @@ const styles = StyleSheet.create({
     minHeight: 40,
   },
   popupTextAdvanced: {
-    fontSize: 15, 
+    fontSize: 16, 
     color: colors.darkGray, 
     textAlign: 'center',
-    marginBottom: 12,
-    lineHeight: 20, 
-    fontWeight: '400',
+    marginBottom: 16,
+    lineHeight: 22, 
+    fontWeight: '500',
+    letterSpacing: -0.2,
   },
   popupDismissButtonAdvanced: {
     backgroundColor: colors.primary,
-    paddingVertical: 8, 
-    paddingHorizontal: 20, 
-    borderRadius: 20, 
+    paddingVertical: 10, 
+    paddingHorizontal: 24, 
+    borderRadius: 24, 
     alignSelf: 'center',
   },
   popupDismissButtonTextAdvanced: {
-    color: colors.white, fontSize: 14, fontWeight: '600',
+    color: colors.white, 
+    fontSize: 15, 
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   popupBodyIconButtonLayout: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     width: '100%',
     minHeight: 40,
   },
   popupTextIconButtonLayout: {
-    textAlign: 'center',
-    marginRight: 8,
+    textAlign: 'left',
+    marginRight: 12,
     marginBottom: 0,
     flex: 1,
+    fontSize: 16,
+    lineHeight: 22,
   },
   popupIconDismissButton: {
-    padding: 4,
+    padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1959,25 +2297,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    backgroundColor: '#F7F7F7',
+    backgroundColor: '#F2F2F7',
     borderTopWidth: 0.5,
     borderTopColor: '#C6C6C8',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    minHeight: 44,
-  },
-  keyboardToolbarSpacer: {
-    flex: 1,
+    paddingVertical: 8,
+    height: 44,
   },
   keyboardDoneButton: {
     paddingHorizontal: 0,
     paddingVertical: 0,
     backgroundColor: 'transparent',
     borderRadius: 0,
+    height: 28,
+    justifyContent: 'center',
   },
   keyboardDoneButtonText: {
     color: '#007AFF',
     fontSize: 17,
     fontWeight: '400',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
   },
 }); 

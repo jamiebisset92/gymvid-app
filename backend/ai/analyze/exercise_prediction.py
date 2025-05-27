@@ -8,37 +8,35 @@ from anthropic import Anthropic  # ✅ Correct import for 0.23.0+
 # ✅ Load environment variables
 load_dotenv()
 
-# ✅ Initialize Claude client with correct class name
+# ✅ Initialize Claude client
 client = Anthropic(api_key=os.getenv("CLAUDE_API_KEY"))
 
 def predict_exercise(image_path: str, model: str = "claude-3-haiku-20240307") -> dict:
     with open(image_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode("utf-8")
 
-    print("📸 Using 1 collage image for prediction.")
+    print("📸 Sending 2x2 collage for prediction.")
     print("🖼️ Image size (base64):", len(b64), "characters")
     print(f"🤖 Using Claude model: {model}")
 
-    # ✅ Construct prompt
+    # ✅ Claude prompt (short, strict, focused on key movements)
     prompt = f"""
-You are a fitness AI analyzing gym exercise keyframes.
+You are a fitness AI that predicts the type of gym exercise being performed from a 2x2 collage of video keyframes.
 
-You must ALWAYS return a prediction in this strict JSON format:
+You must ALWAYS respond with a single JSON object, strictly in this format:
 
 {{
   "equipment": one of ["Barbell", "Dumbbell", "Cable", "Machine", "Bodyweight", "Kettlebell", "Resistance Band", "Smith Machine"],
-  "variation": (only if clearly visible, e.g. "Conventional", "Sumo", "Close Stance", "Wide Grip"),
+  "variation": (optional, include only if clearly visible, e.g. "Conventional", "Sumo", "Close Grip", "Incline"),
   "movement": one of ["Deadlift", "Squat", "Lunge", "Hip Thrust", "Row", "Bench Press", "Shoulder Press", "Pull-up", "Chin-up"],
-  "confidence": integer percentage from 0 to 100
+  "confidence": integer from 0 to 100
 }}
 
-RULES:
-- NEVER leave "movement" blank or missing.
-- If unsure, GUESS the most likely movement based on visible clues.
-- Only respond with the JSON block. No explanation or extra text.
-- Always return valid JSON.
-
-Analyze this image: data:image/jpeg;base64,{b64}
+Rules:
+- NEVER leave out "movement" – always guess based on pose and equipment.
+- Use your best judgment. Be concise. No extra text or explanation.
+- Output ONLY valid JSON. No Markdown, comments, or backticks.
+- Analyze this image: data:image/jpeg;base64,{b64}
 """
 
     try:
