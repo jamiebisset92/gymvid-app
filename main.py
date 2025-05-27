@@ -20,6 +20,7 @@ from backend.api.onboarding import router as onboarding_router
 from backend.api.check_username import router as check_username_router
 from backend.api.quick_analysis import app as quick_analysis_app
 from backend.ai.analyze.feedback_upload import router as feedback_upload_router
+from backend.ai.analyze import quick_exercise_prediction
 from backend.utils.download_from_s3 import download_video_from_url
 from backend.ai.analyze.video_analysis import analyze_video
 from backend.ai.analyze.rep_detection import run_rep_detection_from_landmark_y
@@ -57,6 +58,7 @@ app.include_router(onboarding_router)
 app.include_router(check_username_router)
 app.include_router(quick_analysis_app, prefix="/analyze")
 app.include_router(feedback_upload_router, prefix="/analyze")
+app.include_router(quick_exercise_prediction.app)
 
 # ✅ AI set analysis
 @app.post("/analyze/log_set")
