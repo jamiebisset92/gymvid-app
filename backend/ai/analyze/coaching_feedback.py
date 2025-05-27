@@ -121,8 +121,8 @@ def generate_feedback(video_path, user_id, video_data, rep_data) -> dict:
         for i, path in enumerate(collage_paths):
             logger.info(f"Uploading collage {i+1}/{len(collage_paths)}: {path}")
             s3_url = upload_file_to_s3(
-                file_path=path,
-                s3_path=f"collages/{user_id}/{os.path.basename(path)}"
+                local_path=path,
+                s3_key=f"collages/{user_id}/{os.path.basename(path)}"
             )
             logger.info(f"Collage uploaded to S3: {s3_url}")
             collage_urls.append(s3_url)
