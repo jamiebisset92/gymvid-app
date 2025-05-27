@@ -14,6 +14,7 @@ async def feedback_upload(
     user_id: str = Form(...),
     movement: str = Form(...)
 ):
+    tmp_path = None
     try:
         # ✅ Save uploaded video to a temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
@@ -44,5 +45,5 @@ async def feedback_upload(
 
     finally:
         # ✅ Clean up temp file
-        if os.path.exists(tmp_path):
+        if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)

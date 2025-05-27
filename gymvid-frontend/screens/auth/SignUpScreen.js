@@ -180,11 +180,21 @@ export default function SignUpScreen({ navigation }) {
       const { data, error } = await signUp(email, password);
       
       if (error) {
-        // Only log errors that aren't "User already registered"
         const errorMessage = error.message || error.msg || 'An error occurred. Please try again.';
-        if (errorMessage !== 'User already registered') {
-          console.error('Error signing up:', errorMessage);
+        
+        // Handle "User already registered" case specifically
+        if (errorMessage === 'User already registered' || errorMessage.includes('already registered')) {
+          toast.error('This email is already registered. Please sign in instead.');
+          
+          // Navigate to login screen with the email pre-filled
+          setTimeout(() => {
+            navigation.navigate('Login', { email });
+          }, 1500);
+          return;
         }
+        
+        // Handle other errors
+        console.error('Error signing up:', errorMessage);
         toast.error(errorMessage);
         return;
       }
@@ -214,6 +224,9 @@ export default function SignUpScreen({ navigation }) {
       // Mark this as a fresh signup to prevent ProfileScreen flash
       await AsyncStorage.setItem('freshSignup', 'true');
       
+      // Show success message
+      toast.success('Account created successfully!');
+      
       // Ensure we're not in a loading state before navigating
       setTimeout(() => {
         // Use navigation.reset to prevent going back
@@ -230,11 +243,21 @@ export default function SignUpScreen({ navigation }) {
         });
       }, 800); // Increased timeout to ensure profile creation completes
     } catch (err) {
-      // Only log errors that aren't "User already registered"
-      if (err && err.message !== 'User already registered') {
-        console.error('Unexpected error during signup:', err);
+      const errorMessage = err?.message || 'An unexpected error occurred. Please try again.';
+      
+      // Handle "User already registered" case in catch block too
+      if (errorMessage === 'User already registered' || errorMessage.includes('already registered')) {
+        toast.error('This email is already registered. Please sign in instead.');
+        
+        // Navigate to login screen with the email pre-filled
+        setTimeout(() => {
+          navigation.navigate('Login', { email });
+        }, 1500);
+        return;
       }
-      toast.error('An unexpected error occurred. Please try again.');
+      
+      console.error('Unexpected error during signup:', err);
+      toast.error(errorMessage);
     }
   };
 
