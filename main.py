@@ -164,11 +164,39 @@ async def analyze_feedback(request: FeedbackRequest):
 # ✅ Debug
 @app.get("/debug/env")
 def debug_env():
+    # Import inside function to avoid startup errors
+    try:
+        import cv2
+        opencv_version = cv2.__version__
+    except:
+        opencv_version = "Not installed"
+        
+    try:
+        import mediapipe
+        mediapipe_version = mediapipe.__version__
+    except:
+        mediapipe_version = "Not installed"
+    
+    # Check if Claude client can be initialized
+    claude_key = os.getenv("CLAUDE_API_KEY")
+    claude_works = False
+    if claude_key:
+        try:
+            from anthropic import Anthropic
+            test_client = Anthropic(api_key=claude_key)
+            claude_works = True
+        except Exception as e:
+            claude_works = f"Error: {str(e)}"
+    
     return {
         "openai": os.getenv("OPENAI_API_KEY") is not None,
-        "claude": os.getenv("CLAUDE_API_KEY") is not None,
+        "claude": claude_key is not None,
+        "claude_works": claude_works,
         "aws": os.getenv("AWS_ACCESS_KEY_ID") is not None,
         "bucket": os.getenv("S3_BUCKET_NAME"),
+        "opencv_version": opencv_version,
+        "mediapipe_version": mediapipe_version,
+        "model": os.getenv("GYMVID_AI_MODEL", "claude-3-haiku-20240307"),
     }
 
 # ✅ Run locally
