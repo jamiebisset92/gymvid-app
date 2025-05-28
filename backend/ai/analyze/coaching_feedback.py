@@ -6,6 +6,7 @@ import numpy as np
 from dotenv import load_dotenv
 from anthropic import Anthropic
 from backend.ai.analyze.keyframe_collage import export_keyframe_collages
+from backend.ai.analyze.fallback_keyframes import export_static_keyframe_collage
 from backend.utils.aws_utils import upload_file_to_s3
 import logging
 
@@ -92,63 +93,41 @@ def generate_feedback(video_path, user_id, video_data, rep_data) -> dict:
     logger.info(f"video_data keys: {list(video_data.keys()) if video_data else 'None'}")
     logger.info(f"video_data: {video_data}")
     logger.info(f"rep_data length: {len(rep_data) if rep_data else 0}")
-    logger.info(f"rep_data: {rep_data[:2] if rep_data else 'None'}...")  # Log first 2 reps
-    
-    try:
-        # Validate inputs
-        if not video_path or not os.path.exists(video_path):
-            logger.error(f"Video path invalid or doesn't exist: {video_path}")
-            raise ValueError(f"Video path invalid or doesn't exist: {video_path}")
-            
-        if not video_data:
-            logger.error("video_data is None or empty")
-            raise ValueError("video_data is None or empty")
-            
-        if not rep_data or len(rep_data) == 0:
-            logger.warning("rep_data is empty - no reps detected")
-            raise ValueError("No reps detected in the video")
-            
-        if not client:
-            logger.error("Claude client not initialized - API key missing")
-            raise ValueError("Claude API key not configured")
-        
-        # Step 1: Collage Generation
-        logger.info("Step 1: Starting collage generation...")
-        collage_paths = export_keyframe_collages(video_path, rep_data)
-        logger.info(f"Collage paths generated: {collage_paths}")
-        collage_urls = []
+    logger.info(f"rep_data: {rep_data[:2] if rep_data else 'None'}...")
 
-        for i, path in enumerate(collage_paths):
-            logger.info(f"Uploading collage {i+1}/{len(collage_paths)}: {path}")
+    try:
+        if not video_path or not os.path.exists(video_path):
+            raise ValueError("Video path invalid or doesn't exist")
+        if not video_data:
+            raise ValueError("video_data is None or empty")
+        if not client:
+            raise ValueError("Claude API key not configured")
+
+        exercise_name = video_data.get("predicted_exercise", "an exercise")
+        feedback_depth = video_data.get("feedback_depth", "standard")
+
+        if rep_data:
+            collage_paths = export_keyframe_collages(video_path, rep_data)
+            total_tut, last_rpe = calculate_tut_and_rpe(rep_data)
+            rep_summaries = compress_rep_data_for_gpt(rep_data, feedback_depth)
+        else:
+            collage_paths = [export_static_keyframe_collage(video_path)]
+            total_tut, last_rpe = "N/A", "N/A"
+            rep_summaries = ["Repetition data was not detected for this video."]
+
+        collage_urls = []
+        for path in collage_paths:
             s3_url = upload_file_to_s3(
                 local_path=path,
                 s3_key=f"collages/{user_id}/{os.path.basename(path)}"
             )
-            logger.info(f"Collage uploaded to S3: {s3_url}")
             collage_urls.append(s3_url)
 
-        # Step 2: GPT Prompt Construction
-        logger.info("Step 2: Constructing prompt...")
-        exercise_name = video_data.get("predicted_exercise", "an exercise")
-        logger.info(f"Exercise name: {exercise_name}")
-        
-        feedback_depth = video_data.get("feedback_depth", "standard")
-        logger.info(f"Feedback depth: {feedback_depth}")
-        
-        total_tut, last_rpe = calculate_tut_and_rpe(rep_data)
-        logger.info(f"Total TUT: {total_tut}s, Last RPE: {last_rpe}")
-        
-        rep_summaries = compress_rep_data_for_gpt(rep_data, feedback_depth)
-        summaries_text = "\n".join(rep_summaries)
-        logger.info(f"Rep summaries generated: {len(rep_summaries)} summaries")
-        logger.debug(f"Rep summaries text:\n{summaries_text}")
-
         collage_descriptions = "\n".join([
-    f"- First collage shows reps 1–4: {collage_urls[0]}" if len(collage_urls) >= 1 else "",
-    f"- Second collage shows the final rep: {collage_urls[1]}" if len(rep_data) <= 7 and len(collage_urls) == 2 else "",
-    f"- Second collage shows the last 4 reps: {collage_urls[1]}" if len(rep_data) > 7 and len(collage_urls) == 2 else ""
-])
-        logger.info(f"Collage descriptions:\n{collage_descriptions}")
+            f"- Collage: {url}" for url in collage_urls
+        ])
+
+        summaries_text = "\n".join(rep_summaries)
 
         prompt = f"""
 Human:
@@ -157,13 +136,13 @@ You're a professional lifting coach who provides clear, helpful, and friendly co
 A user just submitted a set of **{exercise_name}**. Below are the summaries of each rep:
 {summaries_text}
 
-They also submitted up to 2 collage images showing 3 keyframes per rep:
+They also submitted keyframe collage images:
 {collage_descriptions}
 
 Please:
 - Share a brief, general comment about their technique
 - Offer up to 4 specific coaching observations with actionable tips (fewer if not needed)
-- When relevant, reference the rep number (e.g. "In rep 3, the bar path shifts forward...")
+- When relevant, reference the rep number (e.g. \"In rep 3, the bar path shifts forward...\")
 - Use plain, confident language (avoid sounding robotic or over-enthusiastic)
 - Keep it supportive — this is someone who wants to improve
 - Return only a valid JSON object (no Markdown, no extra text)
@@ -183,11 +162,6 @@ Format:
 A:
 """.strip()
 
-        logger.info(f"Prompt length: {len(prompt)} characters")
-        logger.debug(f"Full prompt:\n{prompt[:500]}...")  # Log first 500 chars
-
-        # Step 3: Claude API Call
-        logger.info(f"Step 3: Calling Claude API with model {MODEL_NAME}...")
         response = client.messages.create(
             model=MODEL_NAME,
             max_tokens=1000,
@@ -197,42 +171,21 @@ A:
         )
 
         text = response.content[0].text
-        logger.info(f"Claude response received, length: {len(text)} characters")
-        logger.debug(f"Claude raw response:\n{text}")
-        
-        if not IS_SUBPROCESS:
-            print("\U0001f9e0 Claude Coaching Response:\n", text)
-
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if not match:
-            logger.error(f"No JSON found in Claude response: {text}")
             raise ValueError("No valid JSON found in Claude response")
-            
-        json_text = match.group(0)
-        logger.info(f"Extracted JSON from response: {json_text[:200]}...")
-        
-        parsed = json.loads(json_text)
-        logger.info(f"Successfully parsed JSON response")
-        
+
+        parsed = json.loads(match.group(0))
         result = parsed["coaching_feedback"]
         result["total_tut"] = total_tut
         result["rpe"] = last_rpe
-        
-        logger.info(f"=== GENERATE_FEEDBACK SUCCESS ===")
-        logger.info(f"Form rating: {result.get('form_rating')}")
-        logger.info(f"Number of observations: {len(result.get('observations', []))}")
-        
+
         return result
 
     except Exception as e:
         logger.error(f"=== GENERATE_FEEDBACK ERROR ===")
-        logger.error(f"Error type: {type(e).__name__}")
-        logger.error(f"Error message: {str(e)}")
-        logger.error(f"Full traceback:\n{traceback.format_exc()}")
-        
-        if not IS_SUBPROCESS:
-            print("❌ Claude coaching error:", str(e))
-            traceback.print_exc()
+        logger.error(f"Error: {str(e)}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
 
         return {
             "form_rating": 0,
