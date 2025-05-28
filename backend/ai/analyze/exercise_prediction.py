@@ -19,7 +19,7 @@ def predict_exercise(image_path: str, model: str = "claude-3-haiku-20240307") ->
     print("🖼️ Image size (base64):", len(b64), "characters")
     print(f"🤖 Using Claude model: {model}")
 
-    # ✅ Claude prompt (short, strict, focused on key movements)
+    # ✅ Claude prompt (expanded and clarified)
     prompt = f"""
 You are a fitness AI that predicts the type of gym exercise being performed from a 2x2 collage of video keyframes.
 
@@ -27,15 +27,28 @@ You must ALWAYS respond with a single JSON object, strictly in this format:
 
 {{
   "equipment": one of ["Barbell", "Dumbbell", "Cable", "Machine", "Bodyweight", "Kettlebell", "Resistance Band", "Smith Machine"],
-  "variation": (optional, include only if clearly visible, e.g. "Conventional", "Sumo", "Close Grip", "Incline"),
-  "movement": one of ["Deadlift", "Squat", "Lunge", "Hip Thrust", "Row", "Bench Press", "Shoulder Press", "Pull-up", "Chin-up"],
+  "variation": (optional, include only if clearly visible, e.g. "Conventional", "Sumo", "Close Grip", "Incline", "Seated", "Standing"),
+  "movement": one of [
+    // Upper Body - Push
+    "Bench Press", "Incline Press", "Shoulder Press", "Overhead Press", "Chest Fly", "Lateral Raise", "Front Raise", "Triceps Extension", "Push-up", "Dip",
+
+    // Upper Body - Pull
+    "Row", "Lat Pulldown", "Pull-up", "Chin-up", "Face Pull", "Rear Delt Fly", "Biceps Curl", "Hammer Curl",
+
+    // Lower Body
+    "Deadlift", "Romanian Deadlift", "Squat", "Lunge", "Leg Press", "Step-up", "Hip Thrust", "Glute Kickback", "Leg Extension", "Leg Curl", "Calf Raise",
+
+    // Core
+    "Crunch", "Sit-up", "Plank", "Leg Raise", "Russian Twist", "Cable Rotation"
+  ],
   "confidence": integer from 0 to 100
 }}
 
 Rules:
-- NEVER leave out "movement" – always guess based on pose and equipment.
-- Use your best judgment. Be concise. No extra text or explanation.
-- Output ONLY valid JSON. No Markdown, comments, or backticks.
+- ALWAYS include "movement", even if it's a guess based on body position and equipment.
+- If unsure between two options, choose the most likely one based on visible posture, angle, and setup.
+- If a movement is not in the list but can be clearly identified, return the closest matching movement.
+- Do not output any explanations, comments, or extra text — only valid JSON.
 - Analyze this image: data:image/jpeg;base64,{b64}
 """
 
