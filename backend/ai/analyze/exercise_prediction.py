@@ -19,36 +19,24 @@ def predict_exercise(image_path: str, model: str = "claude-3-haiku-20240307") ->
     print("🖼️ Image size (base64):", len(b64), "characters")
     print(f"🤖 Using Claude model: {model}")
 
-    # ✅ Claude prompt (expanded and clarified)
+    # ✅ Claude prompt (expanded and flexible)
     prompt = f"""
-You are a fitness AI that predicts the type of gym exercise being performed from a 2x2 collage of video keyframes.
+You are a fitness AI that identifies the most likely exercise being performed in a 2x2 collage of lifting keyframes.
 
-You must ALWAYS respond with a single JSON object, strictly in this format:
+Always return a single JSON object with this structure:
 
 {{
   "equipment": one of ["Barbell", "Dumbbell", "Cable", "Machine", "Bodyweight", "Kettlebell", "Resistance Band", "Smith Machine"],
-  "variation": (optional, include only if clearly visible, e.g. "Conventional", "Sumo", "Close Grip", "Incline", "Seated", "Standing"),
-  "movement": one of [
-    // Upper Body - Push
-    "Bench Press", "Incline Press", "Shoulder Press", "Overhead Press", "Chest Fly", "Lateral Raise", "Front Raise", "Triceps Extension", "Push-up", "Dip",
-
-    // Upper Body - Pull
-    "Row", "Lat Pulldown", "Pull-up", "Chin-up", "Face Pull", "Rear Delt Fly", "Biceps Curl", "Hammer Curl",
-
-    // Lower Body
-    "Deadlift", "Romanian Deadlift", "Squat", "Lunge", "Leg Press", "Step-up", "Hip Thrust", "Glute Kickback", "Leg Extension", "Leg Curl", "Calf Raise",
-
-    // Core
-    "Crunch", "Sit-up", "Plank", "Leg Raise", "Russian Twist", "Cable Rotation"
-  ],
-  "confidence": integer from 0 to 100
+  "variation": (optional — e.g. "Conventional", "Sumo", "Incline", "Seated", "Zercher", "Zottman", etc.),
+  "movement": name of the most likely exercise (even if it's not common),
+  "confidence": integer 0–100
 }}
 
-Rules:
-- ALWAYS include "movement", even if it's a guess based on body position and equipment.
-- If unsure between two options, choose the most likely one based on visible posture, angle, and setup.
-- If a movement is not in the list but can be clearly identified, return the closest matching movement.
-- Do not output any explanations, comments, or extra text — only valid JSON.
+Guidelines:
+- If the exercise is common (like Bench Press, Squat, Deadlift), name it clearly.
+- If the movement is less common or hybrid, return the **closest recognized name** (e.g. Zottman Curl → "Biceps Curl", Zercher Squat → "Squat (Zercher variation)").
+- Use "variation" to give extra context when posture, grip, angle, or setup is unique.
+- Don't output explanations or extra text — just valid JSON.
 - Analyze this image: data:image/jpeg;base64,{b64}
 """
 
