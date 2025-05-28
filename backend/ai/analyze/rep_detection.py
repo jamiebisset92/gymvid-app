@@ -1,4 +1,7 @@
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 def run_rep_detection_from_landmark_y(
     raw_y: list,
@@ -9,23 +12,37 @@ def run_rep_detection_from_landmark_y(
 ) -> list:
     raw_y = np.array(raw_y)
     if len(raw_y) < 5:
+        logger.warning(f"Not enough data points for rep detection: {len(raw_y)}")
         return []
 
+    # Apply smoothing
     smooth_y = np.convolve(raw_y, np.ones(5) / 5, mode="valid")
+    
+    # Calculate adaptive threshold based on data range
+    data_range = np.max(smooth_y) - np.min(smooth_y)
+    base_threshold = 0.003
+    adaptive_threshold = max(base_threshold, data_range * 0.01)  # 1% of range minimum
+    
+    logger.info(f"Rep detection - data range: {data_range:.4f}, using threshold: {adaptive_threshold:.4f}")
+    
     rep_frames = []
     state = "down"
-    threshold = 0.003
+    threshold = adaptive_threshold
 
     for i in range(1, len(smooth_y)):
         if state == "down" and smooth_y[i] > smooth_y[i - 1] + threshold:
             state = "up"
             rep_frames.append({"start": i})
+            logger.debug(f"Rep started at frame {i}")
         elif state == "up" and smooth_y[i] < smooth_y[i - 1] - threshold:
             state = "down"
             if rep_frames and "peak" not in rep_frames[-1]:
                 peak = np.argmax(smooth_y[rep_frames[-1]["start"]:i]) + rep_frames[-1]["start"]
                 rep_frames[-1]["peak"] = peak
                 rep_frames[-1]["stop"] = i
+                logger.debug(f"Rep completed - start: {rep_frames[-1]['start']}, peak: {peak}, stop: {i}")
+
+    logger.info(f"Found {len(rep_frames)} potential reps")
 
     rep_data = []
     rir_lookup = {
@@ -43,8 +60,10 @@ def run_rep_detection_from_landmark_y(
             start, peak, stop = rep["start"], rep["peak"], rep["stop"]
             segment = smooth_y[start:stop]
 
-            # ✅ Skip short segments
-            if len(segment) < 3:
+            # ✅ Skip short segments (less than 0.5 seconds)
+            min_duration = 0.5  # seconds
+            if (stop - start) / fps < min_duration:
+                logger.debug(f"Skipping rep {idx+1} - too short ({(stop - start) / fps:.2f}s)")
                 continue
 
             duration = abs(stop - start) / fps
@@ -54,7 +73,8 @@ def run_rep_detection_from_landmark_y(
             try:
                 velocities = np.gradient(segment)
                 abs_velocities = np.abs(velocities)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to calculate velocities for rep {idx+1}: {str(e)}")
                 continue
 
             pause_idx = np.argmin(abs_velocities)
@@ -158,6 +178,7 @@ def run_rep_detection_from_landmark_y(
 
             rep_data.append(rep_result)
 
+    logger.info(f"Returning {len(rep_data)} valid reps after filtering")
     return rep_data
 
 def detect_reps(video_data: dict) -> list:
