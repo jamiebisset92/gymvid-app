@@ -1,6 +1,34 @@
 import os
 import cv2
 import numpy as np
+import subprocess
+
+def get_video_rotation(video_path):
+    """
+    Uses ffmpeg to detect rotation metadata (e.g., for iPhone videos).
+    Returns rotation angle as int (0, 90, 180, 270).
+    """
+    try:
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream_tags=rotate",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            video_path
+        ]
+        output = subprocess.check_output(cmd).decode().strip()
+        return int(output) if output else 0
+    except Exception:
+        return 0
+
+def rotate_frame_if_needed(frame, rotation):
+    if rotation == 90:
+        return cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    elif rotation == 180:
+        return cv2.rotate(frame, cv2.ROTATE_180)
+    elif rotation == 270:
+        return cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    return frame
 
 def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = "keyframe_collages") -> list:
     """
@@ -19,6 +47,7 @@ def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = 
     if not cap.isOpened():
         raise ValueError(f"Unable to open video: {video_path}")
 
+    rotation = get_video_rotation(video_path)
     frame_size = (256, 256)  # (width, height)
     total_reps = len(rep_data)
     collage_paths = []
@@ -29,12 +58,13 @@ def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = 
         collage = np.zeros((collage_height, collage_width, 3), dtype=np.uint8)
 
         for i, rep in enumerate(rep_slice):
-            for j, phase in enumerate(["start", "peak", "stop"]):
+            for j, phase in ["start", "peak", "stop"]:
                 frame_no = rep.get(f"{phase}_frame")
                 if frame_no is not None:
                     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
                     ret, frame = cap.read()
                     if ret:
+                        frame = rotate_frame_if_needed(frame, rotation)
                         resized = cv2.resize(frame, frame_size)
                         y = i * frame_size[1]
                         x = j * frame_size[0]
@@ -49,8 +79,8 @@ def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = 
     if total_reps <= 4:
         build_collage(rep_data, "full")
     elif total_reps <= 7:
-        build_collage(rep_data[:4], "first4")
-        build_collage(rep_data[-1:], "last1")
+        build_collage(rep_data[:1], "first1")
+        build_collage(rep_data[-4:], "last4")
     else:
         build_collage(rep_data[:4], "first4")
         build_collage(rep_data[-4:], "last4")

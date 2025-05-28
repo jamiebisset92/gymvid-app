@@ -1,37 +1,76 @@
 import os
-import cv2
+import subprocess
+from PIL import Image, ExifTags
 import numpy as np
+import cv2
 
 def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_dir: str = "quick_collages") -> list:
     os.makedirs(output_dir, exist_ok=True)
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise ValueError(f"Cannot open video file: {video_path}")
 
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if frame_count == 0:
-        raise ValueError("Video contains no frames")
+    # Step 1: Use ffmpeg to extract evenly spaced frames
+    output_template = os.path.join(output_dir, "frame_%03d.jpg")
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-i", video_path,
+        "-vf", f"select='not(mod(n\,{int(get_frame_interval(video_path, total_frames))})')",
+        "-vsync", "vfr",
+        "-q:v", "2",
+        output_template
+    ]
 
-    selected_frames = []
-    for i in range(1, total_frames + 1):
-        frame_no = int((i / (total_frames + 1)) * frame_count)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
-        ret, frame = cap.read()
-        if ret:
-            selected_frames.append(frame)
+    subprocess.run(ffmpeg_cmd, check=True)
 
-    cap.release()
+    # Step 2: Load frames using PIL and auto-rotate
+    frame_paths = sorted([
+        os.path.join(output_dir, f) for f in os.listdir(output_dir)
+        if f.startswith("frame_") and f.endswith(".jpg")
+    ])[:total_frames]
 
-    if not selected_frames:
-        raise ValueError("No frames could be extracted")
+    if not frame_paths:
+        raise ValueError("No frames were extracted by ffmpeg.")
 
-    # Create a 2x2 collage (for 4 keyframes)
+    images = [load_and_autorotate_pil(f).resize((256, 256)) for f in frame_paths]
+
+    # Step 3: Convert to OpenCV format for collage
+    opencv_images = [cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR) for img in images]
     rows = 2
     cols = total_frames // 2
-    resized = [cv2.resize(f, (256, 256)) for f in selected_frames]
-    row_images = [np.hstack(resized[i*cols:(i+1)*cols]) for i in range(rows)]
+    row_images = [np.hstack(opencv_images[i*cols:(i+1)*cols]) for i in range(rows)]
     collage = np.vstack(row_images)
+
+    # Step 4: Save final collage
     collage_path = os.path.join(output_dir, "quick_collage.jpg")
     cv2.imwrite(collage_path, collage, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
 
     return [collage_path]
+
+
+def get_frame_interval(video_path: str, total_frames: int) -> int:
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError(f"Cannot open video file: {video_path}")
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    if frame_count == 0:
+        raise ValueError("Video contains no frames")
+    return max(1, frame_count // (total_frames + 1))
+
+
+def load_and_autorotate_pil(image_path: str) -> Image.Image:
+    image = Image.open(image_path)
+    try:
+        for orientation in ExifTags.TAGS.keys():
+            if ExifTags.TAGS[orientation] == "Orientation":
+                break
+        exif = image._getexif()
+        if exif is not None:
+            orientation_value = exif.get(orientation)
+            if orientation_value == 3:
+                image = image.rotate(180, expand=True)
+            elif orientation_value == 6:
+                image = image.rotate(270, expand=True)
+            elif orientation_value == 8:
+                image = image.rotate(90, expand=True)
+    except Exception:
+        pass
+    return image
