@@ -21,16 +21,24 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
 
         print("📼 Temp video saved to:", tmp_path)
 
-        # ✅ Export a collage using 6 evenly spaced frames
-        collage_paths = export_evenly_spaced_collage(tmp_path, total_frames=6)
+        # ✅ Export a collage using 4 evenly spaced frames (matching the default)
+        collage_paths = export_evenly_spaced_collage(tmp_path, total_frames=4)
 
         # ✅ Predict exercise from collage
         prediction = predict_exercise(collage_paths[0])
 
         # ✅ Flatten prediction name for frontend use
         exercise_name = prediction.get("movement", "Unknown")
+        
+        # Log the prediction for debugging
+        print(f"🎯 Exercise prediction result: {prediction}")
 
-        return {"exercise_name": exercise_name}
+        return {"exercise_name": exercise_name, "prediction_details": prediction}
 
     except Exception as e:
+        print(f"❌ Error in quick_exercise_prediction: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        # Clean up temp file
+        if 'tmp_path' in locals() and os.path.exists(tmp_path):
+            os.remove(tmp_path)

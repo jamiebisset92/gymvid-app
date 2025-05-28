@@ -9,16 +9,22 @@ def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_
 
     # Step 1: Use ffmpeg to extract evenly spaced frames
     output_template = os.path.join(output_dir, "frame_%03d.jpg")
+    
+    # Clear any existing frames
+    for f in os.listdir(output_dir):
+        if f.startswith("frame_") and f.endswith(".jpg"):
+            os.remove(os.path.join(output_dir, f))
+    
     ffmpeg_cmd = [
         "ffmpeg",
         "-i", video_path,
         "-vf", f"select='not(mod(n\,{int(get_frame_interval(video_path, total_frames))})')",
         "-vsync", "vfr",
-        "-q:v", "2",
+        "-q:v", "1",  # Higher quality (1 is best, was 2)
         output_template
     ]
 
-    subprocess.run(ffmpeg_cmd, check=True)
+    subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
 
     # Step 2: Load frames using PIL and auto-rotate
     frame_paths = sorted([
@@ -29,7 +35,9 @@ def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_
     if not frame_paths:
         raise ValueError("No frames were extracted by ffmpeg.")
 
-    images = [load_and_autorotate_pil(f).resize((256, 256)) for f in frame_paths]
+    # Larger frame size for better detail
+    frame_size = (384, 384)  # Increased from 256x256
+    images = [load_and_autorotate_pil(f).resize(frame_size, Image.Resampling.LANCZOS) for f in frame_paths]
 
     # Step 3: Convert to OpenCV format for collage
     opencv_images = [cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR) for img in images]
@@ -38,9 +46,13 @@ def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_
     row_images = [np.hstack(opencv_images[i*cols:(i+1)*cols]) for i in range(rows)]
     collage = np.vstack(row_images)
 
-    # Step 4: Save final collage
+    # Step 4: Save final collage with higher quality
     collage_path = os.path.join(output_dir, "quick_collage.jpg")
-    cv2.imwrite(collage_path, collage, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+    cv2.imwrite(collage_path, collage, [int(cv2.IMWRITE_JPEG_QUALITY), 85])  # Higher quality (was 50)
+
+    # Clean up individual frames
+    for f in frame_paths:
+        os.remove(f)
 
     return [collage_path]
 

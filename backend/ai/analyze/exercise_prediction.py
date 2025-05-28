@@ -21,23 +21,29 @@ def predict_exercise(image_path: str, model: str = "claude-3-haiku-20240307") ->
 
     # ✅ Claude prompt (expanded and flexible)
     prompt = f"""
-You are a fitness AI that identifies the most likely exercise being performed in a 2x2 collage of lifting keyframes.
+You are a fitness AI that identifies exercises from video keyframes. You're looking at a 2x2 grid of frames from a single exercise video.
+
+IMPORTANT: Look carefully at:
+1. The equipment being used (barbell, dumbbells, cables, machine, etc.)
+2. The body position (standing, lying, seated, inclined)
+3. The movement pattern (pressing, pulling, squatting, etc.)
+4. The muscle groups being targeted
+
+Common mistakes to avoid:
+- Don't confuse pressing movements (bench press, incline press) with pulling movements (deadlifts, rows)
+- Pay attention to whether the person is lying down vs standing
+- Look at the direction of movement (pushing away vs pulling towards)
 
 Always return a single JSON object with this structure:
 
 {{
   "equipment": one of ["Barbell", "Dumbbell", "Cable", "Machine", "Bodyweight", "Kettlebell", "Resistance Band", "Smith Machine"],
-  "variation": (optional — e.g. "Conventional", "Sumo", "Incline", "Seated", "Zercher", "Zottman", etc.),
-  "movement": name of the most likely exercise (even if it's not common),
+  "variation": (optional — e.g. "Conventional", "Sumo", "Incline", "Flat", "Decline", "Seated", "Standing"),
+  "movement": name of the exercise (be specific - e.g. "Incline Barbell Press" not just "Press"),
   "confidence": integer 0–100
 }}
 
-Guidelines:
-- If the exercise is common (like Bench Press, Squat, Deadlift), name it clearly.
-- If the movement is less common or hybrid, return the **closest recognized name** (e.g. Zottman Curl → "Biceps Curl", Zercher Squat → "Squat (Zercher variation)").
-- Use "variation" to give extra context when posture, grip, angle, or setup is unique.
-- Don't output explanations or extra text — just valid JSON.
-- Analyze this image: data:image/jpeg;base64,{b64}
+Analyze this image: data:image/jpeg;base64,{b64}
 """
 
     try:
@@ -46,7 +52,7 @@ Guidelines:
             model=model,
             max_tokens=500,
             temperature=0,
-            system="You are a helpful AI fitness assistant.",
+            system="You are an expert fitness coach with deep knowledge of weight training exercises.",
             messages=[
                 {"role": "user", "content": prompt}
             ]

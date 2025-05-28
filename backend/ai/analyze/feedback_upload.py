@@ -74,8 +74,7 @@ async def feedback_upload(
             video_path=tmp_path,
             user_id=user_id,
             video_data={ "predicted_exercise": movement },
-            rep_data=rep_data,
-            collage_paths=collage_paths
+            rep_data=rep_data
         )
         logger.info(f"Coaching feedback generated successfully")
         logger.info(f"Form rating: {feedback.get('form_rating')}")
