@@ -28,14 +28,14 @@ async def feedback_upload(
     logger.info(f"movement: {movement}")
     logger.info(f"video filename: {video.filename}")
     logger.info(f"video content_type: {video.content_type}")
-    
+
     tmp_path = None
     try:
         # ✅ Save uploaded video to a temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             shutil.copyfileobj(video.file, tmp)
             tmp_path = tmp.name
-            
+
         logger.info(f"Video saved to temp path: {tmp_path}")
         logger.info(f"Temp file size: {os.path.getsize(tmp_path)} bytes")
 
@@ -44,8 +44,7 @@ async def feedback_upload(
         video_data = analyze_video(tmp_path)
         logger.info(f"Video analysis complete. FPS: {video_data.get('fps')}, Best landmark: {video_data.get('best_landmark')}")
         logger.info(f"Raw Y data points: {len(video_data.get('raw_y', []))}")
-        
-        # Log raw_y data statistics for debugging
+
         if video_data.get('raw_y'):
             raw_y = video_data['raw_y']
             logger.info(f"Raw Y stats - min: {min(raw_y):.4f}, max: {max(raw_y):.4f}, range: {max(raw_y) - min(raw_y):.4f}")
@@ -57,12 +56,12 @@ async def feedback_upload(
             rep_data = run_rep_detection_from_landmark_y(
                 video_data["raw_y"], video_data["fps"]
             )
-            
-            if rep_data and len(rep_data) > 0:
+
+            if rep_data and isinstance(rep_data, list) and len(rep_data) > 0:
                 logger.info(f"Rep detection complete. Found {len(rep_data)} reps")
                 logger.debug(f"Rep data sample: {rep_data[:1]}")
             else:
-                logger.warning("Rep detection returned empty or no reps")
+                logger.warning("Rep detection returned empty or invalid format")
                 rep_data = None
 
         except Exception as rep_error:
@@ -70,8 +69,8 @@ async def feedback_upload(
             logger.warning(f"[⚠️] Rep detection traceback: {traceback.format_exc()}")
             rep_data = None
 
-        # Generate keyframe collages
-        if rep_data:
+        # ✅ Generate keyframe collages
+        if isinstance(rep_data, list) and len(rep_data) > 0:
             try:
                 collage_paths = export_keyframe_collages(tmp_path, rep_data)
                 logger.info(f"Generated {len(collage_paths)} collages from rep data")
@@ -80,47 +79,66 @@ async def feedback_upload(
                 fallback_path = export_static_keyframe_collage(tmp_path)
                 collage_paths = [fallback_path]
         else:
-            logger.info("Using fallback keyframes due to no rep data")
+            logger.info("Using fallback keyframes due to no valid rep data")
             fallback_path = export_static_keyframe_collage(tmp_path)
             collage_paths = [fallback_path]
+
+        # ❗ Final safeguard: make sure a keyframe was generated
+        if not collage_paths or not os.path.exists(collage_paths[0]):
+            return {
+                "success": False,
+                "error": "Failed to generate keyframe collage from video.",
+                "error_type": "keyframe_generation_failed"
+            }
 
         # ✅ Generate coaching feedback using Claude
         logger.info("Starting coaching feedback generation...")
         logger.info(f"Passing rep_data: {rep_data is not None} (has {len(rep_data) if rep_data else 0} reps)")
-        
+
         feedback = generate_feedback(
             video_path=tmp_path,
             user_id=user_id,
-            video_data={ 
+            video_data={
                 "predicted_exercise": movement,
                 "feedback_depth": "standard"
             },
             rep_data=rep_data
         )
+
+        if not feedback or not isinstance(feedback, dict):
+            logger.error("Feedback response is invalid or not a dictionary")
+            return {
+                "success": False,
+                "error": "Claude did not return valid feedback.",
+                "error_type": "invalid_feedback_structure"
+            }
+
         logger.info(f"Coaching feedback generated")
         logger.info(f"Form rating: {feedback.get('form_rating')}")
         logger.info(f"RPE: {feedback.get('rpe')}, TUT: {feedback.get('total_tut')}")
-        
-        # Check if feedback generation was successful
+
         if feedback.get('form_rating', 0) == 0:
             logger.warning("Feedback generation returned with form_rating of 0, indicating an error")
-            # Still return the feedback but with success: false if it's an error feedback
             if "configuration error" in feedback.get('summary', '') or "technical issue" in str(feedback.get('observations', [])):
-                return { 
-                    "success": False, 
+                return {
+                    "success": False,
                     "feedback": feedback,
                     "error_type": "feedback_generation_error",
                     "error": "Failed to generate proper coaching feedback"
                 }
 
-        return { "success": True, "feedback": feedback }
+        return {
+            "success": True,
+            "feedback": feedback,
+            "movement": movement
+        }
 
     except Exception as e:
         logger.error(f"=== FEEDBACK_UPLOAD ERROR ===")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Error message: {str(e)}")
         logger.error(f"Full traceback:\n{traceback.format_exc()}")
-        
+
         return {
             "success": False,
             "error": str(e),

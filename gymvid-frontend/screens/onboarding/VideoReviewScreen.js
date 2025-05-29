@@ -73,7 +73,8 @@ const GuidedPopup = ({
   highlightLayout, 
   screenBackgroundColor = colors.background,
   showIconButton = false,
-  verticalOffset = 0
+  verticalOffset = 0,
+  iconType = 'arrow'
 }) => {
   const animValue = useRef(new Animated.Value(0)).current;
   const spotlightScale = useRef(new Animated.Value(0.8)).current;
@@ -100,6 +101,20 @@ const GuidedPopup = ({
   const screenDims = Dimensions.get('window');
 
   debugLog(`GuidedPopup RENDER: text="${text}" visible_PROP=${visible} targetLayout_EXISTS=${!!targetLayout} animValue=${animValue._value}`);
+
+  // Special debugging for step 3 (AI coaching tooltip)
+  if (text && text.includes('AI will analyze your technique')) {
+    debugLog('🎯 THIRD TOOLTIP DEBUG - Props received:', {
+      visible,
+      text,
+      targetLayout: !!targetLayout,
+      targetLayoutDetails: targetLayout,
+      highlightLayout: !!highlightLayout,
+      animValue: animValue._value,
+      iconType,
+      showIconButton
+    });
+  }
 
   // Start glow pulse animation
   useEffect(() => {
@@ -153,53 +168,53 @@ const GuidedPopup = ({
       setPopupPosition({ top: pTop, left: pLeft, width: popupWidth });
       setArrowStyle(arrStyleLocal);
 
-      // Elegant entrance animation sequence
+      // Enhanced entrance animation sequence with world-class polish
       Animated.sequence([
-        // First, fade in the spotlight
+        // Phase 1: Graceful spotlight appearance
         Animated.parallel([
           Animated.timing(animValue, {
             toValue: 1,
-            duration: 300,
-            easing: Easing.out(Easing.cubic),
+            duration: 400, // Longer for more elegance
+            easing: Easing.out(Easing.back(1.1)), // Subtle bounce
             useNativeDriver: true,
           }),
           Animated.spring(spotlightScale, {
             toValue: 1,
-            tension: 65,
-            friction: 8,
+            tension: 70, // Slightly softer spring
+            friction: 9,
             useNativeDriver: true,
           }),
           Animated.timing(spotlightOpacity, {
             toValue: 1,
-            duration: 400,
+            duration: 500, // Longer fade-in for smooth appearance
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
         ]),
-        // Then animate the popup content
+        // Phase 2: Sophisticated popup content animation
         Animated.parallel([
-          // Scale up the popup
+          // Popup scale with refined spring
           Animated.spring(popupScale, {
             toValue: 1,
-            tension: 80,
-            friction: 10,
-            delay: 100,
+            tension: 85, // Tighter spring for crispness
+            friction: 11,
+            delay: 80, // Slightly shorter delay
             useNativeDriver: true,
           }),
-          // Slide up the popup
+          // Refined upward slide movement
           Animated.timing(popupTranslateY, {
             toValue: 0,
-            duration: 350,
-            delay: 100,
-            easing: Easing.out(Easing.back(1.2)),
+            duration: 450, // Longer for smoothness
+            delay: 80,
+            easing: Easing.out(Easing.back(1.4)), // More pronounced but controlled bounce
             useNativeDriver: true,
           }),
-          // Animate arrow appearance
+          // Polished arrow animation
           Animated.spring(arrowScale, {
             toValue: 1,
-            tension: 100,
-            friction: 8,
-            delay: 250,
+            tension: 120, // Crisper arrow appearance
+            friction: 9,
+            delay: 200, // Slightly earlier appearance
             useNativeDriver: true,
           }),
         ]),
@@ -208,47 +223,56 @@ const GuidedPopup = ({
       });
     } else {
       debugLog(`GuidedPopup useEffect ELSE: text="${text}" - Animating out or not showing (visible=${visible}, targetLayout=${!!targetLayout}).`);
-      // Elegant exit animation - fade out main stroke
+      // Enhanced exit animation with improved timing and easing
       Animated.timing(mainStrokeOpacity, {
         toValue: 0,
-        duration: 250,
+        duration: 300, // Slightly longer for smoother fade
+        easing: Easing.out(Easing.cubic), // Smoother easing curve
         useNativeDriver: true,
       }).start();
       
-      // Also animate other elements
+      // Sophisticated exit animation sequence
       Animated.parallel([
+        // Main popup fade out
         Animated.timing(animValue, {
           toValue: 0,
-          duration: 250,
+          duration: 350, // Longer duration for elegance
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
-        Animated.timing(spotlightScale, {
-          toValue: 0.8,
-          duration: 250,
-          easing: Easing.in(Easing.cubic),
+        // Spotlight scale down with bounce
+        Animated.spring(spotlightScale, {
+          toValue: 0.85, // Less dramatic scale change
+          tension: 60, // Softer spring
+          friction: 12,
           useNativeDriver: true,
         }),
+        // Popup scale with elegant ease-in
         Animated.timing(popupScale, {
-          toValue: 0.9,
-          duration: 200,
-          easing: Easing.in(Easing.cubic),
+          toValue: 0.94, // Less dramatic scale for smoother feel
+          duration: 280,
+          easing: Easing.in(Easing.back(0.8)), // Gentle ease-in-back
           useNativeDriver: true,
         }),
+        // Refined slide down movement
         Animated.timing(popupTranslateY, {
-          toValue: 20, // Smaller slide down for nearby positioning
-          duration: 200,
+          toValue: 15, // Smaller movement for subtlety
+          duration: 320,
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
+        // Arrow fade out
         Animated.timing(arrowScale, {
           toValue: 0,
-          duration: 150,
+          duration: 200, // Faster arrow disappearance
+          easing: Easing.in(Easing.quad),
           useNativeDriver: true,
         }),
+        // Spotlight opacity with smooth fade
         Animated.timing(spotlightOpacity, {
           toValue: 0,
-          duration: 250,
+          duration: 320,
+          easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
       ]).start(() => {
@@ -358,7 +382,11 @@ const GuidedPopup = ({
                     backgroundColor: 'rgba(0, 122, 255, 0.08)',
                     borderRadius: 20,
                   }]}>
-                    <Ionicons name="arrow-forward" size={28} color={colors.primary} />
+                    {iconType === 'tick' ? (
+                      <Ionicons name="checkmark" size={28} color={colors.primary} />
+                    ) : (
+                      <Ionicons name="arrow-forward" size={28} color={colors.primary} />
+                    )}
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity onPress={onClose} style={[styles.popupDismissButtonAdvanced, {
@@ -535,12 +563,25 @@ export default function VideoReviewScreen({ navigation, route }) {
   const pencilOpacity = useRef(new Animated.Value(0)).current;
   const exerciseBlur = useRef(new Animated.Value(0.3)).current;
 
+  // Animation values for AI Coaching Feedback button
+  const aiButtonOpacity = useRef(new Animated.Value(0)).current;
+  const aiButtonScale = useRef(new Animated.Value(0.9)).current;
+  const aiButtonTranslateY = useRef(new Animated.Value(10)).current;
+
   // State for tooltips/guided popups
   const [tooltipStep, setTooltipStep] = useState(0);
+  
+  // Add debug logging for tooltip step changes
+  useEffect(() => {
+    debugLog('🎯 TOOLTIP STEP CHANGED:', tooltipStep);
+  }, [tooltipStep]);
+
+  const [isTransitioningTooltips, setIsTransitioningTooltips] = useState(false); // New state for smooth transitions
   const [inputsRowLayout, setInputsRowLayout] = useState(null);
   const [exerciseCardLayout, setExerciseCardLayout] = useState(null);
   const [exerciseHeaderLayout, setExerciseHeaderLayout] = useState(null);
   const [tableAreaLayout, setTableAreaLayout] = useState(null);
+  const [aiCoachingButtonLayout, setAiCoachingButtonLayout] = useState(null); // New layout for AI button
   const [hasSeenTooltips, setHasSeenTooltips] = useState(false);
 
   // New state and ref for more robust tooltip triggering
@@ -552,6 +593,7 @@ export default function VideoReviewScreen({ navigation, route }) {
   const exerciseHeaderRef = useRef(null);
   const tableAreaRef = useRef(null);
   const thumbnailRef = useRef(null);
+  const aiCoachingButtonRef = useRef(null); // New ref for AI button
 
   // Add ellipsis animation effect
   useEffect(() => {
@@ -593,6 +635,7 @@ export default function VideoReviewScreen({ navigation, route }) {
     const checkTooltipsSeen = async () => {
       try {
         const seen = await AsyncStorage.getItem('hasSeenVideoReviewTooltips_v2');
+        debugLog("🎯 TOOLTIP_DEBUG: Stored tooltip preference:", seen);
         if (seen === null) {
           debugLog("TOOLTIP_DEBUG: No tooltip preference found, showing tooltips.");
           setHasSeenTooltips(false);
@@ -607,6 +650,18 @@ export default function VideoReviewScreen({ navigation, route }) {
     };
     checkTooltipsSeen();
   }, []);
+  
+  // Debug function to clear tooltip preferences - FOR TESTING ONLY
+  const clearTooltipPreferences = async () => {
+    try {
+      await AsyncStorage.removeItem('hasSeenVideoReviewTooltips_v2');
+      setHasSeenTooltips(false);
+      setTooltipStep(0);
+      debugLog('🎯 Tooltip preferences cleared, tooltips will show again');
+    } catch (e) {
+      debugLog('Error clearing tooltip preferences:', e);
+    }
+  };
   
   // REVISED useEffect for triggering the first tooltip with DETAILED LOGGING
   useEffect(() => {
@@ -1046,6 +1101,11 @@ export default function VideoReviewScreen({ navigation, route }) {
       setCurrentVideoFeedbackKey(null);
       setIsPreloadingFeedback(false);
       debugLog('Cleared all cached feedback for new video');
+      
+      // Reset AI button animation state for new video
+      aiButtonOpacity.setValue(0);
+      aiButtonScale.setValue(0.9);
+      aiButtonTranslateY.setValue(10);
     }
   }, [videoUri]);
   
@@ -1108,7 +1168,85 @@ export default function VideoReviewScreen({ navigation, route }) {
       return;
     }
     
+    const wasCompleted = isSetCompleted;
     setIsSetCompleted(!isSetCompleted);
+    
+    debugLog('🎯 handleCompleteSet - wasCompleted:', wasCompleted, 'isSetCompleted becoming:', !isSetCompleted);
+    debugLog('🎯 handleCompleteSet - hasSeenTooltips:', hasSeenTooltips, 'tooltipStep:', tooltipStep);
+    debugLog('🎯 handleCompleteSet - videoUri exists:', !!videoUri);
+    debugLog('🎯 handleCompleteSet - aiCoachingButtonLayout:', aiCoachingButtonLayout);
+    
+    // If the set is being completed (not uncompleted), trigger AI button animation
+    if (!wasCompleted) {
+      debugLog('🎯 Set being completed - starting AI button animation');
+      // World-class fade-in animation for AI Coaching Feedback button
+      setTimeout(() => {
+        Animated.parallel([
+          // Elegant fade in
+          Animated.timing(aiButtonOpacity, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          // Gentle scale up with subtle bounce
+          Animated.spring(aiButtonScale, {
+            toValue: 1,
+            tension: 80,
+            friction: 12,
+            useNativeDriver: true,
+          }),
+          // Smooth upward slide
+          Animated.timing(aiButtonTranslateY, {
+            toValue: 0,
+            duration: 500,
+            easing: Easing.out(Easing.back(1.2)),
+            useNativeDriver: true,
+          }),
+        ]).start((finished) => {
+          debugLog('🎯 AI button animation completed, finished:', finished);
+          debugLog('🎯 Checking tooltip conditions - hasSeenTooltips:', hasSeenTooltips, 'tooltipStep:', tooltipStep);
+          debugLog('🎯 aiCoachingButtonLayout when animation done:', aiCoachingButtonLayout);
+          
+          // After AI button animation completes, show the third tooltip
+          if (!hasSeenTooltips && finished) {
+            debugLog('🎯 Conditions met - triggering third tooltip in 300ms');
+            setTimeout(() => {
+              debugLog('🎯 Setting tooltipStep to 3');
+              setTooltipStep(3);
+            }, 300); // Small delay for natural flow
+          } else {
+            debugLog('🎯 Not showing third tooltip - hasSeenTooltips:', hasSeenTooltips, 'finished:', finished);
+          }
+        });
+      }, 100); // Small delay to let the checkmark animation settle
+    } else {
+      debugLog('🎯 Set being uncompleted - hiding AI button');
+      // If uncompleting the set, hide the AI button
+      Animated.parallel([
+        Animated.timing(aiButtonOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(aiButtonScale, {
+          toValue: 0.9,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(aiButtonTranslateY, {
+          toValue: 10,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      
+      // Hide tooltip if it's showing
+      if (tooltipStep === 3) {
+        debugLog('🎯 Hiding third tooltip because set uncompleted');
+        setTooltipStep(0);
+      }
+    }
   };
 
   // Function to handle exercise name editing
@@ -1294,28 +1432,63 @@ export default function VideoReviewScreen({ navigation, route }) {
     }
   };
 
-  // handleDismissTooltip (fixed to prevent premature marking as seen)
+  // Enhanced handleDismissTooltip with elegant transitions
   const handleDismissTooltip = async () => {
     debugLog('handleDismissTooltip called with tooltipStep:', tooltipStep);
     
     if (tooltipStep === 1) {
-      // First popup dismissed -> show second popup
-      debugLog('Dismissing first popup, showing second popup');
-      setTooltipStep(2);
+      // First popup dismissed -> smoothly transition to second popup
+      debugLog('Dismissing first popup, preparing second popup');
+      setIsTransitioningTooltips(true); // Indicate transition is in progress
+      
+      // Add a graceful delay for the transition
+      // This allows the first popup's exit animation to complete 
+      // before the second popup starts its entrance animation
+      setTimeout(() => {
+        debugLog('Starting second popup after transition delay');
+        setTooltipStep(2);
+        setIsTransitioningTooltips(false); // Transition complete
+      }, 450); // Slightly increased delay to match our enhanced exit animation
+      
     } else if (tooltipStep === 2) {
-      // Second popup dismissed -> close all tooltips and mark as seen
-      debugLog('Dismissing second popup, closing all tooltips');
+      // Second popup dismissed -> check if we should show third tooltip (AI button)
+      debugLog('Dismissing second popup');
+      setIsTransitioningTooltips(true);
+      
+      // If AI button is available, transition to third tooltip
+      if (isSetCompleted && videoUri) {
+        setTimeout(() => {
+          debugLog('Starting AI coaching tooltip after transition delay');
+          setTooltipStep(3);
+          setIsTransitioningTooltips(false);
+        }, 450);
+      } else {
+        // If AI button not available, close all tooltips
+        setTooltipStep(0);
+        setHasSeenTooltips(true);
+        setIsTransitioningTooltips(false);
+        try { 
+          await AsyncStorage.setItem('hasSeenVideoReviewTooltips_v2', 'true'); 
+          debugLog('Tooltips marked as seen after completing both popups.');
+        } 
+        catch (e) { debugLog('Error saving tooltip_v2 pref', e); }
+      }
+      
+    } else if (tooltipStep === 3) {
+      // Third popup (AI coaching) dismissed -> close all tooltips and mark as seen
+      debugLog('Dismissing AI coaching tooltip, closing all tooltips');
       setTooltipStep(0);
       setHasSeenTooltips(true);
       try { 
         await AsyncStorage.setItem('hasSeenVideoReviewTooltips_v2', 'true'); 
-        debugLog('Tooltips marked as seen after completing both popups.');
+        debugLog('Tooltips marked as seen after completing all three popups.');
       } 
       catch (e) { debugLog('Error saving tooltip_v2 pref', e); }
     } else {
       // Fallback - close tooltips but don't mark as seen (so they can show again)
       debugLog('Unexpected tooltipStep, closing tooltips without marking as seen');
       setTooltipStep(0);
+      setIsTransitioningTooltips(false); // Ensure transition state is reset
     }
   };
   
@@ -1342,6 +1515,13 @@ export default function VideoReviewScreen({ navigation, route }) {
   const onExerciseCardLayout = () => measureElement(exerciseCardRef, setExerciseCardLayout);
   const onExerciseHeaderLayout = () => measureElement(exerciseHeaderRef, setExerciseHeaderLayout);
   const onTableAreaLayout = () => measureElement(tableAreaRef, setTableAreaLayout);
+  const onAiCoachingButtonLayout = () => {
+    debugLog('🎯 onAiCoachingButtonLayout called');
+    measureElement(aiCoachingButtonRef, (layout) => {
+      debugLog('🎯 AI button layout measured:', layout);
+      setAiCoachingButtonLayout(layout);
+    });
+  };
 
   // Custom spotlight configuration - EASY TO EDIT
   const CUSTOM_SPOTLIGHT_CONFIG = {
@@ -1744,13 +1924,25 @@ export default function VideoReviewScreen({ navigation, route }) {
                   
                   {/* AI Coaching Feedback Button */}
                   {isSetCompleted && videoUri && (
-                    <TouchableOpacity
-                      style={styles.aiCoachingButton}
-                      onPress={handleShowCoachingFeedback}
+                    <Animated.View
+                      style={{
+                        opacity: aiButtonOpacity,
+                        transform: [
+                          { scale: aiButtonScale },
+                          { translateY: aiButtonTranslateY }
+                        ]
+                      }}
                     >
-                      <Ionicons name="analytics-outline" size={18} color="#6C3EF6" />
-                      <Text style={styles.aiCoachingButtonText}>AI Coaching Feedback</Text>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        ref={aiCoachingButtonRef}
+                        style={styles.aiCoachingButton}
+                        onPress={handleShowCoachingFeedback}
+                        onLayout={onAiCoachingButtonLayout}
+                      >
+                        <Ionicons name="analytics-outline" size={18} color="#6C3EF6" />
+                        <Text style={styles.aiCoachingButtonText}>AI Coaching Feedback</Text>
+                      </TouchableOpacity>
+                    </Animated.View>
                   )}
                 </Animated.View>
               </View>
@@ -1778,6 +1970,17 @@ export default function VideoReviewScreen({ navigation, route }) {
         onClose={handleDismissTooltip}
         showIconButton={true}
         verticalOffset={30}
+      />
+      <GuidedPopup
+        visible={tooltipStep === 3}
+        text="Tap this button and our AI will analyze your technique for you!"
+        targetLayout={aiCoachingButtonLayout}
+        highlightLayout={aiCoachingButtonLayout}
+        screenBackgroundColor={colors.background}
+        onClose={handleDismissTooltip}
+        showIconButton={true}
+        iconType="tick"
+        verticalOffset={-10}
       />
       
       {/* Video Preview Modal */}
