@@ -97,9 +97,21 @@ async def feedback_upload(
             },
             rep_data=rep_data
         )
-        logger.info(f"Coaching feedback generated successfully")
+        logger.info(f"Coaching feedback generated")
         logger.info(f"Form rating: {feedback.get('form_rating')}")
         logger.info(f"RPE: {feedback.get('rpe')}, TUT: {feedback.get('total_tut')}")
+        
+        # Check if feedback generation was successful
+        if feedback.get('form_rating', 0) == 0:
+            logger.warning("Feedback generation returned with form_rating of 0, indicating an error")
+            # Still return the feedback but with success: false if it's an error feedback
+            if "configuration error" in feedback.get('summary', '') or "technical issue" in str(feedback.get('observations', [])):
+                return { 
+                    "success": False, 
+                    "feedback": feedback,
+                    "error_type": "feedback_generation_error",
+                    "error": "Failed to generate proper coaching feedback"
+                }
 
         return { "success": True, "feedback": feedback }
 

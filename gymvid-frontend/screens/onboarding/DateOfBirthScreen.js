@@ -106,6 +106,23 @@ export default function DateOfBirthScreen({ navigation, route }) {
     setAge(calculatedAge);
   };
 
+  // Calculate age category based on age
+  const getAgeCategory = (age) => {
+    if (age < 18) {
+      return 'Sub-Junior';
+    } else if (age >= 18 && age < 23) {
+      return 'Junior';
+    } else if (age >= 40 && age < 50) {
+      return 'Masters 1';
+    } else if (age >= 50 && age < 60) {
+      return 'Masters 2';
+    } else if (age >= 60) {
+      return 'Masters 3';
+    } else {
+      return 'Open'; // Default for ages 23-39
+    }
+  };
+
   const handleDateChange = (event, selectedDate) => {
     const currentDate = selectedDate || dateOfBirth;
     setDateOfBirth(currentDate);
@@ -115,7 +132,9 @@ export default function DateOfBirthScreen({ navigation, route }) {
   useEffect(() => {
     if (isFocused) {
       // Update progress context with current screen name
+      console.log('📅 DateOfBirthScreen: Current progress before update:', progress);
       updateProgress('DateOfBirth');
+      console.log('📅 DateOfBirthScreen: Called updateProgress with DateOfBirth');
     }
   }, [isFocused, updateProgress]);
 
@@ -318,6 +337,11 @@ export default function DateOfBirthScreen({ navigation, route }) {
                   You must be at least 16 years old to use this app
                 </Text>
               )}
+              {age >= 16 && (
+                <Text style={styles.ageCategory}>
+                  This places you in the <Text style={styles.ageCategoryName}>{getAgeCategory(age)}</Text> category.
+                </Text>
+              )}
             </View>
           </Animated.View>
         </View>
@@ -371,7 +395,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     alignItems: 'center',
     paddingTop: 40,
-    paddingBottom: 20,
+    paddingBottom: 0,
   },
   formContainer: {
     width: '100%',
@@ -380,7 +404,7 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: 32,
     fontWeight: '700',
-    marginBottom: 40,
+    marginBottom: 24,
     textAlign: 'center',
     letterSpacing: -0.5,
     color: '#1A1A1A',
@@ -393,7 +417,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 30,
+    marginTop: 18,
     borderWidth: 1,
     borderColor: colors.lightGray,
     shadowColor: '#000',
@@ -453,8 +477,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FF3B30',
     fontWeight: '500',
-    marginTop: 10,
+    marginTop: 24,
     textAlign: 'center',
+  },
+  ageCategory: {
+    fontSize: 16,
+    color: colors.gray,
+    marginTop: 20,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  ageCategoryName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
   },
   bottomButtonContainer: {
     width: '100%',

@@ -1241,7 +1241,12 @@ export default function VideoReviewScreen({ navigation, route }) {
       debugLog('✅ Coaching feedback received:', data);
       
       if (!data.success) {
-        throw new Error('Failed to get coaching feedback');
+        // If the backend explicitly says it failed, throw an error
+        if (data.error_type === 'feedback_generation_error') {
+          throw new Error(data.error || 'Failed to generate coaching feedback');
+        } else {
+          throw new Error(data.error || 'Failed to get coaching feedback');
+        }
       }
 
       setFeedbackLoading(false);
@@ -1254,6 +1259,13 @@ export default function VideoReviewScreen({ navigation, route }) {
         // Keep other fields for compatibility
         ...data.feedback
       };
+      
+      // Check if this is an error feedback (form_rating of 0)
+      if (feedbackResponse.form_rating === 0) {
+        debugLog('⚠️ Received error feedback with form_rating 0');
+        // Still show the feedback modal with the error message
+        // This allows users to see what went wrong
+      }
       
       setFeedbackData(feedbackResponse);
       

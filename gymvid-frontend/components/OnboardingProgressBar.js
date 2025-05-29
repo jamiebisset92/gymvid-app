@@ -11,6 +11,9 @@ import { LinearGradient } from 'expo-linear-gradient';
  * @param {number} props.total - Total number of steps
  */
 const OnboardingProgressBar = ({ current, total }) => {
+  // Log progress values for debugging
+  console.log('📊 ProgressBar: Received current:', current, 'total:', total, 'percentage:', (current / total * 100).toFixed(1) + '%');
+  
   // Create animated values for progress transitions and effects
   const progressAnim = useRef(new Animated.Value(current / total)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;

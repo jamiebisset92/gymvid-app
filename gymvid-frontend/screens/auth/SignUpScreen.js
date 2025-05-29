@@ -224,9 +224,6 @@ export default function SignUpScreen({ navigation }) {
       // Mark this as a fresh signup to prevent ProfileScreen flash
       await AsyncStorage.setItem('freshSignup', 'true');
       
-      // Show success message
-      toast.success('Account created successfully!');
-      
       // Ensure we're not in a loading state before navigating
       setTimeout(() => {
         // Use navigation.reset to prevent going back

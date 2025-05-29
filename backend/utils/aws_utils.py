@@ -17,19 +17,32 @@ s3 = boto3.client(
 
 def upload_file_to_s3(local_path, s3_key):
     """
-    Uploads a file to S3.
+    Uploads a file to S3 and returns the URL.
     """
     try:
+        if not S3_BUCKET:
+            raise ValueError("S3_BUCKET_NAME environment variable not set")
+        if not AWS_REGION:
+            raise ValueError("AWS_REGION environment variable not set")
+            
+        print(f"🔄 Attempting to upload {local_path} to s3://{S3_BUCKET}/{s3_key}")
+        
         s3.upload_file(
             Filename=local_path,
             Bucket=S3_BUCKET,
             Key=s3_key
         )
-        print(f"✅ Uploaded to s3://{S3_BUCKET}/{s3_key}")
-        return True
+        
+        # Return the S3 URL
+        s3_url = f"https://{S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
+        print(f"✅ Uploaded to {s3_url}")
+        return s3_url
     except (BotoCoreError, ClientError) as e:
-        print(f"❌ Upload failed: {e}")
-        return False
+        print(f"❌ S3 Upload failed: {e}")
+        raise e
+    except Exception as e:
+        print(f"❌ Unexpected error during S3 upload: {e}")
+        raise e
 
 def download_file_from_s3(s3_key, local_path):
     """

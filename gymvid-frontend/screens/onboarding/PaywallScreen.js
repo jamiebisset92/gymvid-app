@@ -7,15 +7,19 @@ import {
   SafeAreaView, 
   Animated,
   Dimensions,
-  ScrollView
+  ScrollView,
+  Platform,
+  Easing
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../config/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 
 const debugLog = (...args) => {
   if (__DEV__) {
@@ -23,7 +27,7 @@ const debugLog = (...args) => {
   }
 };
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function PaywallScreen({ navigation, route }) {
   // Get exercise data from route params if available
@@ -35,6 +39,7 @@ export default function PaywallScreen({ navigation, route }) {
   debugLog('PaywallScreen params:', { exerciseLogged, videoLogged, userId, onboardingComplete });
   
   const [loading, setLoading] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState('monthly');
   const isFocused = useIsFocused();
   const { updateProfile } = useAuth();
   
@@ -46,6 +51,14 @@ export default function PaywallScreen({ navigation, route }) {
   const slideAnim = useRef(new Animated.Value(30)).current;
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
+  const heroScaleAnim = useRef(new Animated.Value(0.8)).current;
+  const heroRotateAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const checkmarkScale = useRef(new Animated.Value(0)).current;
+  const planScaleMonthly = useRef(new Animated.Value(1)).current;
+  const planScaleYearly = useRef(new Animated.Value(1)).current;
+  
   const featureItemAnims = [
     useRef(new Animated.Value(0)).current,
     useRef(new Animated.Value(0)).current,
@@ -158,6 +171,38 @@ export default function PaywallScreen({ navigation, route }) {
     }
   }, [isFocused, updateProgress]);
 
+  // Start pulse animation for CTA button
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  // Start shimmer animation
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: 2000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+
   // Run entrance animations
   useEffect(() => {
     const animationSequence = [
@@ -167,6 +212,22 @@ export default function PaywallScreen({ navigation, route }) {
         duration: 400,
         useNativeDriver: true,
       }),
+      
+      // Hero animation with rotation
+      Animated.parallel([
+        Animated.spring(heroScaleAnim, {
+          toValue: 1,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+        Animated.timing(heroRotateAnim, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.out(Easing.back(1.5)),
+          useNativeDriver: true,
+        }),
+      ]),
       
       // Fade in the title
       Animated.timing(titleAnim, {
@@ -198,7 +259,16 @@ export default function PaywallScreen({ navigation, route }) {
           delay: 100 + (index * 100),
           useNativeDriver: true,
         })
-      )
+      ),
+      
+      // Checkmark animation
+      Animated.spring(checkmarkScale, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        delay: 500,
+        useNativeDriver: true,
+      }),
     ];
     
     // Start the animation sequence
@@ -211,6 +281,9 @@ export default function PaywallScreen({ navigation, route }) {
       slideAnim.setValue(30);
       titleAnim.setValue(0);
       contentAnim.setValue(0);
+      heroScaleAnim.setValue(0.8);
+      heroRotateAnim.setValue(0);
+      checkmarkScale.setValue(0);
       featureItemAnims.forEach(anim => anim.setValue(0));
       
       // Restart the animation sequence
@@ -221,6 +294,44 @@ export default function PaywallScreen({ navigation, route }) {
       unsubFocus();
     };
   }, [navigation]);
+
+  // Handle plan selection
+  const handlePlanSelect = (plan) => {
+    setSelectedPlan(plan);
+    
+    // Animate the selection
+    if (plan === 'monthly') {
+      Animated.parallel([
+        Animated.spring(planScaleMonthly, {
+          toValue: 1.05,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.spring(planScaleYearly, {
+          toValue: 1,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.spring(planScaleYearly, {
+          toValue: 1.05,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.spring(planScaleMonthly, {
+          toValue: 1,
+          tension: 100,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  };
 
   // Handle subscription button press
   const handleSubscribe = async () => {
@@ -254,7 +365,7 @@ export default function PaywallScreen({ navigation, route }) {
   };
 
   // Feature item component with animation
-  const FeatureItem = ({ icon, title, description, anim }) => (
+  const FeatureItem = ({ icon, title, description, anim, iconColor = colors.primary }) => (
     <Animated.View 
       style={[
         styles.featureItem,
@@ -267,18 +378,61 @@ export default function PaywallScreen({ navigation, route }) {
                 outputRange: [20, 0],
                 extrapolate: 'clamp'
               })
+            },
+            {
+              scale: anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.95, 1],
+                extrapolate: 'clamp'
+              })
             }
           ]
         }
       ]}
     >
-      <View style={styles.featureIconContainer}>
-        <Ionicons name={icon} size={24} color="#FFF" />
+      <View style={[styles.featureIconContainer, { backgroundColor: iconColor + '15' }]}>
+        <Ionicons name={icon} size={24} color={iconColor} />
       </View>
       <View style={styles.featureContent}>
         <Text style={styles.featureTitle}>{title}</Text>
         <Text style={styles.featureDescription}>{description}</Text>
       </View>
+    </Animated.View>
+  );
+
+  // Plan card component
+  const PlanCard = ({ plan, price, period, savings, isSelected, scale }) => (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        style={[
+          styles.planCard,
+          isSelected && styles.planCardSelected
+        ]}
+        onPress={() => handlePlanSelect(plan)}
+        activeOpacity={0.8}
+      >
+        {savings && (
+          <View style={styles.savingsBadge}>
+            <Text style={styles.savingsText}>{savings}</Text>
+          </View>
+        )}
+        <View style={styles.planHeader}>
+          <View style={[styles.radioButton, isSelected && styles.radioButtonSelected]}>
+            {isSelected && (
+              <Animated.View style={{ transform: [{ scale: checkmarkScale }] }}>
+                <Ionicons name="checkmark" size={16} color={colors.white} />
+              </Animated.View>
+            )}
+          </View>
+          <Text style={[styles.planTitle, isSelected && styles.planTitleSelected]}>
+            {plan === 'monthly' ? 'Monthly' : 'Annual'}
+          </Text>
+        </View>
+        <View style={styles.planPricing}>
+          <Text style={[styles.planPrice, isSelected && styles.planPriceSelected]}>{price}</Text>
+          <Text style={[styles.planPeriod, isSelected && styles.planPeriodSelected]}>/{period}</Text>
+        </View>
+      </TouchableOpacity>
     </Animated.View>
   );
 
@@ -291,12 +445,46 @@ export default function PaywallScreen({ navigation, route }) {
         }
       ]}
     >
+      <LinearGradient
+        colors={['#FFFFFF', '#F8F9FF', '#FFFFFF']}
+        style={styles.gradientBackground}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
+      
       <SafeAreaView style={styles.safeContainer}>
         <ScrollView 
           style={styles.scrollView}
           contentContainerStyle={styles.scrollViewContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* Hero Section */}
+          <Animated.View 
+            style={[
+              styles.heroContainer,
+              {
+                transform: [
+                  { scale: heroScaleAnim },
+                  {
+                    rotate: heroRotateAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0deg', '360deg']
+                    })
+                  }
+                ]
+              }
+            ]}
+          >
+            <LinearGradient
+              colors={[colors.primary, '#8B5CF6']}
+              style={styles.heroGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Ionicons name="trophy" size={60} color={colors.white} />
+            </LinearGradient>
+          </Animated.View>
+          
           <Animated.Text
             style={[
               styles.titleText,
@@ -314,7 +502,7 @@ export default function PaywallScreen({ navigation, route }) {
               }
             ]}
           >
-            Unlock the full GymVid experience
+            Unlock Your Full Potential
           </Animated.Text>
           
           <Animated.Text
@@ -334,16 +522,15 @@ export default function PaywallScreen({ navigation, route }) {
               }
             ]}
           >
-            {exerciseLogged 
-              ? `Great job logging your ${exerciseLogged.exercise}!` 
-              : videoLogged 
-                ? `Great job analyzing your lift!`
-                : 'Take your training to the next level'}
+            {videoLogged 
+              ? `Great job analyzing your ${videoLogged.exercise || 'lift'}!` 
+              : 'Join thousands of athletes improving their form with AI'}
           </Animated.Text>
           
+          {/* Pricing Plans */}
           <Animated.View
             style={[
-              styles.illustrationContainer,
+              styles.plansContainer,
               {
                 opacity: contentAnim,
                 transform: [
@@ -358,42 +545,62 @@ export default function PaywallScreen({ navigation, route }) {
               }
             ]}
           >
-            <Ionicons name="trophy" size={100} color={colors.primary} />
+            <PlanCard
+              plan="monthly"
+              price="$9.99"
+              period="month"
+              isSelected={selectedPlan === 'monthly'}
+              scale={planScaleMonthly}
+            />
+            <PlanCard
+              plan="yearly"
+              price="$79.99"
+              period="year"
+              savings="Save 33%"
+              isSelected={selectedPlan === 'yearly'}
+              scale={planScaleYearly}
+            />
           </Animated.View>
           
+          {/* Features */}
           <View style={styles.featuresContainer}>
             <FeatureItem 
               icon="analytics"
-              title="Advanced Analytics"
-              description="Track your progress with detailed charts and insights"
+              title="AI Form Analysis"
+              description="Get instant feedback on your technique"
               anim={featureItemAnims[0]}
+              iconColor="#6366F1"
+            />
+            
+            <FeatureItem 
+              icon="trending-up"
+              title="Progress Tracking"
+              description="Visualize your strength gains over time"
+              anim={featureItemAnims[1]}
+              iconColor="#10B981"
             />
             
             <FeatureItem 
               icon="videocam"
-              title="Unlimited Video Analysis"
-              description="Get AI feedback on all your lifts"
-              anim={featureItemAnims[1]}
-            />
-            
-            <FeatureItem 
-              icon="fitness"
-              title="Personalized Programs"
-              description="Custom workout plans tailored to your goals"
+              title="Unlimited Videos"
+              description="Analyze as many lifts as you want"
               anim={featureItemAnims[2]}
+              iconColor="#F59E0B"
             />
             
             <FeatureItem 
-              icon="cloud-upload"
-              title="Cloud Storage"
-              description="Save all your workouts and videos securely"
+              icon="shield-checkmark"
+              title="Secure Cloud Backup"
+              description="Never lose your workout history"
               anim={featureItemAnims[3]}
+              iconColor="#3B82F6"
             />
           </View>
           
+          {/* CTA Section */}
           <Animated.View
             style={[
-              styles.pricingContainer,
+              styles.ctaContainer,
               {
                 opacity: contentAnim,
                 transform: [
@@ -408,24 +615,51 @@ export default function PaywallScreen({ navigation, route }) {
               }
             ]}
           >
-            <TouchableOpacity 
-              style={styles.subscribeButton}
-              onPress={handleSubscribe}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.subscribeButtonText}>Go Pro • $9.99/month</Text>
-            </TouchableOpacity>
+            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+              <TouchableOpacity 
+                style={styles.subscribeButton}
+                onPress={handleSubscribe}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={[colors.primary, '#8B5CF6']}
+                  style={styles.subscribeButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Animated.View
+                    style={[
+                      styles.shimmerOverlay,
+                      {
+                        transform: [
+                          {
+                            translateX: shimmerAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [-SCREEN_WIDTH, SCREEN_WIDTH]
+                            })
+                          }
+                        ]
+                      }
+                    ]}
+                  />
+                  <Text style={styles.subscribeButtonText}>
+                    Start Free Trial
+                  </Text>
+                  <Ionicons name="arrow-forward" size={20} color={colors.white} style={styles.buttonIcon} />
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
             
             <TouchableOpacity 
               style={styles.freeButton}
               onPress={handleContinueFree}
               activeOpacity={0.8}
             >
-              <Text style={styles.freeButtonText}>Continue with free version</Text>
+              <Text style={styles.freeButtonText}>Maybe later</Text>
             </TouchableOpacity>
             
             <Text style={styles.termsText}>
-              Subscription renews automatically. Cancel anytime.
+              7-day free trial • Cancel anytime
             </Text>
           </Animated.View>
         </ScrollView>
@@ -439,6 +673,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  gradientBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   safeContainer: {
     flex: 1,
   },
@@ -450,10 +691,27 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingHorizontal: 20,
   },
-  titleText: {
-    fontSize: 28,
-    fontWeight: '700',
+  heroContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 40,
+    marginBottom: 30,
+  },
+  heroGradient: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  titleText: {
+    fontSize: 32,
+    fontWeight: '700',
     marginBottom: 10,
     textAlign: 'center',
     letterSpacing: -0.5,
@@ -467,6 +725,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.gray,
     width: '100%',
+    lineHeight: 22,
   },
   illustrationContainer: {
     alignItems: 'center',
@@ -478,14 +737,13 @@ const styles = StyleSheet.create({
   },
   featureItem: {
     flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: 20,
     alignItems: 'center',
   },
   featureIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -502,40 +760,57 @@ const styles = StyleSheet.create({
   featureDescription: {
     fontSize: 14,
     color: colors.gray,
+    lineHeight: 20,
   },
   pricingContainer: {
     marginTop: 20,
   },
   subscribeButton: {
-    backgroundColor: colors.primary,
     borderRadius: 16,
-    height: 56,
+    marginBottom: 16,
+    overflow: 'hidden',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  subscribeButtonGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
+    height: 56,
+    paddingHorizontal: 24,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  shimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 100,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    transform: [{ skewX: '-20deg' }],
   },
   subscribeButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  buttonIcon: {
+    marginLeft: 8,
   },
   freeButton: {
-    backgroundColor: colors.white,
+    backgroundColor: 'transparent',
     borderRadius: 16,
-    height: 56,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.lightGray,
   },
   freeButtonText: {
-    color: colors.darkGray,
+    color: colors.gray,
     fontSize: 16,
     fontWeight: '500',
   },
@@ -543,5 +818,96 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.gray,
     textAlign: 'center',
+    lineHeight: 18,
+  },
+  plansContainer: {
+    marginBottom: 30,
+  },
+  ctaContainer: {
+    marginTop: 20,
+  },
+  savingsBadge: {
+    position: 'absolute',
+    top: -8,
+    right: 16,
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  savingsText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  planCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: colors.lightGray,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    position: 'relative',
+  },
+  planCardSelected: {
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  planHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  radioButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.lightGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  radioButtonSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  planTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.darkGray,
+    marginLeft: 12,
+  },
+  planTitleSelected: {
+    color: colors.darkGray,
+  },
+  planPricing: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginLeft: 36,
+  },
+  planPrice: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.darkGray,
+  },
+  planPriceSelected: {
+    color: colors.darkGray,
+  },
+  planPeriod: {
+    fontSize: 16,
+    color: colors.gray,
+    marginLeft: 4,
+  },
+  planPeriodSelected: {
+    color: colors.gray,
   },
 }); 

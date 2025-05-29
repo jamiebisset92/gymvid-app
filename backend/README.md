@@ -124,3 +124,53 @@ Render.com (backend hosting)
 
 📜 License
 Distributed under the MIT License. See LICENSE for more information.
+
+## Deployment Process
+
+### Prerequisites
+
+1. **Ensure the backend folder structure:**
+```
+gymvid-app/
+├── backend/
+│   ├── ai/
+│   │   ├── analyze/
+│   │   └── __init__.py
+│   ├── api/
+│   ├── utils/
+│   ├── requirements.txt
+│   └── __init__.py
+├── main.py
+├── render.yaml
+└── requirements.txt
+```
+
+2. **Environment Variables Required:**
+
+Create a `.env` file in the backend directory (for local development) or set these in your deployment platform:
+
+```bash
+# Claude API for AI coaching feedback
+CLAUDE_API_KEY=your_claude_api_key_here
+GYMVID_AI_MODEL=claude-3-haiku-20240307
+
+# OpenAI API (if still needed for other features)
+OPENAI_API_KEY=your_openai_api_key_here
+
+# AWS S3 for storing video frames and collages
+AWS_ACCESS_KEY_ID=your_aws_access_key_here
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key_here
+AWS_REGION=us-east-1
+S3_BUCKET_NAME=your_s3_bucket_name_here
+
+# Supabase for database
+SUPABASE_URL=your_supabase_url_here
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
+```
+
+3. **Install dependencies:**
+```bash
+Copy
+Edit
+pip install -r requirements.txt
+```

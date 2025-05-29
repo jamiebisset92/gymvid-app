@@ -21,7 +21,13 @@ client = Anthropic(api_key=CLAUDE_API_KEY) if CLAUDE_API_KEY else None
 MODEL_NAME = os.getenv("GYMVID_AI_MODEL", "claude-3-haiku-20240307")
 IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
 
-logger.info(f"Coaching feedback module initialized - Claude API Key present: {bool(CLAUDE_API_KEY)}, Model: {MODEL_NAME}")
+# Log the actual configuration status
+if not CLAUDE_API_KEY:
+    logger.error("CLAUDE_API_KEY is not set in environment variables!")
+else:
+    logger.info(f"Claude API Key present: {CLAUDE_API_KEY[:8]}... (first 8 chars)")
+    
+logger.info(f"Coaching feedback module initialized - Claude client initialized: {client is not None}, Model: {MODEL_NAME}")
 
 # ----------------------
 # 📊 Rep Data Formatting
@@ -97,31 +103,47 @@ def generate_feedback(video_path, user_id, video_data, rep_data) -> dict:
 
     try:
         if not video_path or not os.path.exists(video_path):
-            raise ValueError("Video path invalid or doesn't exist")
+            error_msg = f"Video path invalid or doesn't exist: {video_path}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
         if not video_data:
-            raise ValueError("video_data is None or empty")
+            error_msg = "video_data is None or empty"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
         if not client:
-            raise ValueError("Claude API key not configured")
+            error_msg = "Claude API client not initialized. Please check CLAUDE_API_KEY environment variable."
+            logger.error(error_msg)
+            logger.error(f"CLAUDE_API_KEY env var present: {bool(CLAUDE_API_KEY)}")
+            raise ValueError(error_msg)
 
         exercise_name = video_data.get("predicted_exercise", "an exercise")
         feedback_depth = video_data.get("feedback_depth", "standard")
+        
+        logger.info(f"Exercise: {exercise_name}, Feedback depth: {feedback_depth}")
 
         if rep_data:
+            logger.info("Generating keyframe collages from rep data...")
             collage_paths = export_keyframe_collages(video_path, rep_data)
             total_tut, last_rpe = calculate_tut_and_rpe(rep_data)
             rep_summaries = compress_rep_data_for_gpt(rep_data, feedback_depth)
+            logger.info(f"Generated {len(collage_paths)} collages, TUT: {total_tut}, RPE: {last_rpe}")
         else:
+            logger.info("No rep data, using fallback keyframes...")
             collage_paths = [export_static_keyframe_collage(video_path)]
             total_tut, last_rpe = "N/A", "N/A"
             rep_summaries = ["Repetition data was not detected for this video."]
 
         collage_urls = []
         for path in collage_paths:
+            logger.info(f"Uploading collage to S3: {path}")
             s3_url = upload_file_to_s3(
                 local_path=path,
                 s3_key=f"collages/{user_id}/{os.path.basename(path)}"
             )
             collage_urls.append(s3_url)
+            logger.info(f"Uploaded to: {s3_url}")
 
         collage_descriptions = "\n".join([
             f"- Collage: {url}" for url in collage_urls
@@ -162,6 +184,7 @@ Format:
 A:
 """.strip()
 
+        logger.info(f"Sending request to Claude API with model: {MODEL_NAME}")
         response = client.messages.create(
             model=MODEL_NAME,
             max_tokens=1000,
@@ -169,31 +192,54 @@ A:
             system="You are a world-class strength coach.",
             messages=[{"role": "user", "content": prompt}]
         )
+        logger.info("Claude API request successful")
 
         text = response.content[0].text
+        logger.debug(f"Claude response: {text[:200]}...")
+        
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if not match:
-            raise ValueError("No valid JSON found in Claude response")
+            error_msg = f"No valid JSON found in Claude response. Response text: {text[:500]}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         parsed = json.loads(match.group(0))
         result = parsed["coaching_feedback"]
         result["total_tut"] = total_tut
         result["rpe"] = last_rpe
+        
+        logger.info("Successfully generated coaching feedback")
+        logger.info(f"Form rating: {result.get('form_rating')}, Observations: {len(result.get('observations', []))}")
 
         return result
 
     except Exception as e:
         logger.error(f"=== GENERATE_FEEDBACK ERROR ===")
+        logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Error: {str(e)}")
         logger.error(f"Traceback:\n{traceback.format_exc()}")
+        
+        # Provide more specific error messages based on the error type
+        if "CLAUDE_API_KEY" in str(e) or "Claude API client not initialized" in str(e):
+            error_summary = "AI service configuration error. Please contact support."
+            error_observation = "The AI coaching service is not properly configured."
+        elif "S3" in str(e) or "upload_file_to_s3" in str(e):
+            error_summary = "Failed to upload video frames. Please try again."
+            error_observation = "There was an issue processing your video frames."
+        elif "JSON" in str(e):
+            error_summary = "Failed to parse AI response. Please try again."
+            error_observation = "The AI returned an unexpected response format."
+        else:
+            error_summary = "We hit a snag processing your feedback — but we're working on it!"
+            error_observation = "Unable to generate feedback due to a technical issue."
 
         return {
             "form_rating": 0,
             "rpe": None,
             "total_tut": None,
             "observations": [{
-                "observation": "Unable to generate feedback due to a technical issue.",
+                "observation": error_observation,
                 "tip": "Please try uploading a different video or try again later."
             }],
-            "summary": "We hit a snag processing your feedback — but we're working on it!"
+            "summary": error_summary
         }
