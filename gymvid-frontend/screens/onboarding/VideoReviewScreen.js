@@ -948,37 +948,127 @@ export default function VideoReviewScreen({ navigation, route }) {
     try {
       debugLog('Predicting exercise for video:', videoUri);
       
+      // Verify the video file exists
+      const fileInfo = await FileSystem.getInfoAsync(videoUri);
+      if (!fileInfo.exists) {
+        throw new Error('Video file not found at URI: ' + videoUri);
+      }
+      debugLog('Video file verified - Size:', fileInfo.size, 'URI:', fileInfo.uri);
+      
       const formData = new FormData();
+      
+      // Ensure proper URI format
+      let properUri = fileInfo.uri;
+      if (Platform.OS === 'ios' && !properUri.startsWith('file://')) {
+        properUri = `file://${properUri}`;
+      }
+      
       formData.append('video', {
-        uri: videoUri,
+        uri: properUri,
         type: 'video/mp4',
         name: 'video.mp4',
       });
 
-      const response = await fetch('https://gymvid-app.onrender.com/analyze/video', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
+      debugLog('FormData prepared with video URI:', properUri);
+      debugLog('Making request to:', 'https://gymvid-app.onrender.com/quick_exercise_prediction');
+
+      // First, check if server is reachable
+      try {
+        debugLog('Checking server health...');
+        const healthCheck = await fetch('https://gymvid-app.onrender.com/', {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
+        debugLog('Server health check response:', healthCheck.status);
+      } catch (healthError) {
+        debugLog('Server appears to be unreachable:', healthError.message);
+        console.error('🔴 Backend server is not responding at https://gymvid-app.onrender.com/');
+        console.error('💡 Please ensure the backend is deployed and running');
+      }
+
+      // Try different approaches for better compatibility
+      let response;
+      
+      try {
+        // Approach 1: Standard fetch with FormData
+        response = await fetch('https://gymvid-app.onrender.com/quick_exercise_prediction', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Accept': 'application/json',
+            // Don't set Content-Type, let fetch set it with boundary for multipart
+          },
+        });
+      } catch (fetchError) {
+        debugLog('Standard fetch failed:', fetchError.message);
+        
+        // Approach 2: Try with explicit multipart headers
+        try {
+          const formData2 = new FormData();
+          formData2.append('video', {
+            uri: properUri,
+            type: 'video/mp4',
+            name: 'video.mp4',
+          });
+          
+          response = await fetch('https://gymvid-app.onrender.com/quick_exercise_prediction', {
+            method: 'POST',
+            body: formData2,
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+        } catch (fetchError2) {
+          debugLog('Multipart fetch also failed:', fetchError2.message);
+          throw fetchError; // Throw original error
+        }
+      }
+
+      debugLog('Response received - Status:', response.status, 'OK:', response.ok);
+      
+      // Log response headers for debugging
+      debugLog('Response headers:', response.headers);
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        debugLog('Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
 
       const data = await response.json();
-      return data.exercise_name;
+      debugLog('🔍 PREDICTION RESPONSE:', JSON.stringify(data, null, 2));
+      
+      // Handle different possible response formats
+      const exerciseName = data.exercise_name || data.exercise || data.predicted_exercise || 'Unknown Exercise';
+      debugLog('Extracted exercise name:', exerciseName);
+      
+      return exerciseName;
     } catch (error) {
       console.error('Error predicting exercise:', error);
+      debugLog('Full error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
       
       // Show user-friendly error message
       if (error.message && error.message.includes('Network request failed')) {
         console.error('⚠️ Network Error: Cannot connect to backend server');
-        console.error('📍 Attempted URL: https://gymvid-app.onrender.com/analyze/video');
+        console.error('📍 Attempted URL: https://gymvid-app.onrender.com/quick_exercise_prediction');
+        
+        // Check if it's a localhost development scenario
+        if (__DEV__) {
+          console.error('💡 TIP: If developing locally, ensure your backend is running and accessible');
+          console.error('💡 You may need to use ngrok or a local IP instead of localhost');
+        }
         
         // Show toast instead of alert
-        toast.error('We couldn\'t reach the server — please try again.');
+        toast.error('Cannot connect to server. Please check your connection.');
+      } else if (error.message && error.message.includes('HTTP error')) {
+        toast.error('Server error. Please try again.');
       } else {
         toast.error('Failed to analyze exercise. Please try again.');
       }
@@ -1012,11 +1102,22 @@ export default function VideoReviewScreen({ navigation, route }) {
 
     // Predict exercise
     const movement = await predictExercise(videoUri);
-    setExerciseName(movement);
-    setTempExerciseName(movement);
     
-    // Start preloading coaching feedback in the background (non-blocking)
-    if (movement && movement !== 'Unknown Exercise') {
+    // If prediction failed, set a default and notify user
+    if (movement === 'Unknown Exercise') {
+      debugLog('Exercise prediction failed, using fallback');
+      setExerciseName('Tap to Enter Exercise');
+      setTempExerciseName('');
+      
+      // Show a helpful message
+      setTimeout(() => {
+        toast.info('Please tap the pencil to enter the exercise name');
+      }, 1000);
+    } else {
+      setExerciseName(movement);
+      setTempExerciseName(movement);
+      
+      // Start preloading coaching feedback in the background (non-blocking)
       preloadCoachingFeedback(videoUri, movement).catch(err => {
         debugLog('Background feedback preload failed (non-critical):', err);
       });
@@ -1071,7 +1172,14 @@ export default function VideoReviewScreen({ navigation, route }) {
         delay: 200,
         useNativeDriver: true,
         easing: Easing.out(Easing.cubic),
-      }).start();
+      }).start(() => {
+        // If exercise is unknown, automatically open the editor
+        if (movement === 'Unknown Exercise') {
+          setTimeout(() => {
+            handleStartEditExercise();
+          }, 500);
+        }
+      });
     });
   };
 
