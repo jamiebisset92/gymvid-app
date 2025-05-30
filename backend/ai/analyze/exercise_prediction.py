@@ -2,14 +2,14 @@ import os
 import base64
 import json
 import time
+import openai
 from dotenv import load_dotenv
-from anthropic import Anthropic  # ✅ Correct for Claude 0.23.0+
 
 # ✅ Load environment variables
 load_dotenv()
-client = Anthropic(api_key=os.getenv("CLAUDE_API_KEY"))
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def predict_exercise(image_path: str, model: str = "claude-3-haiku-20240307") -> dict:
+def predict_exercise(image_path: str, model: str = "gpt-4o") -> dict:
     try:
         with open(image_path, "rb") as f:
             image_data = f.read()
@@ -25,9 +25,8 @@ def predict_exercise(image_path: str, model: str = "claude-3-haiku-20240307") ->
 
     print("📸 Sending image for prediction...")
     print(f"🖼️ Base64 size: {len(b64)} chars")
-    print(f"🤖 Claude model: {model}")
+    print(f"🤖 GPT model: {model}")
 
-    # ✅ Claude prompt — precise, lean, and accurate
     prompt = """
 You are an expert fitness AI.
 
@@ -54,23 +53,23 @@ Analyze this image and reply with ONLY valid JSON.
 
     try:
         start = time.time()
-
-        response = client.messages.create(
+        response = openai.ChatCompletion.create(
             model=model,
-            max_tokens=500,
             temperature=0,
-            system="You are a helpful AI fitness assistant.",
+            max_tokens=500,
             messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful AI fitness assistant."
+                },
                 {
                     "role": "user",
                     "content": [
                         { "type": "text", "text": prompt },
                         {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": b64
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{b64}"
                             }
                         }
                     ]
@@ -78,16 +77,16 @@ Analyze this image and reply with ONLY valid JSON.
             ]
         )
 
-        message = response.content[0].text.strip()
-        print(f"⏱️ Claude response time: {round(time.time() - start, 2)} sec")
-        print("🧠 Raw Claude reply:", message)
+        message = response["choices"][0]["message"]["content"].strip()
+        print(f"⏱️ GPT response time: {round(time.time() - start, 2)} sec")
+        print("🧠 Raw GPT reply:", message)
 
         # ✅ Extract valid JSON object
         json_start = message.find('{')
         json_end = message.rfind('}') + 1
 
         if json_start == -1 or json_end <= json_start:
-            raise ValueError("Claude did not return valid JSON")
+            raise ValueError("GPT did not return valid JSON")
 
         parsed = json.loads(message[json_start:json_end])
 
@@ -107,7 +106,7 @@ Analyze this image and reply with ONLY valid JSON.
         }
 
     except Exception as e:
-        print("❌ Claude API error:", str(e))
+        print("❌ OpenAI API error:", str(e))
         return {
             "movement": "Unknown Exercise",
             "equipment": "Unknown",

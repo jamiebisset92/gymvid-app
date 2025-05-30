@@ -96,7 +96,7 @@ export default function GenderScreen({ navigation, route }) {
           isOnboarding: true, 
           currentScreen: 'Gender' 
         }));
-      updateProgress('Gender');
+        updateProgress('Gender');
         console.log('👫 GenderScreen: Called updateProgress with Gender');
       }
     }
@@ -169,100 +169,91 @@ export default function GenderScreen({ navigation, route }) {
       if (!isRevealed) {
         debugLog('GenderScreen Entrance: Animating WELCOME part.');
       timer = setTimeout(() => {
+          // Phase 1: Quick header appearance
           Animated.sequence([
             Animated.timing(welcomeFadeAnim, { 
               toValue: 1, 
-              duration: 800, 
+              duration: 400, 
               useNativeDriver: true, 
               easing: Easing.out(Easing.quad) 
             }),
+            // Phase 2: Header (name) loads quickly
+            Animated.timing(welcomeNameAnim, { 
+              toValue: 1, 
+              duration: 600, 
+              useNativeDriver: true, 
+              easing: Easing.out(Easing.cubic) 
+            }),
+            // Phase 3: Subtitle and blue text follow shortly after
             Animated.parallel([
-              // Name animation with bounce
+              Animated.timing(welcomeSubtitleAnim, { 
+                toValue: 1, 
+                duration: 500, 
+                useNativeDriver: true, 
+                easing: Easing.out(Easing.cubic) 
+              }),
               Animated.sequence([
-                Animated.parallel([
-                  Animated.timing(welcomeNameAnim, { 
-                    toValue: 1, 
-                    duration: 1000, 
-                    useNativeDriver: true, 
-                    easing: Easing.out(Easing.cubic) 
-                  }),
-                  Animated.spring(welcomeNameAnim, {
-                    toValue: 1,
-                    from: 0.8,
-                    tension: 50,
-                    friction: 8,
-                    useNativeDriver: true,
-                  })
-                ]),
-                // Subtitle animation with slight delay
+                Animated.delay(200),
+                Animated.timing(line1Anim, { 
+                  toValue: 1, 
+                  duration: 500, 
+                  useNativeDriver: true, 
+                  easing: Easing.out(Easing.cubic) 
+                })
+              ])
+            ]),
+            // Phase 4: Cards load slowly one at a time with longer delays
+            Animated.sequence([
+              Animated.delay(400),
+              Animated.timing(line2Anim, { 
+                toValue: 1, 
+                duration: 600, 
+                useNativeDriver: true, 
+                easing: Easing.out(Easing.cubic) 
+              }),
+              Animated.delay(500),
+              Animated.timing(line3Anim, { 
+                toValue: 1, 
+                duration: 600, 
+                useNativeDriver: true, 
+                easing: Easing.out(Easing.cubic) 
+              }),
+              Animated.delay(500),
+              Animated.timing(line4Anim, { 
+                toValue: 1, 
+                duration: 600, 
+                useNativeDriver: true, 
+                easing: Easing.out(Easing.cubic) 
+              }),
+              // Phase 5: Help text and button animation last
+              Animated.delay(600),
+              Animated.parallel([
+                Animated.timing(helpTextAnim, { 
+                  toValue: 1, 
+                  duration: 500, 
+                  useNativeDriver: true, 
+                  easing: Easing.out(Easing.cubic) 
+                }),
+                Animated.timing(letsDoItButtonAnim, { 
+                  toValue: 1, 
+                  duration: 500, 
+                  useNativeDriver: true, 
+                  easing: Easing.out(Easing.cubic) 
+                }),
                 Animated.sequence([
-                  Animated.delay(300),
-                  Animated.timing(welcomeSubtitleAnim, { 
+                  Animated.spring(letsDoItButtonScale, { 
+                    toValue: 1.05, 
+                    from: 0.5, 
+                    tension: 100, 
+                    friction: 8, 
+                    useNativeDriver: true 
+                  }),
+                  Animated.spring(letsDoItButtonScale, { 
                     toValue: 1, 
-                    duration: 800, 
-                    useNativeDriver: true, 
-                    easing: Easing.out(Easing.cubic) 
+                    tension: 80, 
+                    friction: 10, 
+                    useNativeDriver: true 
                   })
-                ]),
-                // Staggered text lines
-                Animated.stagger(200, [
-                  Animated.timing(line1Anim, { 
-                    toValue: 1, 
-                    duration: 800, 
-                    useNativeDriver: true, 
-                    easing: Easing.out(Easing.cubic) 
-                  }),
-                  Animated.timing(line2Anim, { 
-                    toValue: 1, 
-                    duration: 800, 
-                    useNativeDriver: true, 
-                    easing: Easing.out(Easing.cubic) 
-                  }),
-                  Animated.timing(line3Anim, { 
-                    toValue: 1, 
-                    duration: 800, 
-                    useNativeDriver: true, 
-                    easing: Easing.out(Easing.cubic) 
-                  }),
-                  Animated.timing(line4Anim, { 
-                    toValue: 1, 
-                    duration: 800, 
-                    useNativeDriver: true, 
-                    easing: Easing.out(Easing.cubic) 
-                  })
-                ]),
-                // Help text and button animation together
-                Animated.sequence([
-                  Animated.delay(800),
-                  Animated.parallel([
-                    Animated.timing(helpTextAnim, { 
-                      toValue: 1, 
-                      duration: 700, 
-                      useNativeDriver: true, 
-                      easing: Easing.out(Easing.cubic) 
-                    }),
-                    Animated.timing(letsDoItButtonAnim, { 
-                      toValue: 1, 
-                      duration: 700, 
-                      useNativeDriver: true, 
-                      easing: Easing.out(Easing.cubic) 
-                    }),
-                    Animated.sequence([
-                      Animated.spring(letsDoItButtonScale, { 
-                        toValue: 1.1, 
-                        from: 0.5, 
-                        tension: 100, 
-                        friction: 8, 
-                        useNativeDriver: true 
-                      }),
-                      Animated.spring(letsDoItButtonScale, { 
-                        toValue: 1, 
-                        tension: 80, 
-                        friction: 10, 
-                        useNativeDriver: true 
-                      })
-                    ])
-                  ])
                 ])
               ])
             ])

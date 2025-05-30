@@ -341,6 +341,12 @@ export default function SignUpScreen({ navigation }) {
                     onChangeText={setPassword}
                     secureTextEntry
                     returnKeyType="next"
+                    textContentType="newPassword"
+                    autoComplete="new-password"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    passwordRules=""
+                    importantForAutofill="no"
                   />
 
                   <PremiumInput
@@ -351,6 +357,12 @@ export default function SignUpScreen({ navigation }) {
                     secureTextEntry
                     returnKeyType="done"
                     onSubmitEditing={handleSignUp}
+                    textContentType="newPassword"
+                    autoComplete="new-password"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    passwordRules=""
+                    importantForAutofill="no"
                   />
 
                   <Animated.View style={[

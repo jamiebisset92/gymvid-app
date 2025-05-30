@@ -13,13 +13,11 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
     tmp_path = None
     collage_path = None
     try:
-        # ✅ Get file extension from uploaded video
         filename = video.filename or "upload.mp4"
         ext = os.path.splitext(filename)[-1].lower()
         if ext not in [".mp4", ".mov", ".webm"]:
-            ext = ".mp4"  # fallback
+            ext = ".mp4"
 
-        # ✅ Save video to a temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             contents = await video.read()
             if not contents:
@@ -30,7 +28,6 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
         print("📼 Temp video saved to:", tmp_path)
         print("📼 Video size:", len(contents), "bytes")
 
-        # ✅ Export a collage using 4 evenly spaced frames
         collage_paths = export_evenly_spaced_collage(tmp_path, total_frames=4)
         collage_path = collage_paths[0]
         
@@ -45,10 +42,8 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
         if collage_size == 0:
             raise ValueError("Collage file is empty")
 
-        # ✅ Predict exercise from collage
         prediction = predict_exercise(collage_path)
 
-        # ⛔ Handle Claude error explicitly
         if "error" in prediction:
             print(f"⚠️ Prediction error: {prediction['error']}")
             return JSONResponse(status_code=502, content={
@@ -56,10 +51,8 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
                 "prediction_details": prediction
             })
 
-        # ✅ Flatten prediction name for frontend use
         exercise_name = prediction.get("movement", "Unknown")
 
-        # Log the prediction for debugging
         print(f"🎯 Exercise prediction result: {prediction}")
 
         return {
@@ -68,29 +61,28 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
         }
 
     except Exception as e:
-        print(f"❌ Error in quick_exercise_prediction: {str(e)}")
         import traceback
+        print(f"❌ Error in quick_exercise_prediction: {str(e)}")
         print(f"❌ Traceback: {traceback.format_exc()}")
         return JSONResponse(status_code=500, content={"error": str(e), "traceback": traceback.format_exc()})
     
     finally:
-        # Clean up temp files
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
-        # Keep collage for now (uncomment below to clean it)
+        # Uncomment if you want to delete the collage as well
         # if collage_path and os.path.exists(collage_path):
         #     os.remove(collage_path)
 
 
 @app.post("/test_exercise_prediction")
 async def test_exercise_prediction():
-    """Test endpoint to verify Claude API is working with a known image"""
+    """Test endpoint to verify prediction pipeline using existing collage"""
     try:
         test_collage_path = "quick_collages/quick_collage.jpg"
         
         if not os.path.exists(test_collage_path):
             return JSONResponse(status_code=404, content={
-                "error": "No test collage found. Please run quick_exercise_prediction first to generate one."
+                "error": "No test collage found. Please run quick_exercise_prediction first."
             })
         
         prediction = predict_exercise(test_collage_path)

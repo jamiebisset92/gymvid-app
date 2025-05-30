@@ -569,21 +569,11 @@ export default function CountryScreen({ navigation, route }) {
         );
         
         if (foundCountry) {
-          // Animate the selection
-          Animated.sequence([
-            Animated.timing(locationButtonScale, {
-              toValue: 1.2,
-              duration: 200,
-              useNativeDriver: true,
-            }),
-            Animated.timing(locationButtonScale, {
-              toValue: 1,
-              duration: 200,
-              useNativeDriver: true,
-            })
-          ]).start();
+          // Stop the loading rotation
+          locationIconRotate.stopAnimation();
+          locationIconRotate.setValue(0);
           
-          // Set the country
+          // Set the country data
           setCountry(foundCountry.name);
           setCountryCode(foundCountry.code);
           setShowDropdown(false);
@@ -594,53 +584,74 @@ export default function CountryScreen({ navigation, route }) {
           // Trigger elegant hide animation
           setLocationUsed(true);
           
-          // Create a beautiful staggered animation sequence
+          // Create a world-class staggered animation sequence
           Animated.sequence([
-            // First, pulse the location button as feedback
-            Animated.sequence([
-              Animated.timing(locationButtonScale, {
-                toValue: 1.1,
-                duration: 150,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-              }),
-              Animated.timing(locationButtonScale, {
-                toValue: 1,
-                duration: 150,
-                easing: Easing.in(Easing.cubic),
-                useNativeDriver: true,
-              })
-            ]),
-            // Then fade out and scale down with elegant timing
+            // Phase 1: Success feedback - brief pause and success indication
             Animated.parallel([
-              // Fade out location elements
+              // Success pulse - larger and more dramatic
+              Animated.sequence([
+                Animated.timing(locationButtonScale, {
+                  toValue: 1.15,
+                  duration: 200,
+                  easing: Easing.out(Easing.back(1.2)),
+                  useNativeDriver: true,
+                }),
+                Animated.timing(locationButtonScale, {
+                  toValue: 1.05,
+                  duration: 180,
+                  easing: Easing.inOut(Easing.cubic),
+                  useNativeDriver: true,
+                })
+              ]),
+              // Brief color/success indication could go here (if we had state for it)
+            ]),
+            
+            // Phase 2: Hold the success state briefly for user recognition
+            Animated.delay(400),
+            
+            // Phase 3: Elegant exit with overlapping animations
+            Animated.parallel([
+              // Fade out location elements smoothly
               Animated.timing(locationElementsOpacity, {
                 toValue: 0,
-                duration: 300,
-                easing: Easing.in(Easing.quad),
+                duration: 600,
+                easing: Easing.bezier(0.4, 0.0, 0.2, 1), // Material Design decelerate
                 useNativeDriver: true,
               }),
-              // Scale down vertically for collapse effect
+              
+              // Scale down vertically with elegant curve
               Animated.timing(locationElementsHeight, {
-                toValue: 0.01, // Not 0 to avoid animation issues
-                duration: 350,
-                easing: Easing.inOut(Easing.cubic),
+                toValue: 0.02, // Slightly higher to avoid animation glitches
+                duration: 650,
+                easing: Easing.bezier(0.4, 0.0, 0.6, 1), // Custom smooth curve
                 useNativeDriver: true,
               }),
-              // Start sliding input up slightly delayed
+              
+              // Scale button down as part of the exit
               Animated.sequence([
-                Animated.delay(150),
+                Animated.delay(100), // Slight delay for staggered effect
+                Animated.timing(locationButtonScale, {
+                  toValue: 0.85,
+                  duration: 500,
+                  easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+                  useNativeDriver: true,
+                })
+              ]),
+              
+              // Slide input up with spring for premium feel
+              Animated.sequence([
+                Animated.delay(200), // More delay for better stagger
                 Animated.spring(inputSlideUp, {
-                  toValue: -30,
-                  tension: 60,
-                  friction: 10,
+                  toValue: -35, // Slightly more movement for dramatic effect
+                  tension: 45, // Lower tension for smoother spring
+                  friction: 12, // Higher friction for controlled bounce
                   useNativeDriver: true,
                 })
               ])
             ])
           ]).start(() => {
-            // Don't focus the input - we want the keyboard to stay dismissed
-            // since the country has already been auto-filled
+            // Animation complete - input field is now the focus
+            debugLog('Location-based country selection animation completed');
           });
           
           debugLog('Location detected country:', foundCountry.name);

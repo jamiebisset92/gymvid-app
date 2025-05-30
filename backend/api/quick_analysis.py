@@ -9,8 +9,7 @@ from backend.ai.analyze.exercise_prediction import predict_exercise
 
 app = APIRouter()
 
-# ✅ New utility: Extract collage from 4 evenly spaced frames, resized to 128x128, with JPEG compression
-
+# ✅ Export collage from 4 evenly spaced frames at 192x192 with JPEG compression
 def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_dir: str = "quick_collages") -> list:
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
@@ -39,22 +38,19 @@ def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_
 @app.post("/quick_exercise_prediction")
 async def quick_exercise_prediction(video: UploadFile = File(...)):
     try:
-        # ✅ Save video to temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp.write(await video.read())
             tmp_path = tmp.name
 
-        # ✅ Export a smaller collage using 4 evenly spaced frames
         collage_paths = export_evenly_spaced_collage(tmp_path, total_frames=4)
         print("✅ Collage paths:", collage_paths)
 
         if not collage_paths or not os.path.exists(collage_paths[0]):
             raise FileNotFoundError("Collage image not created or missing.")
 
-        # ✅ Predict exercise from collage
-        prediction = predict_exercise(collage_paths[0], model="claude-3-haiku-20240307")
+        # ✅ Use updated GPT-4o-based predictor
+        prediction = predict_exercise(collage_paths[0])  # Model is inferred via env
 
-        # ✅ Combine equipment and movement name for frontend use
         equipment = prediction.get("equipment", "").capitalize()
         movement = prediction.get("movement", "Unknown").capitalize()
         exercise_name = f"{equipment} {movement}".strip()

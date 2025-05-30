@@ -4,7 +4,7 @@ import re
 import traceback
 import numpy as np
 from dotenv import load_dotenv
-from anthropic import Anthropic
+import openai
 from backend.ai.analyze.keyframe_collage import export_keyframe_collages
 from backend.ai.analyze.fallback_keyframes import export_static_keyframe_collage
 from backend.utils.aws_utils import upload_file_to_s3
@@ -14,20 +14,19 @@ import logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# ✅ Load environment variables and Claude client
+# ✅ Load environment variables and OpenAI client
 load_dotenv()
-CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
-client = Anthropic(api_key=CLAUDE_API_KEY) if CLAUDE_API_KEY else None
-MODEL_NAME = os.getenv("GYMVID_AI_MODEL", "claude-3-haiku-20240307")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+openai.api_key = OPENAI_API_KEY
+MODEL_NAME = os.getenv("GYMVID_AI_MODEL", "gpt-4o")
 IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
 
-# Log the actual configuration status
-if not CLAUDE_API_KEY:
-    logger.error("CLAUDE_API_KEY is not set in environment variables!")
+if not OPENAI_API_KEY:
+    logger.error("OPENAI_API_KEY is not set in environment variables!")
 else:
-    logger.info(f"Claude API Key present: {CLAUDE_API_KEY[:8]}... (first 8 chars)")
-    
-logger.info(f"Coaching feedback module initialized - Claude client initialized: {client is not None}, Model: {MODEL_NAME}")
+    logger.info(f"OpenAI API Key present: {OPENAI_API_KEY[:8]}...")
+
+logger.info(f"Coaching feedback module initialized - OpenAI client active, Model: {MODEL_NAME}")
 
 # ----------------------
 # 📊 Rep Data Formatting
@@ -90,7 +89,7 @@ def calculate_tut_and_rpe(rep_data):
 
 
 # -----------------------------
-# 🎓 Claude Coaching Generator
+# 🧠 GPT-4o Coaching Generator
 # -----------------------------
 def generate_feedback(video_path, user_id, video_data, rep_data) -> dict:
     logger.info(f"=== GENERATE_FEEDBACK CALLED ===")
@@ -106,21 +105,15 @@ def generate_feedback(video_path, user_id, video_data, rep_data) -> dict:
             error_msg = f"Video path invalid or doesn't exist: {video_path}"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         if not video_data:
             error_msg = "video_data is None or empty"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
-        if not client:
-            error_msg = "Claude API client not initialized. Please check CLAUDE_API_KEY environment variable."
-            logger.error(error_msg)
-            logger.error(f"CLAUDE_API_KEY env var present: {bool(CLAUDE_API_KEY)}")
-            raise ValueError(error_msg)
 
         exercise_name = video_data.get("predicted_exercise", "an exercise")
         feedback_depth = video_data.get("feedback_depth", "standard")
-        
+
         logger.info(f"Exercise: {exercise_name}, Feedback depth: {feedback_depth}")
 
         if rep_data:
@@ -152,7 +145,6 @@ def generate_feedback(video_path, user_id, video_data, rep_data) -> dict:
         summaries_text = "\n".join(rep_summaries)
 
         prompt = f"""
-Human:
 You're a professional lifting coach who provides clear, helpful, and friendly coaching feedback.
 
 A user just submitted a set of **{exercise_name}**. Below are the summaries of each rep:
@@ -164,7 +156,7 @@ They also submitted keyframe collage images:
 Please:
 - Share a brief, general comment about their technique
 - Offer up to 4 specific coaching observations with actionable tips (fewer if not needed)
-- When relevant, reference the rep number (e.g. \"In rep 3, the bar path shifts forward...\")
+- When relevant, reference the rep number (e.g. "In rep 3, the bar path shifts forward...")
 - Use plain, confident language (avoid sounding robotic or over-enthusiastic)
 - Keep it supportive — this is someone who wants to improve
 - Return only a valid JSON object (no Markdown, no extra text)
@@ -180,26 +172,32 @@ Format:
     "summary": "A closing note of encouragement or a reminder of what to focus on."
   }}
 }}
-
-A:
 """.strip()
 
-        logger.info(f"Sending request to Claude API with model: {MODEL_NAME}")
-        response = client.messages.create(
+        logger.info(f"Sending request to OpenAI GPT model: {MODEL_NAME}")
+        response = openai.ChatCompletion.create(
             model=MODEL_NAME,
-            max_tokens=1000,
             temperature=0.4,
-            system="You are a world-class strength coach.",
-            messages=[{"role": "user", "content": prompt}]
+            max_tokens=1000,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a world-class strength coach."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
         )
-        logger.info("Claude API request successful")
+        logger.info("OpenAI API request successful")
 
-        text = response.content[0].text
-        logger.debug(f"Claude response: {text[:200]}...")
-        
+        text = response["choices"][0]["message"]["content"]
+        logger.debug(f"GPT response: {text[:200]}...")
+
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if not match:
-            error_msg = f"No valid JSON found in Claude response. Response text: {text[:500]}"
+            error_msg = f"No valid JSON found in GPT response. Response text: {text[:500]}"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -207,7 +205,7 @@ A:
         result = parsed["coaching_feedback"]
         result["total_tut"] = total_tut
         result["rpe"] = last_rpe
-        
+
         logger.info("Successfully generated coaching feedback")
         logger.info(f"Form rating: {result.get('form_rating')}, Observations: {len(result.get('observations', []))}")
 
@@ -218,9 +216,8 @@ A:
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Error: {str(e)}")
         logger.error(f"Traceback:\n{traceback.format_exc()}")
-        
-        # Provide more specific error messages based on the error type
-        if "CLAUDE_API_KEY" in str(e) or "Claude API client not initialized" in str(e):
+
+        if "OPENAI_API_KEY" in str(e) or "not set" in str(e):
             error_summary = "AI service configuration error. Please contact support."
             error_observation = "The AI coaching service is not properly configured."
         elif "S3" in str(e) or "upload_file_to_s3" in str(e):

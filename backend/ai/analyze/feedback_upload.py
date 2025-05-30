@@ -31,7 +31,6 @@ async def feedback_upload(
 
     tmp_path = None
     try:
-        # ✅ Save uploaded video to a temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             shutil.copyfileobj(video.file, tmp)
             tmp_path = tmp.name
@@ -39,7 +38,6 @@ async def feedback_upload(
         logger.info(f"Video saved to temp path: {tmp_path}")
         logger.info(f"Temp file size: {os.path.getsize(tmp_path)} bytes")
 
-        # ✅ Analyze video and extract pose landmarks
         logger.info("Starting video analysis...")
         video_data = analyze_video(tmp_path)
         logger.info(f"Video analysis complete. FPS: {video_data.get('fps')}, Best landmark: {video_data.get('best_landmark')}")
@@ -51,7 +49,6 @@ async def feedback_upload(
 
         rep_data = None
         try:
-            # ✅ Run rep detection
             logger.info("Starting rep detection...")
             rep_data = run_rep_detection_from_landmark_y(
                 video_data["raw_y"], video_data["fps"]
@@ -69,7 +66,6 @@ async def feedback_upload(
             logger.warning(f"[⚠️] Rep detection traceback: {traceback.format_exc()}")
             rep_data = None
 
-        # ✅ Generate keyframe collages
         if isinstance(rep_data, list) and len(rep_data) > 0:
             try:
                 collage_paths = export_keyframe_collages(tmp_path, rep_data)
@@ -83,7 +79,6 @@ async def feedback_upload(
             fallback_path = export_static_keyframe_collage(tmp_path)
             collage_paths = [fallback_path]
 
-        # ❗ Final safeguard: make sure a keyframe was generated
         if not collage_paths or not os.path.exists(collage_paths[0]):
             return {
                 "success": False,
@@ -91,8 +86,7 @@ async def feedback_upload(
                 "error_type": "keyframe_generation_failed"
             }
 
-        # ✅ Generate coaching feedback using Claude
-        logger.info("Starting coaching feedback generation...")
+        logger.info("Starting GPT-4o coaching feedback generation...")
         logger.info(f"Passing rep_data: {rep_data is not None} (has {len(rep_data) if rep_data else 0} reps)")
 
         feedback = generate_feedback(
@@ -109,11 +103,11 @@ async def feedback_upload(
             logger.error("Feedback response is invalid or not a dictionary")
             return {
                 "success": False,
-                "error": "Claude did not return valid feedback.",
+                "error": "AI did not return valid feedback.",
                 "error_type": "invalid_feedback_structure"
             }
 
-        logger.info(f"Coaching feedback generated")
+        logger.info("Coaching feedback generated")
         logger.info(f"Form rating: {feedback.get('form_rating')}")
         logger.info(f"RPE: {feedback.get('rpe')}, TUT: {feedback.get('total_tut')}")
 
@@ -134,7 +128,7 @@ async def feedback_upload(
         }
 
     except Exception as e:
-        logger.error(f"=== FEEDBACK_UPLOAD ERROR ===")
+        logger.error("=== FEEDBACK_UPLOAD ERROR ===")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Error message: {str(e)}")
         logger.error(f"Full traceback:\n{traceback.format_exc()}")

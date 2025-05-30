@@ -20,11 +20,9 @@ services:
         value: us-east-1
       - key: S3_BUCKET_NAME
         sync: false
-      - key: CLAUDE_API_KEY
-        sync: false
       - key: GYMVID_AI_MODEL
-        value: claude-3-haiku-20240307
+        value: gpt-4o
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false 
+        sync: false

@@ -28,7 +28,7 @@ from backend.ai.analyze.keyframe_exporter import export_keyframes
 from backend.ai.analyze.coaching_feedback import generate_feedback
 from backend.ai.analyze import analyze_set
 
-# ✅ Load env
+# ✅ Load environment variables
 load_dotenv()
 
 app = FastAPI()
@@ -131,7 +131,7 @@ async def process_set(
     except subprocess.CalledProcessError as e:
         return JSONResponse(status_code=500, content={"success": False, "error": f"Subprocess failed with exit code {e.returncode}", "stdout": e.stdout, "stderr": e.stderr})
 
-# ✅ Coaching Feedback Endpoint with URL (still available)
+# ✅ Coaching Feedback from video URL
 class FeedbackRequest(BaseModel):
     user_id: str
     movement: str
@@ -145,10 +145,12 @@ async def analyze_feedback(request: FeedbackRequest):
         rep_data = run_rep_detection_from_landmark_y(video_data["raw_y"], video_data["fps"])
         export_keyframes(local_path, rep_data)
         feedback = generate_feedback(
-            video_data={ "predicted_exercise": request.movement },
+            video_path=local_path,
+            user_id=request.user_id,
+            video_data={"predicted_exercise": request.movement},
             rep_data=rep_data
         )
-        return { "success": True, "feedback": feedback }
+        return {"success": True, "feedback": feedback}
     except Exception as e:
         return {
             "success": False,
@@ -157,13 +159,13 @@ async def analyze_feedback(request: FeedbackRequest):
                 "form_rating": 0,
                 "observations": [{
                     "observation": "👀 We couldn't process your video.",
-                    "tip": "🧠 Try uploading a different angle or clearer rep.",
-                    "summary": f"👉 Error: {str(e)}"
-                }]
+                    "tip": "🧠 Try uploading a different angle or clearer rep."
+                }],
+                "summary": f"👉 Error: {str(e)}"
             }
         }
 
-# ✅ NEW: Coaching Feedback from uploaded file (local)
+# ✅ Coaching Feedback from uploaded file
 @app.post("/analyze/feedback-file")
 async def analyze_feedback_file(
     movement: str = Form(...),
@@ -180,11 +182,11 @@ async def analyze_feedback_file(
         export_keyframes(temp_path, rep_data)
         feedback = generate_feedback(
             video_path=temp_path,
-            user_id="anonymous",  # Since this endpoint doesn't have user_id in the form
-            video_data={ "predicted_exercise": movement },
+            user_id="anonymous",
+            video_data={"predicted_exercise": movement},
             rep_data=rep_data
         )
-        return { "success": True, "feedback": feedback }
+        return {"success": True, "feedback": feedback}
     except Exception as e:
         return {
             "success": False,
@@ -193,51 +195,37 @@ async def analyze_feedback_file(
                 "form_rating": 0,
                 "observations": [{
                     "observation": "👀 We couldn't process your video.",
-                    "tip": "🧠 Try uploading a different angle or clearer rep.",
-                    "summary": f"👉 Error: {str(e)}"
-                }]
+                    "tip": "🧠 Try uploading a different angle or clearer rep."
+                }],
+                "summary": f"👉 Error: {str(e)}"
             }
         }
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
-# ✅ Debug
+# ✅ Debug environment config
 @app.get("/debug/env")
 def debug_env():
-    # Import inside function to avoid startup errors
     try:
         import cv2
         opencv_version = cv2.__version__
     except:
         opencv_version = "Not installed"
-        
+
     try:
         import mediapipe
         mediapipe_version = mediapipe.__version__
     except:
         mediapipe_version = "Not installed"
-    
-    # Check if Claude client can be initialized
-    claude_key = os.getenv("CLAUDE_API_KEY")
-    claude_works = False
-    if claude_key:
-        try:
-            from anthropic import Anthropic
-            test_client = Anthropic(api_key=claude_key)
-            claude_works = True
-        except Exception as e:
-            claude_works = f"Error: {str(e)}"
-    
+
     return {
         "openai": os.getenv("OPENAI_API_KEY") is not None,
-        "claude": claude_key is not None,
-        "claude_works": claude_works,
         "aws": os.getenv("AWS_ACCESS_KEY_ID") is not None,
         "bucket": os.getenv("S3_BUCKET_NAME"),
         "opencv_version": opencv_version,
         "mediapipe_version": mediapipe_version,
-        "model": os.getenv("GYMVID_AI_MODEL", "claude-3-haiku-20240307"),
+        "model": os.getenv("GYMVID_AI_MODEL", "gpt-4o"),
     }
 
 # ✅ Run locally
