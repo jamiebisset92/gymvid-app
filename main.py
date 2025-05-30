@@ -45,7 +45,10 @@ app.add_middleware(
 # ✅ Global error handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    return JSONResponse(status_code=422, content={"success": False, "error": "Validation failed", "details": exc.errors()})
+    return JSONResponse(
+        status_code=422,
+        content={"success": False, "error": "Validation failed", "details": str(exc)}
+    )
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):

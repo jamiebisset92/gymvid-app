@@ -2,22 +2,21 @@ import os
 import json
 import re
 import traceback
-import numpy as np
+import logging
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
+
 from backend.ai.analyze.keyframe_collage import export_keyframe_collages
 from backend.ai.analyze.fallback_keyframes import export_static_keyframe_collage
 from backend.utils.aws_utils import upload_file_to_s3
-import logging
 
 # ✅ Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# ✅ Load environment variables and OpenAI client
+# ✅ Load environment variables and initialize OpenAI client
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
 MODEL_NAME = os.getenv("GYMVID_AI_MODEL", "gpt-4o")
 IS_SUBPROCESS = os.getenv("GYMVID_MODE") == "subprocess"
 
@@ -26,6 +25,7 @@ if not OPENAI_API_KEY:
 else:
     logger.info(f"OpenAI API Key present: {OPENAI_API_KEY[:8]}...")
 
+client = OpenAI(api_key=OPENAI_API_KEY)
 logger.info(f"Coaching feedback module initialized - OpenAI client active, Model: {MODEL_NAME}")
 
 # ----------------------
@@ -33,7 +33,6 @@ logger.info(f"Coaching feedback module initialized - OpenAI client active, Model
 # ----------------------
 def compress_rep_data_for_gpt(rep_data: list, feedback_depth: str = "standard") -> list:
     summaries = []
-
     for rep in rep_data:
         rep_num = rep.get("rep")
         rpe = rep.get("estimated_RPE")
@@ -78,19 +77,13 @@ def compress_rep_data_for_gpt(rep_data: list, feedback_depth: str = "standard") 
                 summary += f"Asymmetry: {asym}/100."
 
         summaries.append(summary.strip())
-
     return summaries
-
 
 def calculate_tut_and_rpe(rep_data):
     total_tut = sum([rep.get("duration_sec", 0) for rep in rep_data])
     last_rpe = rep_data[-1].get("estimated_RPE", None) if rep_data else None
     return round(total_tut, 2), last_rpe
 
-
-# -----------------------------
-# 🧠 GPT-4o Coaching Generator
-# -----------------------------
 def generate_feedback(video_path, user_id, video_data, rep_data) -> dict:
     logger.info(f"=== GENERATE_FEEDBACK CALLED ===")
     logger.info(f"video_path: {video_path}")
@@ -102,46 +95,32 @@ def generate_feedback(video_path, user_id, video_data, rep_data) -> dict:
 
     try:
         if not video_path or not os.path.exists(video_path):
-            error_msg = f"Video path invalid or doesn't exist: {video_path}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError(f"Video path invalid or doesn't exist: {video_path}")
 
         if not video_data:
-            error_msg = "video_data is None or empty"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError("video_data is None or empty")
 
         exercise_name = video_data.get("predicted_exercise", "an exercise")
         feedback_depth = video_data.get("feedback_depth", "standard")
 
-        logger.info(f"Exercise: {exercise_name}, Feedback depth: {feedback_depth}")
-
         if rep_data:
-            logger.info("Generating keyframe collages from rep data...")
             collage_paths = export_keyframe_collages(video_path, rep_data)
             total_tut, last_rpe = calculate_tut_and_rpe(rep_data)
             rep_summaries = compress_rep_data_for_gpt(rep_data, feedback_depth)
-            logger.info(f"Generated {len(collage_paths)} collages, TUT: {total_tut}, RPE: {last_rpe}")
         else:
-            logger.info("No rep data, using fallback keyframes...")
             collage_paths = [export_static_keyframe_collage(video_path)]
             total_tut, last_rpe = "N/A", "N/A"
             rep_summaries = ["Repetition data was not detected for this video."]
 
         collage_urls = []
         for path in collage_paths:
-            logger.info(f"Uploading collage to S3: {path}")
             s3_url = upload_file_to_s3(
                 local_path=path,
                 s3_key=f"collages/{user_id}/{os.path.basename(path)}"
             )
             collage_urls.append(s3_url)
-            logger.info(f"Uploaded to: {s3_url}")
 
-        collage_descriptions = "\n".join([
-            f"- Collage: {url}" for url in collage_urls
-        ])
-
+        collage_descriptions = "\n".join([f"- Collage: {url}" for url in collage_urls])
         summaries_text = "\n".join(rep_summaries)
 
         prompt = f"""
@@ -156,7 +135,7 @@ They also submitted keyframe collage images:
 Please:
 - Share a brief, general comment about their technique
 - Offer up to 4 specific coaching observations with actionable tips (fewer if not needed)
-- When relevant, reference the rep number (e.g. "In rep 3, the bar path shifts forward...")
+- When relevant, reference the rep number (e.g. \"In rep 3, the bar path shifts forward...\")
 - Use plain, confident language (avoid sounding robotic or over-enthusiastic)
 - Keep it supportive — this is someone who wants to improve
 - Return only a valid JSON object (no Markdown, no extra text)
@@ -167,76 +146,47 @@ Format:
     "form_rating": integer (1–10),
     "observations": [
       {{ "observation": "...", "tip": "..." }}
-      // Up to 4 total
     ],
     "summary": "A closing note of encouragement or a reminder of what to focus on."
   }}
 }}
 """.strip()
 
-        logger.info(f"Sending request to OpenAI GPT model: {MODEL_NAME}")
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model=MODEL_NAME,
             temperature=0.4,
             max_tokens=1000,
             messages=[
-                {
-                    "role": "system",
-                    "content": "You are a world-class strength coach."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "system", "content": "You are a world-class strength coach."},
+                {"role": "user", "content": prompt}
             ]
         )
-        logger.info("OpenAI API request successful")
 
-        text = response["choices"][0]["message"]["content"]
-        logger.debug(f"GPT response: {text[:200]}...")
+        text = response.choices[0].message.content
+        json_start = text.find('{')
+        json_end = text.rfind('}')
+        if json_start == -1 or json_end == -1:
+            raise ValueError("No valid JSON structure found.")
 
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
-            error_msg = f"No valid JSON found in GPT response. Response text: {text[:500]}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-        parsed = json.loads(match.group(0))
+        parsed = json.loads(text[json_start:json_end + 1])
         result = parsed["coaching_feedback"]
         result["total_tut"] = total_tut
         result["rpe"] = last_rpe
 
         logger.info("Successfully generated coaching feedback")
-        logger.info(f"Form rating: {result.get('form_rating')}, Observations: {len(result.get('observations', []))}")
-
         return result
 
     except Exception as e:
-        logger.error(f"=== GENERATE_FEEDBACK ERROR ===")
-        logger.error(f"Error type: {type(e).__name__}")
-        logger.error(f"Error: {str(e)}")
-        logger.error(f"Traceback:\n{traceback.format_exc()}")
-
-        if "OPENAI_API_KEY" in str(e) or "not set" in str(e):
-            error_summary = "AI service configuration error. Please contact support."
-            error_observation = "The AI coaching service is not properly configured."
-        elif "S3" in str(e) or "upload_file_to_s3" in str(e):
-            error_summary = "Failed to upload video frames. Please try again."
-            error_observation = "There was an issue processing your video frames."
-        elif "JSON" in str(e):
-            error_summary = "Failed to parse AI response. Please try again."
-            error_observation = "The AI returned an unexpected response format."
-        else:
-            error_summary = "We hit a snag processing your feedback — but we're working on it!"
-            error_observation = "Unable to generate feedback due to a technical issue."
+        logger.error(f"Error generating feedback: {e}")
+        logger.debug(traceback.format_exc())
 
         return {
             "form_rating": 0,
             "rpe": None,
             "total_tut": None,
             "observations": [{
-                "observation": error_observation,
+                "observation": "Unable to generate feedback due to a technical issue.",
                 "tip": "Please try uploading a different video or try again later."
             }],
-            "summary": error_summary
+            "summary": "We hit a snag processing your feedback — but we're working on it!"
         }

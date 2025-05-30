@@ -9,18 +9,18 @@ def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_
 
     # Step 1: Use ffmpeg to extract evenly spaced frames
     output_template = os.path.join(output_dir, "frame_%03d.jpg")
-    
+
     # Clear any existing frames
     for f in os.listdir(output_dir):
         if f.startswith("frame_") and f.endswith(".jpg"):
             os.remove(os.path.join(output_dir, f))
-    
+
     ffmpeg_cmd = [
         "ffmpeg",
         "-i", video_path,
         "-vf", f"select='not(mod(n\,{int(get_frame_interval(video_path, total_frames))})')",
         "-vsync", "vfr",
-        "-q:v", "1",  # Higher quality (1 is best, was 2)
+        "-q:v", "1",
         output_template
     ]
 
@@ -35,22 +35,35 @@ def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_
     if not frame_paths:
         raise ValueError("No frames were extracted by ffmpeg.")
 
-    # Larger frame size for better detail
-    frame_size = (384, 384)  # Increased from 256x256
+    # Determine best frame size based on video orientation
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError(f"Cannot open video file: {video_path}")
+
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cap.release()
+
+    if height > width:
+        frame_size = (216, 384)  # Portrait
+    else:
+        frame_size = (384, 216)  # Landscape
+
+    # Load and resize with PIL
     images = [load_and_autorotate_pil(f).resize(frame_size, Image.Resampling.LANCZOS) for f in frame_paths]
 
-    # Step 3: Convert to OpenCV format for collage
+    # Step 3: Convert to OpenCV and create collage
     opencv_images = [cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR) for img in images]
     rows = 2
     cols = total_frames // 2
     row_images = [np.hstack(opencv_images[i*cols:(i+1)*cols]) for i in range(rows)]
     collage = np.vstack(row_images)
 
-    # Step 4: Save final collage with higher quality
+    # Step 4: Save final collage
     collage_path = os.path.join(output_dir, "quick_collage.jpg")
-    cv2.imwrite(collage_path, collage, [int(cv2.IMWRITE_JPEG_QUALITY), 85])  # Higher quality (was 50)
+    cv2.imwrite(collage_path, collage, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
 
-    # Clean up individual frames
+    # Clean up temporary frames
     for f in frame_paths:
         os.remove(f)
 

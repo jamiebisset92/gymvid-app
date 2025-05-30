@@ -52,7 +52,16 @@ def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = 
         raise ValueError(f"Unable to open video: {video_path}")
 
     rotation = get_video_rotation(video_path)
-    frame_size = (256, 256)
+
+    # ✅ Dynamically determine frame size based on orientation
+    vid_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    vid_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    if vid_height > vid_width:
+        frame_size = (216, 384)  # Portrait
+    else:
+        frame_size = (384, 216)  # Landscape
+
     total_reps = len(rep_data)
     collage_paths = []
 
