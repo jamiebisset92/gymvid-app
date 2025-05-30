@@ -17,7 +17,7 @@ def predict_exercise(image_path: str, model: str = "gpt-4o") -> dict:
     except Exception as e:
         print(f"❌ Error reading image file: {str(e)}")
         return {
-            "movement": "Unknown Exercise",
+            "movement": "Unknown",
             "equipment": "Unknown",
             "confidence": 0,
             "error": f"Failed to read image: {str(e)}"
@@ -30,25 +30,23 @@ def predict_exercise(image_path: str, model: str = "gpt-4o") -> dict:
     prompt = """
 You are an expert fitness AI.
 
-You are analyzing a 2x2 collage of gym video keyframes. Identify the most likely exercise being performed.
+You are analyzing a 2x2 collage of keyframes from a gym video. Identify the most likely exercise being performed.
 
 Your task:
-- Determine the exact exercise name
-- Identify the equipment used
-- Specify variation if visible (e.g. Incline, Sumo, Romanian, etc.)
-- Estimate confidence level (0–100)
+- Determine the exact exercise name (e.g. "Conventional Deadlift", "Incline Barbell Press", "Seated Cable Row")
+- Identify the type of equipment used
+- Specify variation if clearly visible (e.g. Sumo, Romanian, Incline, Trap Bar, etc.)
+- Estimate a confidence level from 0 to 100
 
-⚠️ Always respond in **this strict JSON format** — no commentary:
+⚠️ Format your response strictly as valid JSON — no commentary, no markdown:
 
 {
   "equipment": one of ["Barbell", "Dumbbell", "Kettlebell", "Cable", "Pin-Loaded Machine", "Plate-Loaded Machine", "Bodyweight", "Resistance Band"],
   "movement_pattern": one of ["Push - Horizontal", "Push - Vertical", "Push - Incline", "Pull - Horizontal", "Pull - Vertical", "Squat", "Hinge", "Isolation", "Core", "Carry"],
-  "variation": (if applicable — e.g. "Incline", "Seated", "Sumo", "Zercher", etc.),
-  "movement": exact name like "Incline Barbell Press", "Romanian Deadlift", "Cable Face Pull", etc.,
+  "variation": (if applicable — e.g. "Incline", "Seated", "Sumo", "Trap Bar", etc.),
+  "movement": exact name of the lift (e.g. "Romanian Deadlift", "Incline Barbell Press", etc.),
   "confidence": 0–100
 }
-
-Analyze this image and reply with ONLY valid JSON.
 """
 
     try:
@@ -81,7 +79,6 @@ Analyze this image and reply with ONLY valid JSON.
         print(f"⏱️ GPT response time: {round(time.time() - start, 2)} sec")
         print("🧠 Raw GPT reply:", message)
 
-        # ✅ Extract valid JSON object
         json_start = message.find('{')
         json_end = message.rfind('}') + 1
 
@@ -90,16 +87,17 @@ Analyze this image and reply with ONLY valid JSON.
 
         parsed = json.loads(message[json_start:json_end])
 
-        # ✅ Auto-correct fallback
-        if "movement" not in parsed:
-            parsed["movement"] = f"{parsed.get('variation', '')} {parsed.get('equipment', '')} Exercise".strip()
+        # ✅ Ensure all expected fields are present
+        parsed["movement"] = parsed.get("movement") or "Unknown"
+        parsed["equipment"] = parsed.get("equipment") or "Unknown"
+        parsed["confidence"] = parsed.get("confidence", 0)
 
         return parsed
 
     except json.JSONDecodeError as e:
         print("❌ JSON decode error:", str(e))
         return {
-            "movement": "Unknown Exercise",
+            "movement": "Unknown",
             "equipment": "Unknown",
             "confidence": 0,
             "error": f"Failed to parse JSON: {str(e)}"
@@ -108,7 +106,7 @@ Analyze this image and reply with ONLY valid JSON.
     except Exception as e:
         print("❌ OpenAI API error:", str(e))
         return {
-            "movement": "Unknown Exercise",
+            "movement": "Unknown",
             "equipment": "Unknown",
             "confidence": 0,
             "error": str(e)
