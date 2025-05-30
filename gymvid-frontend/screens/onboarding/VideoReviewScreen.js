@@ -955,7 +955,7 @@ export default function VideoReviewScreen({ navigation, route }) {
         name: 'video.mp4',
       });
 
-      const response = await fetch('https://gymvid-app.onrender.com/analyze/quick_exercise_prediction', {
+      const response = await fetch('https://gymvid-app.onrender.com/analyze/video', {
         method: 'POST',
         body: formData,
         headers: {
@@ -975,7 +975,7 @@ export default function VideoReviewScreen({ navigation, route }) {
       // Show user-friendly error message
       if (error.message && error.message.includes('Network request failed')) {
         console.error('⚠️ Network Error: Cannot connect to backend server');
-        console.error('📍 Attempted URL: https://gymvid-app.onrender.com/analyze/quick_exercise_prediction');
+        console.error('📍 Attempted URL: https://gymvid-app.onrender.com/analyze/video');
         
         // Show toast instead of alert
         toast.error('We couldn\'t reach the server — please try again.');
@@ -1362,7 +1362,7 @@ export default function VideoReviewScreen({ navigation, route }) {
       debugLog('Making request to backend...');
 
       // Fetch without manual Content-Type header (React Native handles this automatically)
-      const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback_upload', {
+      const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback-file', {
         method: 'POST',
         body: formData,
       });
@@ -1659,7 +1659,7 @@ export default function VideoReviewScreen({ navigation, route }) {
       debugLog('Making background request to feedback endpoint...');
 
       // Make the request in the background
-      const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback_upload', {
+      const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback-file', {
         method: 'POST',
         body: formData,
       });
