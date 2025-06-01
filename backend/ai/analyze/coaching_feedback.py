@@ -76,6 +76,11 @@ def calculate_tut_and_rpe(rep_data):
 
 def generate_feedback(video_path, user_id, video_data, rep_data) -> dict:
     try:
+        logger.info(f"🎯 Starting generate_feedback for user {user_id}")
+        logger.info(f"Video path: {video_path}, exists: {os.path.exists(video_path) if video_path else False}")
+        logger.info(f"Video data: {video_data}")
+        logger.info(f"Rep data: {rep_data is not None}, count: {len(rep_data) if rep_data else 0}")
+        
         if not video_path or not os.path.exists(video_path):
             raise ValueError("Invalid or missing video path.")
 
@@ -84,24 +89,38 @@ def generate_feedback(video_path, user_id, video_data, rep_data) -> dict:
 
         exercise_name = video_data.get("predicted_exercise", "an exercise")
         feedback_depth = video_data.get("feedback_depth", "standard")
+        
+        logger.info(f"Exercise: {exercise_name}, feedback_depth: {feedback_depth}")
 
         if rep_data:
+            logger.info("📸 Generating collages from rep data...")
             collage_paths = export_keyframe_collages(video_path, rep_data)
             total_tut, last_rpe = calculate_tut_and_rpe(rep_data)
             rep_summaries = compress_rep_data_for_gpt(rep_data, feedback_depth)
+            logger.info(f"Generated {len(collage_paths)} collage(s): {collage_paths}")
         else:
+            logger.info("📸 Generating static fallback collage...")
             collage_paths = [export_static_keyframe_collage(video_path)]
             total_tut, last_rpe = "N/A", "N/A"
             rep_summaries = ["No reps were detected in this video."]
+            logger.info(f"Generated fallback collage: {collage_paths}")
 
+        logger.info("☁️ Uploading collages to S3...")
         collage_urls = []
-        for path in collage_paths:
-            s3_url = upload_file_to_s3(
-                local_path=path,
-                s3_key=f"collages/{user_id}/{os.path.basename(path)}"
-            )
-            collage_urls.append(s3_url)
+        for i, path in enumerate(collage_paths):
+            logger.info(f"Uploading collage {i+1}/{len(collage_paths)}: {path}")
+            try:
+                s3_url = upload_file_to_s3(
+                    local_path=path,
+                    s3_key=f"collages/{user_id}/{os.path.basename(path)}"
+                )
+                collage_urls.append(s3_url)
+                logger.info(f"✅ Uploaded: {s3_url}")
+            except Exception as upload_error:
+                logger.error(f"❌ S3 upload failed for {path}: {upload_error}")
+                raise Exception(f"Failed to upload collage to S3: {upload_error}")
 
+        logger.info(f"🤖 Preparing OpenAI prompt for {len(collage_urls)} images...")
         prompt = f"""
 You're a professional lifting coach providing helpful, supportive feedback.
 
@@ -134,33 +153,50 @@ Return JSON only:
 }}
 """.strip()
 
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            temperature=0.4,
-            max_tokens=1000,
-            messages=[
-                {"role": "system", "content": "You are a world-class strength coach."},
-                {"role": "user", "content": prompt}
-            ]
-        )
+        logger.info(f"🎤 Making OpenAI API call with model: {MODEL_NAME}")
+        logger.info(f"Prompt length: {len(prompt)} chars, Images: {len(collage_urls)}")
+        
+        try:
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                temperature=0.4,
+                max_tokens=1000,
+                messages=[
+                    {"role": "system", "content": "You are a world-class strength coach."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            logger.info("✅ OpenAI API call successful")
+        except Exception as openai_error:
+            logger.error(f"❌ OpenAI API call failed: {openai_error}")
+            raise Exception(f"OpenAI API error: {openai_error}")
 
         text = response.choices[0].message.content
+        logger.info(f"📝 Received response from OpenAI: {text[:200]}...")
+        
         json_start = text.find('{')
         json_end = text.rfind('}')
         if json_start == -1 or json_end == -1:
+            logger.error(f"❌ No valid JSON found in OpenAI response: {text}")
             raise ValueError("No valid JSON response from GPT")
 
-        parsed = json.loads(text[json_start:json_end + 1])
-        result = parsed["coaching_feedback"]
-        result["total_tut"] = total_tut
-        result["rpe"] = last_rpe
+        try:
+            parsed = json.loads(text[json_start:json_end + 1])
+            result = parsed["coaching_feedback"]
+            result["total_tut"] = total_tut
+            result["rpe"] = last_rpe
+            logger.info(f"✅ Successfully parsed feedback: form_rating={result.get('form_rating')}")
+        except Exception as json_error:
+            logger.error(f"❌ JSON parsing failed: {json_error}")
+            logger.error(f"Raw text: {text}")
+            raise Exception(f"Failed to parse JSON response: {json_error}")
 
         logger.info("✅ Coaching feedback successfully generated")
         return result
 
     except Exception as e:
         logger.error(f"❌ Error generating feedback: {e}")
-        logger.debug(traceback.format_exc())
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
         return {
             "form_rating": 0,
             "rpe": None,
