@@ -5,6 +5,8 @@ import logging
 from dotenv import load_dotenv
 from openai import OpenAI
 
+BASE_DISK_PATH = "/mnt/data"
+
 from backend.ai.analyze.keyframe_collage import export_keyframe_collages
 from backend.ai.analyze.fallback_keyframes import export_static_keyframe_collage
 from backend.utils.aws_utils import upload_file_to_s3

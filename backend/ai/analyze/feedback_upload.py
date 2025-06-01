@@ -5,8 +5,6 @@ from backend.ai.analyze.rep_detection import run_rep_detection_from_landmark_y
 from backend.ai.analyze.keyframe_collage import export_keyframe_collages
 from backend.ai.analyze.fallback_keyframes import export_static_keyframe_collage
 
-import tempfile
-import shutil
 import os
 import logging
 import traceback
@@ -19,8 +17,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Create a thread pool for CPU-intensive tasks
-executor = ThreadPoolExecutor(max_workers=2)  # Limit concurrent processing
+executor = ThreadPoolExecutor(max_workers=2)
+
+# Use SSD-backed disk for large video files
+DISK_BASE_PATH = "/mnt/data"
 
 @router.post("/feedback_upload")
 async def feedback_upload(
@@ -36,52 +36,45 @@ async def feedback_upload(
 
     tmp_path = None
     try:
-        # Validate inputs
         if not video.filename:
             return {
                 "success": False,
                 "error": "No video file provided",
                 "error_type": "invalid_input"
             }
-            
+
         if not user_id or not movement:
             return {
-                "success": False, 
+                "success": False,
                 "error": "Missing required parameters: user_id or movement",
                 "error_type": "invalid_input"
             }
 
-        # Save uploaded video with size validation
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-            video_data = await video.read()
-            
-            # Check file size (limit to 200MB to prevent overload)
-            MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
-            if len(video_data) > MAX_FILE_SIZE:
-                logger.warning(f"Video file too large: {len(video_data) / 1024 / 1024:.2f}MB")
-                return {
-                    "success": False,
-                    "error": "Video file is too large. Please use a video under 200MB.",
-                    "error_type": "file_too_large"
-                }
-            
-            tmp.write(video_data)
-            tmp_path = tmp.name
+        video_data = await video.read()
 
-        logger.info(f"Video saved to temp path: {tmp_path}")
-        logger.info(f"Temp file size: {os.path.getsize(tmp_path)} bytes")
+        MAX_FILE_SIZE = 200 * 1024 * 1024
+        if len(video_data) > MAX_FILE_SIZE:
+            logger.warning(f"Video file too large: {len(video_data) / 1024 / 1024:.2f}MB")
+            return {
+                "success": False,
+                "error": "Video file is too large. Please use a video under 200MB.",
+                "error_type": "file_too_large"
+            }
 
-        # Step 1: Video Analysis with timeout
+        os.makedirs(DISK_BASE_PATH, exist_ok=True)
+        tmp_path = os.path.join(DISK_BASE_PATH, f"upload_{user_id}_{video.filename}")
+        with open(tmp_path, "wb") as f:
+            f.write(video_data)
+
+        logger.info(f"Video saved to disk path: {tmp_path}")
+        logger.info(f"File size: {os.path.getsize(tmp_path)} bytes")
+
         try:
             logger.info("Starting video analysis...")
-            # Run in thread pool with timeout to prevent hanging
             loop = asyncio.get_event_loop()
-            video_data = await loop.run_in_executor(
-                executor, analyze_video, tmp_path
-            )
+            video_data = await loop.run_in_executor(executor, analyze_video, tmp_path)
             logger.info(f"Video analysis complete. FPS: {video_data.get('fps')}, Best landmark: {video_data.get('best_landmark')}")
             logger.info(f"Raw Y data points: {len(video_data.get('raw_y', []))}")
-
             if video_data.get('raw_y'):
                 raw_y = video_data['raw_y']
                 logger.info(f"Raw Y stats - min: {min(raw_y):.4f}, max: {max(raw_y):.4f}, range: {max(raw_y) - min(raw_y):.4f}")
@@ -93,14 +86,12 @@ async def feedback_upload(
                 "error_type": "video_analysis_failed"
             }
 
-        # Step 2: Rep Detection with error handling
         rep_data = None
         try:
             logger.info("Starting rep detection...")
-            # Run rep detection in thread pool to prevent blocking
             loop = asyncio.get_event_loop()
             rep_data = await loop.run_in_executor(
-                executor, run_rep_detection_from_landmark_y, 
+                executor, run_rep_detection_from_landmark_y,
                 video_data["raw_y"], video_data["fps"]
             )
 
@@ -110,13 +101,11 @@ async def feedback_upload(
             else:
                 logger.warning("Rep detection returned empty or invalid format")
                 rep_data = None
-
         except Exception as rep_error:
             logger.warning(f"[⚠️] Rep detection failed with error: {str(rep_error)}")
             logger.warning(f"[⚠️] Rep detection traceback: {traceback.format_exc()}")
             rep_data = None
 
-        # Step 3: Keyframe Generation with fallback
         try:
             if isinstance(rep_data, list) and len(rep_data) > 0:
                 try:
@@ -154,16 +143,13 @@ async def feedback_upload(
                 "error_type": "keyframe_generation_failed"
             }
 
-        # Step 4: AI Feedback Generation with timeout
         try:
             logger.info("Starting GPT-4o coaching feedback generation...")
             logger.info(f"Passing rep_data: {rep_data is not None} (has {len(rep_data) if rep_data else 0} reps)")
-
-            # Run feedback generation in thread pool to prevent blocking
             loop = asyncio.get_event_loop()
             feedback = await loop.run_in_executor(
                 executor, generate_feedback,
-                tmp_path, user_id, 
+                tmp_path, user_id,
                 {
                     "predicted_exercise": movement,
                     "feedback_depth": "standard"
@@ -187,11 +173,6 @@ async def feedback_upload(
                 "error_type": "invalid_feedback_structure"
             }
 
-        logger.info("Coaching feedback generated successfully")
-        logger.info(f"Form rating: {feedback.get('form_rating')}")
-        logger.info(f"RPE: {feedback.get('rpe')}, TUT: {feedback.get('total_tut')}")
-
-        # Check for error feedback (form_rating of 0 indicates AI had issues)
         if feedback.get('form_rating', 0) == 0:
             logger.warning("Feedback generation returned with form_rating of 0, indicating an error")
             if "configuration error" in feedback.get('summary', '').lower() or "technical issue" in str(feedback.get('observations', [])).lower():
@@ -201,6 +182,10 @@ async def feedback_upload(
                     "error_type": "feedback_generation_error",
                     "error": "Failed to generate proper coaching feedback"
                 }
+
+        logger.info("Coaching feedback generated successfully")
+        logger.info(f"Form rating: {feedback.get('form_rating')}")
+        logger.info(f"RPE: {feedback.get('rpe')}, TUT: {feedback.get('total_tut')}")
 
         return {
             "success": True,
@@ -222,7 +207,6 @@ async def feedback_upload(
         }
 
     finally:
-        # Cleanup temp files
         if tmp_path and os.path.exists(tmp_path):
             try:
                 logger.info(f"Cleaning up temp file: {tmp_path}")

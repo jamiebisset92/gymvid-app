@@ -5,11 +5,13 @@ import os
 import cv2
 import numpy as np
 
+BASE_DISK_PATH = "/mnt/data"
+
 from backend.ai.analyze.exercise_prediction import predict_exercise
 
 app = APIRouter()
 
-def simple_export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_dir: str = "quick_collages") -> list:
+def simple_export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_dir: str = os.path.join(BASE_DISK_PATH, "quick_collages")) -> list:
     """
     Simple, robust collage generation using only OpenCV (no ffmpeg or PIL dependencies)
     """
@@ -82,12 +84,13 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
             ext = ".mp4"
 
         # Save uploaded video
-        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+        tmp_path = os.path.join(BASE_DISK_PATH, f"uploaded_video_{video.filename}")
+        with open(tmp_path, "wb") as tmp:
+
             contents = await video.read()
             if not contents:
                 raise ValueError("Uploaded video file is empty or could not be read.")
             tmp.write(contents)
-            tmp_path = tmp.name
 
         print(f"📼 Saved temp video to: {tmp_path}")
         print(f"📼 Video size: {len(contents)} bytes")
@@ -197,7 +200,7 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
 async def test_exercise_prediction():
     """Test endpoint to verify prediction pipeline using existing collage"""
     try:
-        test_collage_path = "quick_collages/quick_collage.jpg"
+        test_collage_path = os.path.join(BASE_DISK_PATH, "quick_collages", "quick_collage.jpg")
 
         if not os.path.exists(test_collage_path):
             return JSONResponse(status_code=404, content={

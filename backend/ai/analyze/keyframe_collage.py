@@ -6,6 +6,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Mounted disk path for performance and persistence
+BASE_DISK_PATH = "/mnt/data"
+
 def get_video_rotation(video_path):
     """
     Uses ffmpeg to detect rotation metadata (e.g., for iPhone videos).
@@ -34,7 +37,7 @@ def rotate_frame_if_needed(frame, rotation):
         return cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
     return frame
 
-def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = "keyframe_collages") -> list:
+def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = os.path.join(BASE_DISK_PATH, "keyframe_collages")) -> list:
     """
     Extracts and saves keyframe collages for exercise prediction and coaching feedback.
 
@@ -46,14 +49,18 @@ def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = 
     Returns:
         List of saved collage file paths.
     """
+    # Clean the folder before saving new files
+    if os.path.exists(output_dir):
+        import shutil
+        shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
+
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise ValueError(f"Unable to open video: {video_path}")
 
     rotation = get_video_rotation(video_path)
 
-    # ✅ Dynamically determine frame size based on orientation
     vid_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     vid_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -71,7 +78,7 @@ def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = 
         collage = np.zeros((collage_height, collage_width, 3), dtype=np.uint8)
 
         for i, rep in enumerate(rep_slice):
-            for j, phase in enumerate(["start", "peak", "stop"]):
+            for j, phase in ["start", "peak", "stop"]:
                 frame_no = rep.get(f"{phase}_frame")
                 if frame_no is not None:
                     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)

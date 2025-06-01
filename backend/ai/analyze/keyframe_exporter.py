@@ -1,20 +1,28 @@
 import os
 import subprocess
+import shutil
 
-def export_keyframes(video_path: str, rep_data: list, output_dir: str = "keyframes") -> list:
+# Use mounted Render disk for performance and persistence
+BASE_DISK_PATH = "/mnt/data"
+
+def export_keyframes(video_path: str, rep_data: list, output_dir: str = os.path.join(BASE_DISK_PATH, "keyframes")) -> list:
     """
     Extracts and saves keyframes (start, peak, stop) for each rep using ffmpeg.
     This ensures orientation metadata is respected, especially for vertical iPhone videos.
-    
+
     Args:
         video_path (str): Path to the video file.
         rep_data (list): List of dictionaries with rep timing information.
         output_dir (str): Directory to save keyframes.
-        
+
     Returns:
         list: List of saved image file paths.
     """
+    # Clean the directory if it already exists
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
+
     saved_paths = []
 
     for rep in rep_data:

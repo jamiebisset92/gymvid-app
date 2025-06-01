@@ -4,7 +4,10 @@ from PIL import Image, ExifTags
 import numpy as np
 import cv2
 
-def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_dir: str = "quick_collages") -> list:
+# ✅ Use Render's mounted SSD disk for speed & persistence
+BASE_DISK_PATH = "/mnt/data"
+
+def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_dir: str = os.path.join(BASE_DISK_PATH, "quick_collages")) -> list:
     os.makedirs(output_dir, exist_ok=True)
 
     # Step 1: Use ffmpeg to extract evenly spaced frames
@@ -18,7 +21,7 @@ def export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_
     ffmpeg_cmd = [
         "ffmpeg",
         "-i", video_path,
-        "-vf", f"select='not(mod(n\,{int(get_frame_interval(video_path, total_frames))})')",
+        "-vf", f"select='not(mod(n\\,{int(get_frame_interval(video_path, total_frames))})')",
         "-vsync", "vfr",
         "-q:v", "1",
         output_template
