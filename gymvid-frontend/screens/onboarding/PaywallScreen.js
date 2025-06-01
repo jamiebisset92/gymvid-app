@@ -34,9 +34,16 @@ export default function PaywallScreen({ navigation, route }) {
   const exerciseLogged = route.params?.exerciseLogged;
   const videoLogged = route.params?.videoLogged;
   const userId = route.params?.userId;
-  const onboardingComplete = route.params?.onboardingComplete || false;
+  const continueOnboarding = route.params?.continueOnboarding || false;
+  const fromVideoReview = route.params?.fromVideoReview || false;
   
-  debugLog('PaywallScreen params:', { exerciseLogged, videoLogged, userId, onboardingComplete });
+  debugLog('PaywallScreen params:', { 
+    exerciseLogged, 
+    videoLogged, 
+    userId, 
+    continueOnboarding,
+    fromVideoReview 
+  });
   
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('monthly');
@@ -119,13 +126,16 @@ export default function PaywallScreen({ navigation, route }) {
     try {
       // This is a final safety check to make sure onboarding is marked complete
       // before going to the main app
-      debugLog('Performing final check to ensure onboarding is marked complete');
+      debugLog('🎯 FINALIZING ONBOARDING - PaywallScreen completing onboarding flow');
+      debugLog('PaywallScreen finalizeOnboarding called with flags:', { continueOnboarding, fromVideoReview });
       
       const currentUserId = await getCurrentUserId();
       if (!currentUserId) {
         console.error('Cannot finalize onboarding: No user ID available');
         return;
       }
+      
+      debugLog('PaywallScreen marking onboarding complete for user:', currentUserId);
       
       // Set flag in AsyncStorage
       await AsyncStorage.setItem('onboardingComplete', 'true');
@@ -140,13 +150,13 @@ export default function PaywallScreen({ navigation, route }) {
       if (error) {
         console.error('Error marking onboarding as complete in Supabase:', error);
       } else {
-        debugLog('Successfully marked onboarding as complete in Supabase');
+        debugLog('✅ PaywallScreen successfully marked onboarding as complete in Supabase');
       }
       
       // Also try with the updateProfile function from auth context
       try {
         await updateProfile({ onboarding_complete: true });
-        debugLog('Successfully marked onboarding as complete via updateProfile');
+        debugLog('✅ PaywallScreen successfully marked onboarding as complete via updateProfile');
       } catch (err) {
         console.error('Error in updateProfile:', err);
       }
@@ -154,12 +164,12 @@ export default function PaywallScreen({ navigation, route }) {
       // Force refresh auth session to ensure the new onboarding state is picked up
       try {
         await supabase.auth.refreshSession();
-        debugLog('Refreshed auth session');
+        debugLog('✅ PaywallScreen refreshed auth session');
       } catch (refreshErr) {
         console.error('Error refreshing auth session:', refreshErr);
       }
     } catch (err) {
-      console.error('Error in finalizeOnboarding:', err);
+      console.error('Error in PaywallScreen finalizeOnboarding:', err);
     }
   };
 
@@ -337,8 +347,10 @@ export default function PaywallScreen({ navigation, route }) {
   const handleSubscribe = async () => {
     setLoading(true);
     
-    // Make sure onboarding is marked as complete before proceeding
-    await finalizeOnboarding();
+    // Only mark onboarding as complete if we're in the onboarding flow
+    if (continueOnboarding || fromVideoReview) {
+      await finalizeOnboarding();
+    }
     
     // Simulate subscription process
     setTimeout(() => {
@@ -354,8 +366,10 @@ export default function PaywallScreen({ navigation, route }) {
   
   // Handle continue with free version
   const handleContinueFree = async () => {
-    // Make sure onboarding is marked as complete before proceeding
-    await finalizeOnboarding();
+    // Only mark onboarding as complete if we're in the onboarding flow
+    if (continueOnboarding || fromVideoReview) {
+      await finalizeOnboarding();
+    }
     
     // Navigate to main app
     navigation.reset({
@@ -522,9 +536,11 @@ export default function PaywallScreen({ navigation, route }) {
               }
             ]}
           >
-            {videoLogged 
-              ? `Great job analyzing your ${videoLogged.exercise || 'lift'}!` 
-              : 'Join thousands of athletes improving their form with AI'}
+            {videoLogged && fromVideoReview
+              ? `Great job analyzing your ${videoLogged.exercise || 'lift'}! Now unlock your full potential.` 
+              : videoLogged 
+                ? `Great job analyzing your ${videoLogged.exercise || 'lift'}!`
+                : 'Join thousands of athletes improving their form with AI'}
           </Animated.Text>
           
           {/* Pricing Plans */}

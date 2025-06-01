@@ -173,16 +173,8 @@ async def feedback_upload(
                 "error_type": "invalid_feedback_structure"
             }
 
-        if feedback.get('form_rating', 0) == 0:
-            logger.warning("Feedback generation returned with form_rating of 0, indicating an error")
-            if "configuration error" in feedback.get('summary', '').lower() or "technical issue" in str(feedback.get('observations', [])).lower():
-                return {
-                    "success": False,
-                    "feedback": feedback,
-                    "error_type": "feedback_generation_error",
-                    "error": "Failed to generate proper coaching feedback"
-                }
-
+        # Always return the feedback - even if it's an error message for the user
+        # The frontend will handle displaying error feedback gracefully
         logger.info("Coaching feedback generated successfully")
         logger.info(f"Form rating: {feedback.get('form_rating')}")
         logger.info(f"RPE: {feedback.get('rpe')}, TUT: {feedback.get('total_tut')}")

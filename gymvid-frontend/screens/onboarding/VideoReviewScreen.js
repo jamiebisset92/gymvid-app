@@ -907,6 +907,7 @@ export default function VideoReviewScreen({ navigation, route }) {
     
     // Set up a focus listener for when returning to this screen
     const unsubFocus = navigation.addListener('focus', () => {
+      debugLog('🎯 VideoReviewScreen gained focus');
       // Force dismiss keyboard when screen comes into focus
       Keyboard.dismiss();
       
@@ -922,6 +923,7 @@ export default function VideoReviewScreen({ navigation, route }) {
     });
     
     return () => {
+      debugLog('🎯 VideoReviewScreen cleanup - removing focus listener');
       unsubFocus();
       // Stop video playback when leaving the screen
       if (videoRef.current) {
@@ -962,25 +964,41 @@ export default function VideoReviewScreen({ navigation, route }) {
     // Show loading state
     setLoading(true);
     
-    // If this is part of the onboarding flow, mark onboarding as complete NOW
-    // This is the final step where we should set onboarding_complete to true
-    if (continueOnboarding) {
-      debugLog('This is part of onboarding flow - marking onboarding as complete');
-      await markOnboardingComplete();
-    }
+    // DON'T mark onboarding as complete yet - let PaywallScreen handle that
+    // The paywall should be the final step before completing onboarding
+    debugLog('🚀 LOG LIFT BUTTON PRESSED - navigating to PaywallScreen');
+    debugLog('VideoReviewScreen navigation params:', { 
+      continueOnboarding, 
+      videoUri, 
+      exerciseName, 
+      weight, 
+      userId 
+    });
     
     // Simulate processing the video and logging the lift
     setTimeout(() => {
       setLoading(false);
       
-      // Navigate to PaywallScreen
+      // Navigate to PaywallScreen - this is the next step in onboarding
+      debugLog('🎯 VideoReviewScreen navigating to Paywall with params:', {
+        videoLogged: {
+          videoUri,
+          exercise: exerciseName || 'Unknown Exercise',
+          weight: Number(weight)
+        },
+        continueOnboarding: continueOnboarding,
+        fromVideoReview: true,
+        userId: userId
+      });
+      
       navigation.navigate('Paywall', {
         videoLogged: {
           videoUri,
           exercise: exerciseName || 'Unknown Exercise',
           weight: Number(weight)
         },
-        onboardingComplete: true, // Mark as complete since we've finished onboarding
+        continueOnboarding: continueOnboarding, // Pass through the onboarding flag
+        fromVideoReview: true, // Flag to indicate we came from video review
         userId: userId
       });
     }, 1500);
@@ -1770,15 +1788,8 @@ export default function VideoReviewScreen({ navigation, route }) {
         const data = await response.json();
         debugLog('✅ Coaching feedback received:', data);
         
-        if (!data.success) {
-          // If the backend explicitly says it failed, throw an error
-          if (data.error_type === 'feedback_generation_error') {
-            throw new Error(data.error || 'Failed to generate coaching feedback');
-          } else {
-            throw new Error(data.error || 'Failed to get coaching feedback');
-          }
-        }
-
+        // Always process the feedback if we got a response
+        // Even error feedback should be shown to the user gracefully
         setFeedbackLoading(false);
         
         // Structure the feedback data with the specified fields
@@ -1790,11 +1801,9 @@ export default function VideoReviewScreen({ navigation, route }) {
           ...data.feedback
         };
         
-        // Check if this is an error feedback (form_rating of 0)
+        // Log if this is error feedback but still show it to the user
         if (feedbackResponse.form_rating === 0) {
-          debugLog('⚠️ Received error feedback with form_rating 0');
-          // Still show the feedback modal with the error message
-          // This allows users to see what went wrong
+          debugLog('⚠️ Received error feedback with form_rating 0 - showing to user');
         }
         
         setFeedbackData(feedbackResponse);
