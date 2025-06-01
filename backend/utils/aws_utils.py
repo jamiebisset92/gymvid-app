@@ -2,6 +2,7 @@ import boto3
 import os
 import subprocess
 from botocore.exceptions import BotoCoreError, ClientError
+import logging
 
 # Load environment variables
 AWS_REGION = os.getenv("AWS_REGION")
@@ -19,12 +20,19 @@ def upload_file_to_s3(local_path, s3_key):
     """
     Uploads a file to S3 and returns the URL.
     """
+    logger = logging.getLogger(__name__)
+    
     try:
         if not S3_BUCKET:
             raise ValueError("S3_BUCKET_NAME environment variable not set")
         if not AWS_REGION:
             raise ValueError("AWS_REGION environment variable not set")
+        if not os.path.exists(local_path):
+            raise FileNotFoundError(f"Local file does not exist: {local_path}")
             
+        file_size = os.path.getsize(local_path)
+        logger.info(f"🔄 Attempting to upload {local_path} to s3://{S3_BUCKET}/{s3_key}")
+        logger.info(f"File size: {file_size} bytes")
         print(f"🔄 Attempting to upload {local_path} to s3://{S3_BUCKET}/{s3_key}")
         
         s3.upload_file(
@@ -35,14 +43,19 @@ def upload_file_to_s3(local_path, s3_key):
         
         # Return the S3 URL
         s3_url = f"https://{S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
+        logger.info(f"✅ Successfully uploaded to {s3_url}")
         print(f"✅ Uploaded to {s3_url}")
         return s3_url
     except (BotoCoreError, ClientError) as e:
-        print(f"❌ S3 Upload failed: {e}")
-        raise e
+        error_msg = f"S3 Upload failed (AWS Error): {e}"
+        logger.error(f"❌ {error_msg}")
+        print(f"❌ {error_msg}")
+        raise Exception(error_msg)
     except Exception as e:
-        print(f"❌ Unexpected error during S3 upload: {e}")
-        raise e
+        error_msg = f"Unexpected error during S3 upload: {e}"
+        logger.error(f"❌ {error_msg}")
+        print(f"❌ {error_msg}")
+        raise Exception(error_msg)
 
 def download_file_from_s3(s3_key, local_path):
     """
