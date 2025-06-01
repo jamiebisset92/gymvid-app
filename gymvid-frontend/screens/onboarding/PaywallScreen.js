@@ -18,8 +18,6 @@ import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../config/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 
 const debugLog = (...args) => {
   if (__DEV__) {
@@ -46,7 +44,7 @@ export default function PaywallScreen({ navigation, route }) {
   });
   
   const [loading, setLoading] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState('monthly');
+  const [selectedPlan, setSelectedPlan] = useState('annual');
   const isFocused = useIsFocused();
   const { updateProfile } = useAuth();
   
@@ -56,22 +54,6 @@ export default function PaywallScreen({ navigation, route }) {
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-  const titleAnim = useRef(new Animated.Value(0)).current;
-  const contentAnim = useRef(new Animated.Value(0)).current;
-  const heroScaleAnim = useRef(new Animated.Value(0.8)).current;
-  const heroRotateAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
-  const checkmarkScale = useRef(new Animated.Value(0)).current;
-  const planScaleMonthly = useRef(new Animated.Value(1)).current;
-  const planScaleYearly = useRef(new Animated.Value(1)).current;
-  
-  const featureItemAnims = [
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current
-  ];
 
   // Function to get current user ID
   const getCurrentUserId = async () => {
@@ -181,66 +163,11 @@ export default function PaywallScreen({ navigation, route }) {
     }
   }, [isFocused, updateProgress]);
 
-  // Start pulse animation for CTA button
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 1000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, []);
-
-  // Start shimmer animation
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(shimmerAnim, {
-        toValue: 1,
-        duration: 2000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-
   // Run entrance animations
   useEffect(() => {
     const animationSequence = [
       // Fade in the entire view first
       Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      
-      // Hero animation with rotation
-      Animated.parallel([
-        Animated.spring(heroScaleAnim, {
-          toValue: 1,
-          tension: 50,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-        Animated.timing(heroRotateAnim, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.out(Easing.back(1.5)),
-          useNativeDriver: true,
-        }),
-      ]),
-      
-      // Fade in the title
-      Animated.timing(titleAnim, {
         toValue: 1,
         duration: 400,
         useNativeDriver: true,
@@ -253,32 +180,6 @@ export default function PaywallScreen({ navigation, route }) {
         friction: 7,
         useNativeDriver: true,
       }),
-      
-      // Fade in content
-      Animated.timing(contentAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      
-      // Staggered feature items
-      ...featureItemAnims.map((anim, index) => 
-        Animated.timing(anim, {
-          toValue: 1,
-          duration: 300,
-          delay: 100 + (index * 100),
-          useNativeDriver: true,
-        })
-      ),
-      
-      // Checkmark animation
-      Animated.spring(checkmarkScale, {
-        toValue: 1,
-        tension: 100,
-        friction: 8,
-        delay: 500,
-        useNativeDriver: true,
-      }),
     ];
     
     // Start the animation sequence
@@ -289,12 +190,6 @@ export default function PaywallScreen({ navigation, route }) {
       // Reset animations
       fadeAnim.setValue(0);
       slideAnim.setValue(30);
-      titleAnim.setValue(0);
-      contentAnim.setValue(0);
-      heroScaleAnim.setValue(0.8);
-      heroRotateAnim.setValue(0);
-      checkmarkScale.setValue(0);
-      featureItemAnims.forEach(anim => anim.setValue(0));
       
       // Restart the animation sequence
       Animated.parallel(animationSequence).start();
@@ -308,39 +203,6 @@ export default function PaywallScreen({ navigation, route }) {
   // Handle plan selection
   const handlePlanSelect = (plan) => {
     setSelectedPlan(plan);
-    
-    // Animate the selection
-    if (plan === 'monthly') {
-      Animated.parallel([
-        Animated.spring(planScaleMonthly, {
-          toValue: 1.05,
-          tension: 100,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-        Animated.spring(planScaleYearly, {
-          toValue: 1,
-          tension: 100,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.spring(planScaleYearly, {
-          toValue: 1.05,
-          tension: 100,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-        Animated.spring(planScaleMonthly, {
-          toValue: 1,
-          tension: 100,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
   };
 
   // Handle subscription button press
@@ -378,77 +240,13 @@ export default function PaywallScreen({ navigation, route }) {
     });
   };
 
-  // Feature item component with animation
-  const FeatureItem = ({ icon, title, description, anim, iconColor = colors.primary }) => (
-    <Animated.View 
-      style={[
-        styles.featureItem,
-        {
-          opacity: anim,
-          transform: [
-            { 
-              translateX: anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [20, 0],
-                extrapolate: 'clamp'
-              })
-            },
-            {
-              scale: anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.95, 1],
-                extrapolate: 'clamp'
-              })
-            }
-          ]
-        }
-      ]}
-    >
-      <View style={[styles.featureIconContainer, { backgroundColor: iconColor + '15' }]}>
-        <Ionicons name={icon} size={24} color={iconColor} />
-      </View>
-      <View style={styles.featureContent}>
-        <Text style={styles.featureTitle}>{title}</Text>
-        <Text style={styles.featureDescription}>{description}</Text>
-      </View>
-    </Animated.View>
-  );
+  // Get user's first name for personalization
+  const getUserFirstName = () => {
+    // For now, return a default. In production, you'd get this from user profile
+    return "Champion";
+  };
 
-  // Plan card component
-  const PlanCard = ({ plan, price, period, savings, isSelected, scale }) => (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <TouchableOpacity
-        style={[
-          styles.planCard,
-          isSelected && styles.planCardSelected
-        ]}
-        onPress={() => handlePlanSelect(plan)}
-        activeOpacity={0.8}
-      >
-        {savings && (
-          <View style={styles.savingsBadge}>
-            <Text style={styles.savingsText}>{savings}</Text>
-          </View>
-        )}
-        <View style={styles.planHeader}>
-          <View style={[styles.radioButton, isSelected && styles.radioButtonSelected]}>
-            {isSelected && (
-              <Animated.View style={{ transform: [{ scale: checkmarkScale }] }}>
-                <Ionicons name="checkmark" size={16} color={colors.white} />
-              </Animated.View>
-            )}
-          </View>
-          <Text style={[styles.planTitle, isSelected && styles.planTitleSelected]}>
-            {plan === 'monthly' ? 'Monthly' : 'Annual'}
-          </Text>
-        </View>
-        <View style={styles.planPricing}>
-          <Text style={[styles.planPrice, isSelected && styles.planPriceSelected]}>{price}</Text>
-          <Text style={[styles.planPeriod, isSelected && styles.planPeriodSelected]}>/{period}</Text>
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
+  const firstName = getUserFirstName();
 
   return (
     <Animated.View 
@@ -456,229 +254,131 @@ export default function PaywallScreen({ navigation, route }) {
         styles.container, 
         { 
           opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }]
         }
       ]}
     >
-      <LinearGradient
-        colors={['#FFFFFF', '#F8F9FF', '#FFFFFF']}
-        style={styles.gradientBackground}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
-      
       <SafeAreaView style={styles.safeContainer}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>GymVid</Text>
+        </View>
+
         <ScrollView 
           style={styles.scrollView}
           contentContainerStyle={styles.scrollViewContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Hero Section */}
-          <Animated.View 
-            style={[
-              styles.heroContainer,
-              {
-                transform: [
-                  { scale: heroScaleAnim },
-                  {
-                    rotate: heroRotateAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['0deg', '360deg']
-                    })
-                  }
-                ]
-              }
-            ]}
-          >
-            <LinearGradient
-              colors={[colors.primary, '#8B5CF6']}
-              style={styles.heroGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Ionicons name="trophy" size={60} color={colors.white} />
-            </LinearGradient>
-          </Animated.View>
-          
-          <Animated.Text
-            style={[
-              styles.titleText,
-              { 
-                opacity: titleAnim,
-                transform: [
-                  { 
-                    scale: titleAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.96, 1],
-                      extrapolate: 'clamp'
-                    })
-                  }
-                ] 
-              }
-            ]}
-          >
-            Unlock Your Full Potential
-          </Animated.Text>
-          
-          <Animated.Text
-            style={[
-              styles.subtitleText,
-              { 
-                opacity: titleAnim,
-                transform: [
-                  { 
-                    translateY: titleAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [10, 0],
-                      extrapolate: 'clamp'
-                    })
-                  }
-                ] 
-              }
-            ]}
-          >
-            {videoLogged && fromVideoReview
-              ? `Great job analyzing your ${videoLogged.exercise || 'lift'}! Now unlock your full potential.` 
-              : videoLogged 
-                ? `Great job analyzing your ${videoLogged.exercise || 'lift'}!`
-                : 'Join thousands of athletes improving their form with AI'}
-          </Animated.Text>
+          {/* Main Title */}
+          <Text style={styles.mainTitle}>
+            Unlock your full potential today, {firstName}!
+          </Text>
           
           {/* Pricing Plans */}
-          <Animated.View
-            style={[
-              styles.plansContainer,
-              {
-                opacity: contentAnim,
-                transform: [
-                  {
-                    translateY: contentAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [20, 0],
-                      extrapolate: 'clamp'
-                    })
-                  }
-                ]
-              }
-            ]}
-          >
-            <PlanCard
-              plan="monthly"
-              price="$9.99"
-              period="month"
-              isSelected={selectedPlan === 'monthly'}
-              scale={planScaleMonthly}
-            />
-            <PlanCard
-              plan="yearly"
-              price="$79.99"
-              period="year"
-              savings="Save 33%"
-              isSelected={selectedPlan === 'yearly'}
-              scale={planScaleYearly}
-            />
-          </Animated.View>
-          
-          {/* Features */}
-          <View style={styles.featuresContainer}>
-            <FeatureItem 
-              icon="analytics"
-              title="AI Form Analysis"
-              description="Get instant feedback on your technique"
-              anim={featureItemAnims[0]}
-              iconColor="#6366F1"
-            />
-            
-            <FeatureItem 
-              icon="trending-up"
-              title="Progress Tracking"
-              description="Visualize your strength gains over time"
-              anim={featureItemAnims[1]}
-              iconColor="#10B981"
-            />
-            
-            <FeatureItem 
-              icon="videocam"
-              title="Unlimited Videos"
-              description="Analyze as many lifts as you want"
-              anim={featureItemAnims[2]}
-              iconColor="#F59E0B"
-            />
-            
-            <FeatureItem 
-              icon="shield-checkmark"
-              title="Secure Cloud Backup"
-              description="Never lose your workout history"
-              anim={featureItemAnims[3]}
-              iconColor="#3B82F6"
-            />
-          </View>
-          
-          {/* CTA Section */}
-          <Animated.View
-            style={[
-              styles.ctaContainer,
-              {
-                opacity: contentAnim,
-                transform: [
-                  {
-                    translateY: contentAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [20, 0],
-                      extrapolate: 'clamp'
-                    })
-                  }
-                ]
-              }
-            ]}
-          >
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <TouchableOpacity 
-                style={styles.subscribeButton}
-                onPress={handleSubscribe}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={[colors.primary, '#8B5CF6']}
-                  style={styles.subscribeButtonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Animated.View
-                    style={[
-                      styles.shimmerOverlay,
-                      {
-                        transform: [
-                          {
-                            translateX: shimmerAnim.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: [-SCREEN_WIDTH, SCREEN_WIDTH]
-                            })
-                          }
-                        ]
-                      }
-                    ]}
-                  />
-                  <Text style={styles.subscribeButtonText}>
-                    Start Free Trial
-                  </Text>
-                  <Ionicons name="arrow-forward" size={20} color={colors.white} style={styles.buttonIcon} />
-                </LinearGradient>
-              </TouchableOpacity>
-            </Animated.View>
-            
-            <TouchableOpacity 
-              style={styles.freeButton}
-              onPress={handleContinueFree}
+          <View style={styles.plansContainer}>
+            {/* Annual Plan - Featured */}
+            <TouchableOpacity
+              style={[
+                styles.planCard,
+                styles.featuredPlanCard,
+                selectedPlan === 'annual' && styles.selectedPlanCard
+              ]}
+              onPress={() => handlePlanSelect('annual')}
               activeOpacity={0.8}
             >
-              <Text style={styles.freeButtonText}>Maybe later</Text>
+              <View style={styles.freeBadge}>
+                <Text style={styles.freeBadgeText}>3 months free</Text>
+              </View>
+              
+              <View style={styles.planHeader}>
+                <Text style={styles.planTitle}>Annual Plan</Text>
+                <Text style={styles.planPrice}>$8.33/mo</Text>
+              </View>
+              <Text style={styles.planBilling}>Billed annually</Text>
+              <Text style={styles.planTotalPrice}>$99.99/yr</Text>
+              
+              <View style={styles.featuresContainer}>
+                <View style={styles.featureRow}>
+                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                  <Text style={styles.featureText}>Most popular choice</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                  <Text style={styles.featureText}>Unlimited AI form analysis</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                  <Text style={styles.featureText}>Advanced progress tracking</Text>
+                </View>
+              </View>
             </TouchableOpacity>
-            
-            <Text style={styles.termsText}>
-              7-day free trial • Cancel anytime
-            </Text>
-          </Animated.View>
+
+            {/* Monthly Plan */}
+            <TouchableOpacity
+              style={[
+                styles.planCard,
+                selectedPlan === 'monthly' && styles.selectedPlanCard
+              ]}
+              onPress={() => handlePlanSelect('monthly')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.planHeader}>
+                <Text style={styles.planTitle}>Monthly Plan</Text>
+                <Text style={styles.planPrice}>$12.99/mo</Text>
+              </View>
+              <Text style={styles.planBilling}>Billed monthly</Text>
+              
+              <Text style={styles.additionalNote}>
+                + Premium workout templates
+              </Text>
+            </TouchableOpacity>
+
+            {/* Free Trial */}
+            <TouchableOpacity
+              style={[
+                styles.planCard,
+                selectedPlan === 'trial' && styles.selectedPlanCard
+              ]}
+              onPress={() => handlePlanSelect('trial')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.planHeader}>
+                <Text style={styles.planTitle}>7 day Trial</Text>
+                <Text style={styles.planPrice}>$0</Text>
+              </View>
+              <Text style={styles.planBilling}>
+                $99.99 billed annually after trial ends
+              </Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
+
+        {/* Bottom Section */}
+        <View style={styles.bottomSection}>
+          {/* CTA Button */}
+          <TouchableOpacity 
+            style={styles.ctaButton}
+            onPress={handleSubscribe}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.ctaButtonText}>
+              {selectedPlan === 'annual' ? 'Continue with Annual Plan' : 
+               selectedPlan === 'monthly' ? 'Continue with Monthly Plan' :
+               'Start Free Trial'}
+            </Text>
+          </TouchableOpacity>
+          
+          {/* Footer Links */}
+          <View style={styles.footerLinks}>
+            <TouchableOpacity onPress={handleContinueFree}>
+              <Text style={styles.footerLinkText}>Maybe later</Text>
+            </TouchableOpacity>
+            <Text style={styles.footerSeparator}>or</Text>
+            <TouchableOpacity>
+              <Text style={styles.footerLinkText}>Restore purchase</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </SafeAreaView>
     </Animated.View>
   );
@@ -687,243 +387,158 @@ export default function PaywallScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  gradientBackground: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    backgroundColor: '#F8F9FA',
   },
   safeContainer: {
     flex: 1,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: -0.5,
   },
   scrollView: {
     flex: 1,
   },
   scrollViewContent: {
-    flexGrow: 1,
-    paddingBottom: 40,
     paddingHorizontal: 20,
+    paddingBottom: 20,
   },
-  heroContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 40,
-    marginBottom: 30,
-  },
-  heroGradient: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  titleText: {
-    fontSize: 32,
+  mainTitle: {
+    fontSize: 28,
     fontWeight: '700',
-    marginBottom: 10,
-    textAlign: 'center',
-    letterSpacing: -0.5,
     color: '#1A1A1A',
-    width: '100%',
-  },
-  subtitleText: {
-    fontSize: 16,
-    fontWeight: '400',
-    marginBottom: 30,
     textAlign: 'center',
-    color: colors.gray,
-    width: '100%',
-    lineHeight: 22,
-  },
-  illustrationContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 30,
-  },
-  featuresContainer: {
-    marginBottom: 30,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  featureIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  featureContent: {
-    flex: 1,
-  },
-  featureTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.darkGray,
-    marginBottom: 4,
-  },
-  featureDescription: {
-    fontSize: 14,
-    color: colors.gray,
-    lineHeight: 20,
-  },
-  pricingContainer: {
-    marginTop: 20,
-  },
-  subscribeButton: {
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  subscribeButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 56,
-    paddingHorizontal: 24,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  shimmerOverlay: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    transform: [{ skewX: '-20deg' }],
-  },
-  subscribeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-  buttonIcon: {
-    marginLeft: 8,
-  },
-  freeButton: {
-    backgroundColor: 'transparent',
-    borderRadius: 16,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  freeButtonText: {
-    color: colors.gray,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  termsText: {
-    fontSize: 12,
-    color: colors.gray,
-    textAlign: 'center',
-    lineHeight: 18,
+    marginBottom: 40,
+    lineHeight: 34,
+    letterSpacing: -0.5,
   },
   plansContainer: {
-    marginBottom: 30,
+    gap: 16,
   },
-  ctaContainer: {
-    marginTop: 20,
+  planCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    position: 'relative',
   },
-  savingsBadge: {
+  featuredPlanCard: {
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  selectedPlanCard: {
+    borderColor: colors.primary,
+  },
+  freeBadge: {
     position: 'absolute',
     top: -8,
     right: 16,
     backgroundColor: '#10B981',
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
-  savingsText: {
+  freeBadgeText: {
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
-    color: colors.white,
-  },
-  planCard: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: colors.lightGray,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    position: 'relative',
-  },
-  planCardSelected: {
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
   },
   planHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  radioButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: colors.lightGray,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.white,
-  },
-  radioButtonSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
+    marginBottom: 4,
   },
   planTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.darkGray,
-    marginLeft: 12,
-  },
-  planTitleSelected: {
-    color: colors.darkGray,
-  },
-  planPricing: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginLeft: 36,
+    color: '#1A1A1A',
   },
   planPrice: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '700',
-    color: colors.darkGray,
+    color: '#1A1A1A',
   },
-  planPriceSelected: {
-    color: colors.darkGray,
+  planBilling: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 8,
   },
-  planPeriod: {
+  planTotalPrice: {
     fontSize: 16,
-    color: colors.gray,
-    marginLeft: 4,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 16,
   },
-  planPeriodSelected: {
-    color: colors.gray,
+  additionalNote: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 8,
+  },
+  featuresContainer: {
+    gap: 8,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  featureText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  bottomSection: {
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 30,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  ctaButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  ctaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  footerLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  footerLinkText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  footerSeparator: {
+    fontSize: 14,
+    color: '#9CA3AF',
   },
 }); 

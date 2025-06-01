@@ -3,17 +3,13 @@ import cv2
 import numpy as np
 import subprocess
 import logging
+import shutil
 
 logger = logging.getLogger(__name__)
 
-# Mounted disk path for performance and persistence
 BASE_DISK_PATH = "/mnt/data"
 
 def get_video_rotation(video_path):
-    """
-    Uses ffmpeg to detect rotation metadata (e.g., for iPhone videos).
-    Returns rotation angle as int (0, 90, 180, 270).
-    """
     try:
         cmd = [
             "ffprobe", "-v", "error",
@@ -37,21 +33,20 @@ def rotate_frame_if_needed(frame, rotation):
         return cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
     return frame
 
-def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = os.path.join(BASE_DISK_PATH, "keyframe_collages")) -> list:
+def export_keyframe_collages(video_path: str, rep_data: list, user_id: str = "anonymous", output_dir: str = os.path.join(BASE_DISK_PATH, "keyframe_collages")) -> list:
     """
-    Extracts and saves keyframe collages for exercise prediction and coaching feedback.
+    Extracts and saves keyframe collages to local disk and returns file paths.
 
     Rules:
     - 1–4 reps: return 1 collage of all reps
-    - 5–7 reps: return 2 collages (first 1 rep + final 4 reps)
-    - 8+ reps: return 2 collages (first 4 reps + last 4 reps)
+    - 5–7 reps: 2 collages (first 1 rep + final 4 reps)
+    - 8+ reps: 2 collages (first 4 reps + last 4 reps)
 
     Returns:
-        List of saved collage file paths.
+        List of local collage image file paths
     """
-    # Clean the folder before saving new files
+    # Clean output dir
     if os.path.exists(output_dir):
-        import shutil
         shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
@@ -60,25 +55,20 @@ def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = 
         raise ValueError(f"Unable to open video: {video_path}")
 
     rotation = get_video_rotation(video_path)
-
     vid_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     vid_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    if vid_height > vid_width:
-        frame_size = (216, 384)  # Portrait
-    else:
-        frame_size = (384, 216)  # Landscape
+    frame_size = (216, 384) if vid_height > vid_width else (384, 216)
 
     total_reps = len(rep_data)
     collage_paths = []
 
     def build_collage(rep_slice, suffix):
         collage_height = frame_size[1] * len(rep_slice)
-        collage_width = frame_size[0] * 3  # 3 phases per rep
+        collage_width = frame_size[0] * 3
         collage = np.zeros((collage_height, collage_width, 3), dtype=np.uint8)
 
         for i, rep in enumerate(rep_slice):
-            for j, phase in ["start", "peak", "stop"]:
+            for j, phase in enumerate(["start", "peak", "stop"]):
                 frame_no = rep.get(f"{phase}_frame")
                 if frame_no is not None:
                     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
@@ -93,12 +83,12 @@ def export_keyframe_collages(video_path: str, rep_data: list, output_dir: str = 
                     collage[y:y + frame_size[1], x:x + frame_size[0]] = resized
 
         filename = f"collage_{suffix}.jpg"
-        path = os.path.join(output_dir, filename)
-        cv2.imwrite(path, collage)
-        collage_paths.append(path)
-        logger.info(f"Saved collage: {path}")
+        local_path = os.path.join(output_dir, filename)
+        cv2.imwrite(local_path, collage)
+        logger.info(f"✅ Saved collage locally: {local_path}")
+        collage_paths.append(local_path)
 
-    # Apply logic based on total rep count
+    # Logic based on rep count
     if total_reps <= 4:
         build_collage(rep_data, "full")
     elif total_reps <= 7:
