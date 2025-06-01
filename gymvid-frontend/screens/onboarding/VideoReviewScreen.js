@@ -76,6 +76,7 @@ const GuidedPopup = ({
   verticalOffset = 0,
   iconType = 'arrow'
 }) => {
+  // ✅ ALL HOOKS MUST BE AT THE TOP - Rules of Hooks
   const animValue = useRef(new Animated.Value(0)).current;
   const spotlightScale = useRef(new Animated.Value(0.8)).current;
   const popupScale = useRef(new Animated.Value(0.9)).current;
@@ -92,6 +93,7 @@ const GuidedPopup = ({
   const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0, width: 0 });
   const [arrowStyle, setArrowStyle] = useState({});
   
+  // Constants can be here after hooks
   const ARROW_SIZE = 10;
   const POPUP_MARGIN_FROM_TARGET = 15;
   const SCREEN_PADDING = 15;
@@ -100,22 +102,7 @@ const GuidedPopup = ({
   const HIGHLIGHT_VERTICAL_OFFSET = -15;
   const screenDims = Dimensions.get('window');
 
-  debugLog(`GuidedPopup RENDER: text="${text}" visible_PROP=${visible} targetLayout_EXISTS=${!!targetLayout} animValue=${animValue._value}`);
-
-  // Special debugging for step 3 (AI coaching tooltip)
-  if (text && text.includes('AI will analyze your technique')) {
-    debugLog('🎯 THIRD TOOLTIP DEBUG - Props received:', {
-      visible,
-      text,
-      targetLayout: !!targetLayout,
-      targetLayoutDetails: targetLayout,
-      highlightLayout: !!highlightLayout,
-      animValue: animValue._value,
-      iconType,
-      showIconButton
-    });
-  }
-
+  // ✅ ALL useEffect hooks must be here too!
   // Start glow pulse animation
   useEffect(() => {
     if (visible) {
@@ -143,9 +130,9 @@ const GuidedPopup = ({
   }, [visible]);
 
   useEffect(() => {
-    debugLog(`GuidedPopup useEffect: text="${text}" visible_PROP=${visible} targetLayout_EXISTS=${!!targetLayout}`);
+    // debugLog(`GuidedPopup useEffect: text="${text}" visible_PROP=${visible} targetLayout_EXISTS=${!!targetLayout}`);
     if (visible && targetLayout) {
-      debugLog(`GuidedPopup useEffect INSIDE IF: text="${text}" - Calculating position...`);
+      // debugLog(`GuidedPopup useEffect INSIDE IF: text="${text}" - Calculating position...`);
       const popupWidth = screenDims.width - (2 * SCREEN_PADDING);
       const estimatedPopupHeight = text.length > 70 ? (showIconButton ? 70 : 100) : (showIconButton ? 55 : 85);
       
@@ -218,11 +205,18 @@ const GuidedPopup = ({
             useNativeDriver: true,
           }),
         ]),
+        // Stroke opacity animation
+        Animated.timing(mainStrokeOpacity, {
+          toValue: 1,
+          duration: 400,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
       ]).start(() => {
-        debugLog(`GuidedPopup ANIMATION IN COMPLETE for text="${text}"`);
+        // debugLog(`GuidedPopup ANIMATION IN COMPLETE for text="${text}"`);
       });
     } else {
-      debugLog(`GuidedPopup useEffect ELSE: text="${text}" - Animating out or not showing (visible=${visible}, targetLayout=${!!targetLayout}).`);
+      // debugLog(`GuidedPopup useEffect ELSE: text="${text}" - Animating out or not showing (visible=${visible}, targetLayout=${!!targetLayout}).`);
       // Enhanced exit animation with improved timing and easing
       Animated.timing(mainStrokeOpacity, {
         toValue: 0,
@@ -276,21 +270,18 @@ const GuidedPopup = ({
           useNativeDriver: true,
         }),
       ]).start(() => {
-         debugLog(`GuidedPopup ANIMATION OUT COMPLETE for text="${text}"`);
+         // debugLog(`GuidedPopup ANIMATION OUT COMPLETE for text="${text}"`);
       });
     }
   }, [visible, targetLayout, text, forcePositionBelow, screenDims, showIconButton, verticalOffset]);
 
-  if (!targetLayout && visible) { 
-      debugLog(`GuidedPopup PRE-RETURN: text="${text}" IS visible but targetLayout is MISSING. Returning null.`);
-      return null; 
-  }
-  
-  // Only render the modal if visible is true
-  if (!visible && animValue._value === 0) {
-    debugLog(`GuidedPopup OPTIMIZED RETURN: text="${text}" - Not visible and animation value is 0.`);
+  // Early return AFTER all hooks are defined
+  if (!visible || !targetLayout) {
     return null;
   }
+  
+  // Remove excessive debug logging
+  // debugLog(`GuidedPopup RENDER: text="${text}" visible_PROP=${visible} targetLayout_EXISTS=${!!targetLayout} animValue=${animValue._value}`);
 
   // Calculate expanded highlight area with padding AND vertical offset
   const expandedHighlight = highlightLayout ? {
@@ -514,7 +505,10 @@ export default function VideoReviewScreen({ navigation, route }) {
   const continueOnboarding = route.params?.continueOnboarding || false;
   const userId = route.params?.userId;
   
-  debugLog('VideoReviewScreen params:', { isDemo, fromGallery, continueOnboarding, userId });
+  // Only log params once on mount
+  useEffect(() => {
+    debugLog('VideoReviewScreen params:', { isDemo, fromGallery, continueOnboarding, userId });
+  }, []); // Empty dependency array to run only once
   
   const [weight, setWeight] = useState('');
   const [reps, setReps] = useState('');
@@ -548,9 +542,15 @@ export default function VideoReviewScreen({ navigation, route }) {
   const [isLoadingExercise, setIsLoadingExercise] = useState(false);
   const [isEditingExercise, setIsEditingExercise] = useState(false);
   const [tempExerciseName, setTempExerciseName] = useState('');
+  const [predictionDetails, setPredictionDetails] = useState(null); // Store prediction details from API
   
   // Add state for animated ellipsis
   const [ellipsisCount, setEllipsisCount] = useState(0);
+  
+  // State for smart abbreviation system and full exercise names
+  const [fullExerciseName, setFullExerciseName] = useState('');
+  const [displayExerciseName, setDisplayExerciseName] = useState('');
+  const [showInfoIcon, setShowInfoIcon] = useState(false);
   
   // Animation values for smooth data transitions
   const exerciseOpacity = useRef(new Animated.Value(0)).current;
@@ -567,6 +567,10 @@ export default function VideoReviewScreen({ navigation, route }) {
   const aiButtonOpacity = useRef(new Animated.Value(0)).current;
   const aiButtonScale = useRef(new Animated.Value(0.9)).current;
   const aiButtonTranslateY = useRef(new Animated.Value(10)).current;
+
+  // Add button press animations to match VideoPromptScreen.js
+  const [primaryButtonScale] = useState(new Animated.Value(1));
+  const [secondaryButtonScale] = useState(new Animated.Value(1));
 
   // State for tooltips/guided popups
   const [tooltipStep, setTooltipStep] = useState(0);
@@ -660,6 +664,45 @@ export default function VideoReviewScreen({ navigation, route }) {
       debugLog('🎯 Tooltip preferences cleared, tooltips will show again');
     } catch (e) {
       debugLog('Error clearing tooltip preferences:', e);
+    }
+  };
+  
+  // Development function to reset app state and test server connectivity - FOR TESTING ONLY
+  const resetAppStateAndTestServer = async () => {
+    if (__DEV__) {
+      try {
+        // Clear all cached feedback
+        setCachedFeedback({});
+        setCurrentVideoFeedbackKey(null);
+        setIsPreloadingFeedback(false);
+        
+        // Clear tooltip preferences
+        await clearTooltipPreferences();
+        
+        // Reset exercise states
+        setExerciseName('');
+        setFullExerciseName('');
+        setDisplayExerciseName('');
+        setShowInfoIcon(false);
+        setIsLoadingExercise(false);
+        setIsEditingExercise(false);
+        setIsSetCompleted(false);
+        
+        // Reset form
+        setWeight('');
+        setReps('');
+        
+        // Test server health
+        const serverHealthy = await checkServerHealth();
+        const healthMessage = serverHealthy ? 'Server is responsive ✅' : 'Server is unavailable ❌';
+        
+        debugLog('🔄 App state reset for testing');
+        debugLog('🌐 Server health:', healthMessage);
+        toast.success(`App state reset. ${healthMessage}`);
+      } catch (e) {
+        debugLog('Error resetting app state:', e);
+        toast.error('Error resetting app state');
+      }
     }
   };
   
@@ -943,10 +986,235 @@ export default function VideoReviewScreen({ navigation, route }) {
     }, 1500);
   };
 
-  // API function to predict exercise
-  const predictExercise = async (videoUri) => {
+  // Smart abbreviation system for exercise names
+  const ABBREVIATIONS = {
+    // Equipment
+    'Barbell': 'BB',
+    'Dumbbell': 'DB', 
+    'Dumbell': 'DB',
+    'Cable': 'Cbl',
+    'Machine': 'Mch',
+    'Kettlebell': 'KB',
+    'Resistance': 'Res',
+    'Band': 'Bd',
+    'Bodyweight': 'BW',
+    'Smith': 'Sm',
+    'Hammer': 'Hmr',
+    'Preacher': 'Prch',
+    
+    // Variations
+    'Romanian': 'Rom',
+    'Bulgarian': 'Bulg', 
+    'Sumo': 'Sumo',
+    'Conventional': 'Conv',
+    'Close-Grip': 'CG',
+    'Close Grip': 'CG',
+    'Wide-Grip': 'WG',
+    'Wide Grip': 'WG',
+    'Reverse': 'Rev',
+    'Overhead': 'OH',
+    'Underhand': 'UH',
+    'Overhand': 'OH',
+    'Single-Arm': 'SA',
+    'Single Arm': 'SA',
+    'Alternating': 'Alt',
+    'Incline': 'Inc',
+    'Decline': 'Dec',
+    'Deficit': 'Def',
+    'Paused': 'Psd',
+    'Tempo': 'Tmp',
+    'Eccentric': 'Ecc',
+    'Isometric': 'Iso',
+    'Explosive': 'Exp',
+    'Jump': 'Jmp',
+    'Plyometric': 'Plyo',
+    'Assisted': 'Ast',
+    'Unassisted': 'Unast',
+    'Lateral': 'Lat',
+    'Medial': 'Med',
+    'Front': 'Fr',
+    'Back': 'Bk',
+    'Side': 'Sd',
+    'Cross': 'X',
+    'High': 'Hi',
+    'Low': 'Lo',
+    'Mid': 'Mid',
+    'Upper': 'Up',
+    'Lower': 'Lwr',
+    'Inner': 'In',
+    'Outer': 'Out',
+    'Seated': 'Std',
+    'Standing': 'Stnd',
+    'Lying': 'Ly',
+    'Prone': 'Pr',
+    'Supine': 'Sup',
+    
+    // Common words
+    'Exercise': 'Ex',
+    'Workout': 'WO',
+    'Training': 'Tr',
+    'Strength': 'Str',
+    'Power': 'Pwr',
+    'Cardio': 'Card',
+    'Isolation': 'Iso',
+    'Compound': 'Comp',
+    'with': 'w/',
+    'and': '&',
+    'the': '',
+    'of': '',
+    'for': '',
+    'in': '',
+    'on': '',
+    'at': '',
+    'to': '',
+    'from': '',
+    'Chain': 'Chn',
+    'Chains': 'Chns',
+    'Weight': 'Wt',
+    'Plate': 'Pl',
+    'Plates': 'Pls'
+  };
+
+  const smartAbbreviate = (text) => {
+    if (!text || text.length <= 33) return text;
+    
+    let abbreviated = text;
+    
+    // Apply abbreviations
+    for (const [full, abbrev] of Object.entries(ABBREVIATIONS)) {
+      const regex = new RegExp(`\\b${full}\\b`, 'gi');
+      abbreviated = abbreviated.replace(regex, abbrev);
+    }
+    
+    // If still too long, truncate at word boundary
+    if (abbreviated.length > 33) {
+      const words = abbreviated.split(' ');
+      let truncated = '';
+      
+      for (let i = 0; i < words.length; i++) {
+        const testString = truncated + (truncated ? ' ' : '') + words[i];
+        if (testString.length <= 30) { // Leave room for "..."
+          truncated = testString;
+        } else {
+          break;
+        }
+      }
+      
+      if (truncated !== abbreviated) {
+        abbreviated = truncated + '...';
+      }
+    }
+    
+    return abbreviated;
+  };
+
+  const buildFullExerciseName = (data) => {
+    debugLog('🔍 Building exercise name from data:', data);
+    
+    // Handle different response formats - backend returns exercise_name as the movement
+    const equipment = data.equipment || data.Equipment || '';
+    const variation = data.variation || data.Variation || '';
+    const exerciseName = data.exercise_name || data.Exercise_name || data.exercise || data.predicted_exercise || data.movement || '';
+    
+    debugLog('🔍 Extracted components:', { equipment, variation, exerciseName });
+    
+    // Filter out "Unknown", "None", null, or empty values
+    const components = [equipment, variation, exerciseName]
+      .filter(component => 
+        component && 
+        component.trim() !== '' && 
+        component.toLowerCase() !== 'unknown' && 
+        component.toLowerCase() !== 'none'
+      );
+    
+    debugLog('🔍 Filtered components:', components);
+    
+    if (components.length === 0) {
+      return 'Unable to Detect: Enter Manually';
+    }
+    
+    // Join components with spaces for "Equipment Variation Movement" format
+    const fullName = components.join(' ');
+    debugLog('🔍 Full exercise name:', fullName);
+    
+    return fullName;
+  };
+
+  const processExerciseName = (fullName) => {
+    debugLog('🔍 Processing exercise name:', fullName);
+    
+    // Handle special case
+    if (fullName === 'Unable to Detect: Enter Manually') {
+      setFullExerciseName(fullName);
+      setDisplayExerciseName('Tap to Enter Exercise');
+      setExerciseName('Tap to Enter Exercise');
+      setShowInfoIcon(false);
+      return 'Tap to Enter Exercise';
+    }
+    
+    // Create abbreviated version
+    const abbreviated = smartAbbreviate(fullName);
+    const isTruncated = abbreviated !== fullName;
+    
+    debugLog('🔍 Abbreviated name:', abbreviated, 'isTruncated:', isTruncated);
+    
+    // Update states
+    setFullExerciseName(fullName);
+    setDisplayExerciseName(abbreviated);
+    setExerciseName(abbreviated);
+    setShowInfoIcon(isTruncated);
+    
+    return abbreviated;
+  };
+
+  const handleExerciseNameTap = () => {
+    if (fullExerciseName && fullExerciseName !== displayExerciseName) {
+      toast.info(fullExerciseName);
+    }
+  };
+
+  // Function to check server health before making requests
+  const checkServerHealth = async () => {
     try {
-      debugLog('Predicting exercise for video:', videoUri);
+      debugLog('Checking server health...');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for health check
+      
+      const response = await fetch('https://gymvid-app.onrender.com/', {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      const isHealthy = response.ok;
+      debugLog('Server health check result:', isHealthy ? 'HEALTHY' : 'UNHEALTHY', 'Status:', response.status);
+      
+      return isHealthy;
+    } catch (error) {
+      debugLog('Server health check failed:', error.message);
+      return false;
+    }
+  };
+
+  // API function to predict exercise
+  const predictExercise = async (videoUri, retryCount = 0) => {
+    const MAX_RETRIES = 3; // Increased from 2
+    // Progressive timeout - longer for first attempt (cold start), shorter for retries
+    const TIMEOUT_MS = retryCount === 0 ? 45000 : 30000; // 45s first try, 30s for retries
+    
+    try {
+      debugLog('Predicting exercise for video:', videoUri, `(attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+      
+      // Show appropriate user feedback based on attempt
+      if (retryCount === 0) {
+        // First attempt - normal loading
+        debugLog('First attempt at exercise prediction');
+      } else if (retryCount === 1) {
+        toast.info('Server is starting up, please wait...');
+      } else if (retryCount === 2) {
+        toast.info('Almost there, trying one more time...');
+      }
       
       // Verify the video file exists
       const fileInfo = await FileSystem.getInfoAsync(videoUri);
@@ -954,6 +1222,14 @@ export default function VideoReviewScreen({ navigation, route }) {
         throw new Error('Video file not found at URI: ' + videoUri);
       }
       debugLog('Video file verified - Size:', fileInfo.size, 'URI:', fileInfo.uri);
+      
+      // Check file size - if too large, it might cause timeouts
+      const MAX_FILE_SIZE = 100 * 1024 * 1024; // Increased to 100MB
+      if (fileInfo.size > MAX_FILE_SIZE) {
+        console.warn('Video file is very large:', (fileInfo.size / 1024 / 1024).toFixed(2), 'MB');
+        toast.error('Video file is too large. Please use a shorter video.');
+        return 'Unable to Detect: Enter Manually';
+      }
       
       const formData = new FormData();
       
@@ -965,116 +1241,124 @@ export default function VideoReviewScreen({ navigation, route }) {
       
       formData.append('video', {
         uri: properUri,
+        name: 'workout_video.mp4',
         type: 'video/mp4',
-        name: 'video.mp4',
       });
 
       debugLog('FormData prepared with video URI:', properUri);
       debugLog('Making request to:', 'https://gymvid-app.onrender.com/quick_exercise_prediction');
 
-      // First, check if server is reachable
-      try {
-        debugLog('Checking server health...');
-        const healthCheck = await fetch('https://gymvid-app.onrender.com/', {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          },
-        });
-        debugLog('Server health check response:', healthCheck.status);
-      } catch (healthError) {
-        debugLog('Server appears to be unreachable:', healthError.message);
-        console.error('🔴 Backend server is not responding at https://gymvid-app.onrender.com/');
-        console.error('💡 Please ensure the backend is deployed and running');
-      }
+      // Create an AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        debugLog(`Request aborted after ${TIMEOUT_MS}ms timeout`);
+      }, TIMEOUT_MS);
 
-      // Try different approaches for better compatibility
-      let response;
-      
       try {
-        // Approach 1: Standard fetch with FormData
-        response = await fetch('https://gymvid-app.onrender.com/quick_exercise_prediction', {
+        const response = await fetch('https://gymvid-app.onrender.com/quick_exercise_prediction', {
           method: 'POST',
           body: formData,
           headers: {
             'Accept': 'application/json',
-            // Don't set Content-Type, let fetch set it with boundary for multipart
           },
+          signal: controller.signal,
         });
-      } catch (fetchError) {
-        debugLog('Standard fetch failed:', fetchError.message);
         
-        // Approach 2: Try with explicit multipart headers
-        try {
-          const formData2 = new FormData();
-          formData2.append('video', {
-            uri: properUri,
-            type: 'video/mp4',
-            name: 'video.mp4',
-          });
+        clearTimeout(timeoutId);
+        
+        debugLog('Response received - Status:', response.status, 'OK:', response.ok);
+        
+        if (!response.ok) {
+          // Handle different HTTP errors
+          if (response.status === 504 || response.status === 502) {
+            throw new Error('Gateway timeout - server is overloaded');
+          } else if (response.status === 503) {
+            throw new Error('Service unavailable - server is down');
+          } else if (response.status >= 500) {
+            throw new Error(`Server error (${response.status}) - please try again`);
+          }
           
-          response = await fetch('https://gymvid-app.onrender.com/quick_exercise_prediction', {
-            method: 'POST',
-            body: formData2,
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'multipart/form-data',
-            },
-          });
-        } catch (fetchError2) {
-          debugLog('Multipart fetch also failed:', fetchError2.message);
-          throw fetchError; // Throw original error
+          const errorText = await response.text();
+          debugLog('Error response body:', errorText);
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+
+        const data = await response.json();
+        debugLog('🔍 PREDICTION RESPONSE:', JSON.stringify(data, null, 2));
+        
+        // Store the full prediction details in state
+        setPredictionDetails(data);
+        
+        // Clear any retry messages on success
+        if (retryCount > 0) {
+          toast.success('Exercise detected successfully!');
+        }
+        
+        // Handle different possible response formats with enhanced processing
+        const fullExerciseName = buildFullExerciseName(data);
+        debugLog('Built full exercise name:', fullExerciseName);
+        
+        return fullExerciseName;
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        // Check if it's an abort error
+        if (fetchError.name === 'AbortError') {
+          throw new Error(`Request timeout after ${TIMEOUT_MS / 1000}s - server is taking too long`);
+        }
+        
+        throw fetchError;
       }
-
-      debugLog('Response received - Status:', response.status, 'OK:', response.ok);
-      
-      // Log response headers for debugging
-      debugLog('Response headers:', response.headers);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        debugLog('Error response body:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
-      }
-
-      const data = await response.json();
-      debugLog('🔍 PREDICTION RESPONSE:', JSON.stringify(data, null, 2));
-      
-      // Handle different possible response formats
-      const exerciseName = data.exercise_name || data.exercise || data.predicted_exercise || 'Unknown Exercise';
-      debugLog('Extracted exercise name:', exerciseName);
-      
-      return exerciseName;
     } catch (error) {
       console.error('Error predicting exercise:', error);
       debugLog('Full error details:', {
         message: error.message,
         name: error.name,
-        stack: error.stack
+        retryCount: retryCount
       });
       
-      // Show user-friendly error message
-      if (error.message && error.message.includes('Network request failed')) {
+      // Determine if we should retry based on the error type
+      const shouldRetry = (
+        (error.message.includes('timeout') || 
+         error.message.includes('504') || 
+         error.message.includes('502') ||
+         error.message.includes('503') ||
+         error.message.includes('Gateway timeout') ||
+         error.message.includes('Service unavailable') ||
+         error.message.includes('overloaded')) && 
+        retryCount < MAX_RETRIES
+      );
+      
+      if (shouldRetry) {
+        debugLog(`Retrying exercise prediction (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
+        
+        // Exponential backoff: wait longer between retries
+        const backoffDelay = Math.min(2000 * Math.pow(2, retryCount), 8000); // 2s, 4s, 8s max
+        debugLog(`Waiting ${backoffDelay}ms before retry...`);
+        
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        
+        return predictExercise(videoUri, retryCount + 1);
+      }
+      
+      // Show user-friendly error message based on error type
+      if (error.message && (error.message.includes('timeout') || error.message.includes('504') || error.message.includes('Gateway timeout'))) {
+        console.error('⚠️ Backend server is overloaded or cold-starting');
+        toast.error('Server is busy. Exercise detection unavailable - please enter manually.');
+      } else if (error.message && error.message.includes('Network request failed')) {
         console.error('⚠️ Network Error: Cannot connect to backend server');
-        console.error('📍 Attempted URL: https://gymvid-app.onrender.com/quick_exercise_prediction');
-        
-        // Check if it's a localhost development scenario
-        if (__DEV__) {
-          console.error('💡 TIP: If developing locally, ensure your backend is running and accessible');
-          console.error('💡 You may need to use ngrok or a local IP instead of localhost');
-        }
-        
-        // Show toast instead of alert
-        toast.error('Cannot connect to server. Please check your connection.');
-      } else if (error.message && error.message.includes('HTTP error')) {
-        toast.error('Server error. Please try again.');
+        toast.error('Network error. Please check your connection.');
+      } else if (error.message && (error.message.includes('503') || error.message.includes('Service unavailable'))) {
+        console.error('⚠️ Backend service is temporarily unavailable');
+        toast.error('Service temporarily down. Please enter exercise manually.');
       } else {
-        toast.error('Failed to analyze exercise. Please try again.');
+        console.error('⚠️ Unknown error during exercise prediction:', error.message);
+        toast.error('Unable to detect exercise. Please enter manually.');
       }
       
       // Return graceful fallback
-      return 'Unknown Exercise';
+      return 'Unable to Detect: Enter Manually';
     }
   };
 
@@ -1091,6 +1375,7 @@ export default function VideoReviewScreen({ navigation, route }) {
     }
 
     setIsLoadingExercise(true);
+    setPredictionDetails(null); // Reset prediction details for new video
     setEllipsisCount(0); // Reset ellipsis animation
     
     // Reset exercise animations
@@ -1100,25 +1385,21 @@ export default function VideoReviewScreen({ navigation, route }) {
     pencilOpacity.setValue(0);
     exerciseBlur.setValue(0.3);
 
-    // Predict exercise
+    // Directly call prediction API - let it handle server availability
     const movement = await predictExercise(videoUri);
     
-    // If prediction failed, set a default and notify user
-    if (movement === 'Unknown Exercise') {
-      debugLog('Exercise prediction failed, using fallback');
-      setExerciseName('Tap to Enter Exercise');
-      setTempExerciseName('');
-      
+    // Process the exercise name with smart abbreviation system
+    const processedMovement = processExerciseName(movement);
+    
+    // If prediction failed, show helpful message
+    if (movement === 'Unable to Detect: Enter Manually') {
       // Show a helpful message
       setTimeout(() => {
         toast.info('Please tap the pencil to enter the exercise name');
       }, 1000);
     } else {
-      setExerciseName(movement);
-      setTempExerciseName(movement);
-      
       // Start preloading coaching feedback in the background (non-blocking)
-      preloadCoachingFeedback(videoUri, movement).catch(err => {
+      preloadCoachingFeedback(videoUri, fullExerciseName).catch(err => {
         debugLog('Background feedback preload failed (non-critical):', err);
       });
     }
@@ -1314,18 +1595,7 @@ export default function VideoReviewScreen({ navigation, route }) {
         ]).start((finished) => {
           debugLog('🎯 AI button animation completed, finished:', finished);
           debugLog('🎯 Checking tooltip conditions - hasSeenTooltips:', hasSeenTooltips, 'tooltipStep:', tooltipStep);
-          debugLog('🎯 aiCoachingButtonLayout when animation done:', aiCoachingButtonLayout);
-          
-          // After AI button animation completes, show the third tooltip
-          if (!hasSeenTooltips && finished) {
-            debugLog('🎯 Conditions met - triggering third tooltip in 300ms');
-            setTimeout(() => {
-              debugLog('🎯 Setting tooltipStep to 3');
-              setTooltipStep(3);
-            }, 300); // Small delay for natural flow
-          } else {
-            debugLog('🎯 Not showing third tooltip - hasSeenTooltips:', hasSeenTooltips, 'finished:', finished);
-          }
+          debugLog('🎯 aiCoachingButtonLayout when animation done:', aiCoachingButtonLayout); 
         });
       }, 100); // Small delay to let the checkmark animation settle
     } else {
@@ -1348,12 +1618,6 @@ export default function VideoReviewScreen({ navigation, route }) {
           useNativeDriver: true,
         }),
       ]).start();
-      
-      // Hide tooltip if it's showing
-      if (tooltipStep === 3) {
-        debugLog('🎯 Hiding third tooltip because set uncompleted');
-        setTooltipStep(0);
-      }
     }
   };
 
@@ -1365,7 +1629,8 @@ export default function VideoReviewScreen({ navigation, route }) {
 
   // Function to save edited exercise name
   const handleSaveExercise = () => {
-    setExerciseName(tempExerciseName);
+    // Process the manually entered exercise name through smart abbreviation system
+    const processedName = processExerciseName(tempExerciseName);
     setIsEditingExercise(false);
   };
 
@@ -1426,118 +1691,181 @@ export default function VideoReviewScreen({ navigation, route }) {
     setFeedbackData(null);
     setFeedbackThumbnail(thumbnailUri);
     setFeedbackVideoUrl(videoUri);
+    
+    // Let users know this will take some time
+    toast.info('AI analysis in progress - this may take a few minutes...');
 
-    try {
-      // Get current user ID
-      const currentUserId = await getCurrentUserId();
-      if (!currentUserId) {
-        throw new Error('User not authenticated');
-      }
+    // Retry logic for coaching feedback
+    const MAX_RETRIES = 2;
+    let retryCount = 0;
+    
+    const attemptFeedbackRequest = async () => {
+      try {
+        // Get current user ID
+        const currentUserId = await getCurrentUserId();
+        if (!currentUserId) {
+          throw new Error('User not authenticated');
+        }
 
-      debugLog('Sending coaching feedback request with user_id:', currentUserId);
-      debugLog('Video URI:', videoUri);
-      debugLog('Exercise name:', exerciseName || 'Unknown Exercise');
+        debugLog('Sending coaching feedback request with user_id:', currentUserId, `(attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+        debugLog('Video URI:', videoUri);
+        debugLog('Exercise name:', exerciseName || 'Unknown Exercise');
 
-      // Use expo-file-system to confirm the file exists and retrieve proper URI
-      const fileInfo = await FileSystem.getInfoAsync(videoUri);
-      if (!fileInfo.exists) {
-        throw new Error('Video file not found');
-      }
+        // Use expo-file-system to confirm the file exists and retrieve proper URI
+        const fileInfo = await FileSystem.getInfoAsync(videoUri);
+        if (!fileInfo.exists) {
+          throw new Error('Video file not found');
+        }
 
-      debugLog('File verified, exists:', fileInfo.exists, 'URI:', fileInfo.uri, 'Size:', fileInfo.size);
+        debugLog('File verified, exists:', fileInfo.exists, 'URI:', fileInfo.uri, 'Size:', fileInfo.size);
 
-      // Create FormData for file upload with proper React Native/Expo formatting
-      const formData = new FormData();
-      
-      // Ensure proper URI format for iOS/Expo
-      let properUri = fileInfo.uri;
-      if (Platform.OS === 'ios' && !properUri.startsWith('file://')) {
-        properUri = `file://${properUri}`;
-      }
-      
-      // Add the video file with exact structure required for React Native FormData
-      formData.append('video', {
-        uri: properUri,
-        name: 'workout_video.mp4',
-        type: 'video/mp4',
-      });
-      
-      // Add other form fields as plain text
-      formData.append('user_id', currentUserId);
-      formData.append('movement', exerciseName || 'Unknown Exercise');
+        // Create FormData for file upload with proper React Native/Expo formatting
+        const formData = new FormData();
+        
+        // Ensure proper URI format for iOS/Expo
+        let properUri = fileInfo.uri;
+        if (Platform.OS === 'ios' && !properUri.startsWith('file://')) {
+          properUri = `file://${properUri}`;
+        }
+        
+        // Add the video file with exact structure required for React Native FormData
+        formData.append('video', {
+          uri: properUri,
+          name: 'workout_video.mp4',
+          type: 'video/mp4',
+        });
+        
+        // Add other form fields as plain text
+        formData.append('user_id', currentUserId);
+        formData.append('movement', exerciseName);
 
-      debugLog('FormData created with proper URI:', properUri);
-      debugLog('Making request to backend...');
+        debugLog('FormData created with proper URI:', properUri);
+        debugLog('Making request to backend - no timeout, allowing full processing time...');
 
-      // Fetch without manual Content-Type header (React Native handles this automatically)
-      const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback-file', {
-        method: 'POST',
-        body: formData,
-      });
+        // Make the request without any timeout - let backend take as long as needed
+        const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback_upload', {
+          method: 'POST',
+          body: formData,
+          // No AbortController or timeout - let the AI analysis complete naturally
+        });
 
-      debugLog('Response received, status:', response.status);
+        debugLog('Response received, status:', response.status);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        debugLog('Response error text:', errorText);
-        throw new Error(`Upload failed with status: ${response.status}`);
-      }
+        if (!response.ok) {
+          const errorText = await response.text();
+          debugLog('Response error text:', errorText);
+          
+          // Handle different HTTP errors
+          if (response.status === 504 || response.status === 502) {
+            throw new Error('Gateway timeout - server is overloaded');
+          } else if (response.status === 503) {
+            throw new Error('Service unavailable - server is down');
+          } else if (response.status >= 500) {
+            throw new Error(`Server error (${response.status}) - please try again`);
+          }
+          
+          throw new Error(`Upload failed with status: ${response.status}`);
+        }
 
-      const data = await response.json();
-      debugLog('✅ Coaching feedback received:', data);
-      
-      if (!data.success) {
-        // If the backend explicitly says it failed, throw an error
-        if (data.error_type === 'feedback_generation_error') {
-          throw new Error(data.error || 'Failed to generate coaching feedback');
+        const data = await response.json();
+        debugLog('✅ Coaching feedback received:', data);
+        
+        if (!data.success) {
+          // If the backend explicitly says it failed, throw an error
+          if (data.error_type === 'feedback_generation_error') {
+            throw new Error(data.error || 'Failed to generate coaching feedback');
+          } else {
+            throw new Error(data.error || 'Failed to get coaching feedback');
+          }
+        }
+
+        setFeedbackLoading(false);
+        
+        // Structure the feedback data with the specified fields
+        const feedbackResponse = {
+          form_rating: data.feedback?.form_rating || '',
+          observations: data.feedback?.observations || '',
+          summary: data.feedback?.summary || '',
+          // Keep other fields for compatibility
+          ...data.feedback
+        };
+        
+        // Check if this is an error feedback (form_rating of 0)
+        if (feedbackResponse.form_rating === 0) {
+          debugLog('⚠️ Received error feedback with form_rating 0');
+          // Still show the feedback modal with the error message
+          // This allows users to see what went wrong
+        }
+        
+        setFeedbackData(feedbackResponse);
+        
+        // Cache the feedback for this specific combination
+        setCachedFeedback(prev => ({
+          ...prev,
+          [feedbackKey]: feedbackResponse
+        }));
+        
+        debugLog('Feedback cached for key:', feedbackKey);
+
+      } catch (error) {
+        debugLog('Coaching feedback error:', {
+          message: error.message,
+          name: error.name,
+          retryCount: retryCount
+        });
+        
+        // Determine if we should retry - only for server errors, not timeouts
+        const shouldRetry = (
+          (error.message.includes('504') || 
+           error.message.includes('502') ||
+           error.message.includes('503') ||
+           error.message.includes('Gateway timeout') ||
+           error.message.includes('Service unavailable') ||
+           error.message.includes('overloaded')) && 
+          retryCount < MAX_RETRIES
+        );
+        
+        if (shouldRetry) {
+          retryCount++;
+          debugLog(`Retrying coaching feedback (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
+          
+          // Show user feedback
+          if (retryCount === 1) {
+            toast.info('Server is starting up, retrying...');
+          } else if (retryCount === 2) {
+            toast.info('Last attempt, please wait...');
+          }
+          
+          // Exponential backoff
+          const backoffDelay = Math.min(2000 * Math.pow(2, retryCount - 1), 8000);
+          debugLog(`Waiting ${backoffDelay}ms before retry...`);
+          
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+          return attemptFeedbackRequest();
+        }
+        
+        // All retries failed - show error and close modal
+        console.error('❌ Error uploading video for feedback after all retries:', error);
+        
+        setFeedbackLoading(false);
+        setFeedbackData(null);
+        setFeedbackModalVisible(false);
+        
+        // Show specific error message based on error type
+        if (error.message && error.message.includes('Network request failed')) {
+          toast.error("Network error. Please check your connection and try again.");
+        } else if (error.message && (error.message.includes('503') || error.message.includes('Service unavailable'))) {
+          toast.error("Service temporarily down. Please try again later.");
+        } else if (error.message && (error.message.includes('504') || error.message.includes('Gateway timeout'))) {
+          toast.error("Server is busy. Please try again later or enter feedback manually.");
         } else {
-          throw new Error(data.error || 'Failed to get coaching feedback');
+          toast.error("We couldn't generate feedback for this video. Try uploading a clearer angle or a different set.");
         }
       }
+    };
 
-      setFeedbackLoading(false);
-      
-      // Structure the feedback data with the specified fields
-      const feedbackResponse = {
-        form_rating: data.feedback?.form_rating || '',
-        observations: data.feedback?.observations || '',
-        summary: data.feedback?.summary || '',
-        // Keep other fields for compatibility
-        ...data.feedback
-      };
-      
-      // Check if this is an error feedback (form_rating of 0)
-      if (feedbackResponse.form_rating === 0) {
-        debugLog('⚠️ Received error feedback with form_rating 0');
-        // Still show the feedback modal with the error message
-        // This allows users to see what went wrong
-      }
-      
-      setFeedbackData(feedbackResponse);
-      
-      // Cache the feedback for this specific combination
-      setCachedFeedback(prev => ({
-        ...prev,
-        [feedbackKey]: feedbackResponse
-      }));
-      
-      debugLog('Feedback cached for key:', feedbackKey);
-
-    } catch (error) {
-      console.error('❌ Error uploading video for feedback:', error);
-      debugLog('Full error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-      
-      setFeedbackLoading(false);
-      setFeedbackData(null);
-      setFeedbackModalVisible(false);
-      
-      // Show the specific error message as requested
-      toast.error("We couldn't generate feedback for this video. Try uploading a clearer angle or a different set.");
-    }
+    // Start the attempt
+    await attemptFeedbackRequest();
   };
 
   // Enhanced handleDismissTooltip with elegant transitions
@@ -1559,39 +1887,20 @@ export default function VideoReviewScreen({ navigation, route }) {
       }, 450); // Slightly increased delay to match our enhanced exit animation
       
     } else if (tooltipStep === 2) {
-      // Second popup dismissed -> check if we should show third tooltip (AI button)
+      // Second popup dismissed -> close all tooltips
       debugLog('Dismissing second popup');
       setIsTransitioningTooltips(true);
       
-      // If AI button is available, transition to third tooltip
-      if (isSetCompleted && videoUri) {
-        setTimeout(() => {
-          debugLog('Starting AI coaching tooltip after transition delay');
-          setTooltipStep(3);
-          setIsTransitioningTooltips(false);
-        }, 450);
-      } else {
-        // If AI button not available, close all tooltips
-        setTooltipStep(0);
-        setHasSeenTooltips(true);
-        setIsTransitioningTooltips(false);
-        try { 
-          await AsyncStorage.setItem('hasSeenVideoReviewTooltips_v2', 'true'); 
-          debugLog('Tooltips marked as seen after completing both popups.');
-        } 
-        catch (e) { debugLog('Error saving tooltip_v2 pref', e); }
-      }
-      
-    } else if (tooltipStep === 3) {
-      // Third popup (AI coaching) dismissed -> close all tooltips and mark as seen
-      debugLog('Dismissing AI coaching tooltip, closing all tooltips');
+      // Close all tooltips after second popup
       setTooltipStep(0);
       setHasSeenTooltips(true);
+      setIsTransitioningTooltips(false);
       try { 
         await AsyncStorage.setItem('hasSeenVideoReviewTooltips_v2', 'true'); 
-        debugLog('Tooltips marked as seen after completing all three popups.');
+        debugLog('Tooltips marked as seen after completing both popups.');
       } 
       catch (e) { debugLog('Error saving tooltip_v2 pref', e); }
+      
     } else {
       // Fallback - close tooltips but don't mark as seen (so they can show again)
       debugLog('Unexpected tooltipStep, closing tooltips without marking as seen');
@@ -1651,13 +1960,13 @@ export default function VideoReviewScreen({ navigation, route }) {
   const FIRST_POPUP_SPOTLIGHT_CONFIG = {
     // Position adjustments
     offsetX: 0,        // Move left/right (negative = left, positive = right)
-    offsetY: 57,        // Move up/down (negative = up, positive = down)
+    offsetY: 52,      // Move up/down (negative = up, positive = down) - moved higher from 57
     
     // Size adjustments  
-    paddingTop: -5,    // Space above the target area
-    paddingBottom: 0, // Space below the target area
-    paddingLeft: 0,   // Space to the left of target area
-    paddingRight: 0,  // Space to the right of target area
+    paddingTop: -4,     // Space above the target area - increased from -5
+    paddingBottom: 8,  // Space below the target area - increased from 0
+    paddingLeft: 2,   // Space to the left of target area - increased from 0
+    paddingRight: 2,  // Space to the right of target area - increased from 0
     
     // Enable/disable
     enabled: true      // Set to false to disable custom spotlight
@@ -1766,10 +2075,14 @@ export default function VideoReviewScreen({ navigation, route }) {
 
       debugLog('Making background request to feedback endpoint...');
 
-      // Make the request in the background
-      const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback-file', {
+      // Background preload - no timeout, let it run as long as needed
+      debugLog('Background request started - no timeout applied for better success rate');
+
+      // Make the request in the background without any timeout
+      const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback_upload', {
         method: 'POST',
         body: formData,
+        // No AbortController or timeout for background preload
       });
 
       if (!response.ok) {
@@ -1803,6 +2116,43 @@ export default function VideoReviewScreen({ navigation, route }) {
     } finally {
       setIsPreloadingFeedback(false);
     }
+  };
+
+  // Button press animation handlers to match VideoPromptScreen.js
+  const handlePrimaryButtonPressIn = () => {
+    Animated.spring(primaryButtonScale, {
+      toValue: 0.95,
+      tension: 200,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePrimaryButtonPressOut = () => {
+    Animated.spring(primaryButtonScale, {
+      toValue: 1,
+      tension: 100,
+      friction: 6,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleSecondaryButtonPressIn = () => {
+    Animated.spring(secondaryButtonScale, {
+      toValue: 0.95,
+      tension: 200,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleSecondaryButtonPressOut = () => {
+    Animated.spring(secondaryButtonScale, {
+      toValue: 1,
+      tension: 100,
+      friction: 6,
+      useNativeDriver: true,
+    }).start();
   };
 
   return (
@@ -1922,18 +2272,30 @@ export default function VideoReviewScreen({ navigation, route }) {
                           {(!exerciseName || isLoadingExercise) && !isEditingExercise && (
                             <View style={styles.editButtonPlaceholder} />
                           )}
-                          <Animated.Text style={[
-                            styles.exerciseTableTitle,
-                            {
-                              opacity: Animated.multiply(exerciseOpacity, exerciseBlur),
-                              transform: [
-                                { translateY: exerciseTranslateY },
-                                { scale: exerciseScale }
-                              ]
-                            }
-                          ]}>
-                            {exerciseName || ''}
-                          </Animated.Text>
+                          <TouchableOpacity 
+                            onPress={handleExerciseNameTap}
+                            style={styles.exerciseNameTouchable}
+                            activeOpacity={showInfoIcon ? 0.7 : 1}
+                            disabled={!showInfoIcon}
+                          >
+                            <Animated.Text style={[
+                              styles.exerciseTableTitle,
+                              {
+                                opacity: Animated.multiply(exerciseOpacity, exerciseBlur),
+                                transform: [
+                                  { translateY: exerciseTranslateY },
+                                  { scale: exerciseScale }
+                                ]
+                              }
+                            ]}>
+                              {exerciseName || ''}
+                            </Animated.Text>
+                            {showInfoIcon && (
+                              <Animated.View style={{ opacity: pencilOpacity, marginLeft: 6 }}>
+                                <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+                              </Animated.View>
+                            )}
+                          </TouchableOpacity>
                         </View>
                       )}
                     </View>
@@ -2030,28 +2392,7 @@ export default function VideoReviewScreen({ navigation, route }) {
                     </View>
                   </View>
                   
-                  {/* AI Coaching Feedback Button */}
-                  {isSetCompleted && videoUri && (
-                    <Animated.View
-                      style={{
-                        opacity: aiButtonOpacity,
-                        transform: [
-                          { scale: aiButtonScale },
-                          { translateY: aiButtonTranslateY }
-                        ]
-                      }}
-                    >
-                      <TouchableOpacity
-                        ref={aiCoachingButtonRef}
-                        style={styles.aiCoachingButton}
-                        onPress={handleShowCoachingFeedback}
-                        onLayout={onAiCoachingButtonLayout}
-                      >
-                        <Ionicons name="analytics-outline" size={18} color="#6C3EF6" />
-                        <Text style={styles.aiCoachingButtonText}>AI Coaching Feedback</Text>
-                      </TouchableOpacity>
-                    </Animated.View>
-                  )}
+                  {/* Remove buttons from inline content - they will be positioned at bottom */}
                 </Animated.View>
               </View>
             </View>
@@ -2078,17 +2419,6 @@ export default function VideoReviewScreen({ navigation, route }) {
         onClose={handleDismissTooltip}
         showIconButton={true}
         verticalOffset={30}
-      />
-      <GuidedPopup
-        visible={tooltipStep === 3}
-        text="Tap this button and our AI will analyze your technique for you!"
-        targetLayout={aiCoachingButtonLayout}
-        highlightLayout={aiCoachingButtonLayout}
-        screenBackgroundColor={colors.background}
-        onClose={handleDismissTooltip}
-        showIconButton={true}
-        iconType="tick"
-        verticalOffset={-10}
       />
       
       {/* Video Preview Modal */}
@@ -2128,30 +2458,75 @@ export default function VideoReviewScreen({ navigation, route }) {
         }}
       />
       
-      {/* Only show the Log Lift button if weight is entered and set is completed */}
-      {weight && isSetCompleted && (
-        <TouchableOpacity 
-          style={[
-            styles.logButton,
-            loading && styles.logButtonDisabled
-          ]}
-          onPress={handleLogLift}
-          disabled={loading}
-          activeOpacity={0.8}
-        >
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <>
-              <Text style={styles.logButtonText}>Log Lift</Text>
-              <Ionicons name="checkmark" size={24} color={colors.white} style={styles.buttonIcon} />
-            </>
-          )}
-        </TouchableOpacity>
-      )}
-      
       {/* Keyboard Toolbar */}
       <KeyboardToolbar />
+      
+      {/* Bottom Buttons - positioned at bottom of screen */}
+      {weight && isSetCompleted && (
+        <Animated.View
+          style={[
+            styles.bottomButtonsContainer,
+            {
+              opacity: aiButtonOpacity,
+              transform: [
+                { scale: aiButtonScale },
+                { translateY: aiButtonTranslateY }
+              ]
+            }
+          ]}
+        >
+          {/* AI Coaching Feedback Button - Blue Primary */}
+          <Animated.View
+            style={{
+              transform: [{ scale: primaryButtonScale }],
+              width: '100%',
+            }}
+          >
+            <TouchableOpacity 
+              style={styles.primaryButton} 
+              onPress={handleShowCoachingFeedback}
+              onPressIn={handlePrimaryButtonPressIn}
+              onPressOut={handlePrimaryButtonPressOut}
+              disabled={loading}
+              activeOpacity={0.9}
+            >
+              <View style={styles.buttonContent}>
+                <Ionicons name="analytics-outline" size={24} color={colors.white} style={styles.buttonIcon} />
+                <Text style={styles.primaryButtonText}>AI Coaching Feedback</Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+          
+          {/* Log Lift Button - White Secondary */}
+          <Animated.View
+            style={{
+              transform: [{ scale: secondaryButtonScale }],
+              width: '100%',
+            }}
+          >
+            <TouchableOpacity 
+              style={[
+                styles.secondaryButton,
+                loading && styles.secondaryButtonDisabled
+              ]}
+              onPress={handleLogLift}
+              onPressIn={handleSecondaryButtonPressIn}
+              onPressOut={handleSecondaryButtonPressOut}
+              disabled={loading}
+              activeOpacity={0.9}
+            >
+              {loading ? (
+                <ActivityIndicator color="#333333" />
+              ) : (
+                <View style={styles.buttonContent}>
+                  <Ionicons name="checkmark" size={24} color="#333333" style={styles.buttonIcon} />
+                  <Text style={styles.secondaryButtonText}>Log Lift</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
+      )}
     </Animated.View>
   );
 }
@@ -2640,5 +3015,78 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '400',
     fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+  },
+  buttonsContainer: {
+    width: '100%',
+    marginTop: 0,
+  },
+  primaryButton: {
+    backgroundColor: '#0070E0', // Matches VideoPromptScreen.js
+    borderRadius: 16,
+    height: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17, // Matches VideoPromptScreen.js
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  secondaryButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    height: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0', // Matches VideoPromptScreen.js
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  secondaryButtonText: {
+    color: '#333333', // Dark gray for contrast
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButtonDisabled: {
+    backgroundColor: '#F5F5F5',
+    borderColor: '#CCCCCC',
+    shadowOpacity: 0,
+  },
+  buttonContent: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  buttonIcon: {
+    marginRight: 12,
+  },
+  exerciseNameTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bottomButtonsContainer: {
+    position: 'absolute',
+    bottom: 40, // Increased from 20 to add more space below buttons
+    left: 20,
+    right: 20,
+    zIndex: 10,
   },
 }); 

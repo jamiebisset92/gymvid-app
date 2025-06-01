@@ -720,19 +720,21 @@ export default function VideoPromptScreen({ navigation, route }) {
     
     // Define the image sources based on gender
     if (showMaleImages) {
-      if (position === 'main') return { uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Man doing deadlift
-      if (position === 'left') return { uri: 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Man with dumbbells
-      if (position === 'right') return { uri: 'https://images.unsplash.com/photo-1605296867304-46d5465a13f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Man squatting with barbell
+      // High-quality male weightlifting images - specific exercises (CORRECTED)
+      if (position === 'main') return { uri: 'https://source.unsplash.com/GXTfOkAQLZA?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (from user)
+      if (position === 'left') return { uri: 'https://source.unsplash.com/ui45PyGUsBY?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (from user)
+      if (position === 'right') return { uri: 'https://source.unsplash.com/fGAgXh6QQEU?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (from user)
     } else if (showFemaleImages) {
-      if (position === 'main') return { uri: 'https://images.unsplash.com/photo-1594737625785-a6cbdabd333c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Woman doing barbell squats
-      if (position === 'left') return { uri: 'https://images.unsplash.com/photo-1550345332-09e3ac987658?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Woman lifting weights
-      if (position === 'right') return { uri: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Woman with dumbbells
+      // High-quality female weightlifting images - specific exercises 
+      if (position === 'main') return { uri: 'https://source.unsplash.com/LT4bLdgtBug?auto=format&fit=crop&w=1000&q=80' }; // Woman lifting (from user)
+      if (position === 'left') return { uri: 'https://source.unsplash.com/E1DKyChPV0o?auto=format&fit=crop&w=1000&q=80' }; // Woman lifting (from user)
+      if (position === 'right') return { uri: 'https://source.unsplash.com/aHqe_NrxrUk?auto=format&fit=crop&w=1000&q=80' }; // Woman lifting (from user)
     }
     
-    // Default fallback images if gender is not set or doesn't match - mixed gender lifting images
-    if (position === 'main') return { uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Man doing deadlift
-    if (position === 'left') return { uri: 'https://images.unsplash.com/photo-1594737625785-a6cbdabd333c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Woman doing barbell squats
-    if (position === 'right') return { uri: 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }; // Man with dumbbells
+    // Default fallback images if gender is not set - use new MALE images as fallback
+    if (position === 'main') return { uri: 'https://source.unsplash.com/GXTfOkAQLZA?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (fallback)
+    if (position === 'left') return { uri: 'https://source.unsplash.com/ui45PyGUsBY?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (fallback)
+    if (position === 'right') return { uri: 'https://source.unsplash.com/fGAgXh6QQEU?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (fallback)
   };
 
   // Video placeholder frames
@@ -1107,7 +1109,7 @@ export default function VideoPromptScreen({ navigation, route }) {
                     }
                   ]}
                 >
-                  {'Do you have any videos of you lifting in your phone?'}
+                  {'Do you have any videos of you lifting?'}
                 </Animated.Text>
               </View>
               
@@ -1217,7 +1219,7 @@ const styles = StyleSheet.create({
   videoSection: {
     width: '100%',
     height: SCREEN_HEIGHT * 0.4, // Increased height for better use of space
-    marginTop: 50, // Reduced space since header disappears
+    marginTop: 25, // Reduced from 50 to shift content up
     marginBottom: 20,
     alignItems: 'center',
     paddingTop: 5,
@@ -1233,16 +1235,18 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 35,
     paddingHorizontal: 0,
-    paddingTop: 20, // Reduced padding
+    paddingTop: 20, // Reduced from 20 to bring question text closer to videos
   },
   titleText: {
-    fontSize: 24,
-    fontWeight: '500',
+    fontSize: 32,
+    fontWeight: '700',
     textAlign: 'center',
-    letterSpacing: -0.2,
-    color: '#434343',
-    lineHeight: 32,
-    marginHorizontal: 15,
+    letterSpacing: -0.5,
+    color: '#1A1A1A',
+    lineHeight: 40,
+    marginHorizontal: 0,
+    width: '100%',
+    paddingHorizontal: 10,
   },
   videoFramesContainer: {
     width: '100%',

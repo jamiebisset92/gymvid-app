@@ -180,11 +180,26 @@ export default function SignUpScreen({ navigation }) {
       const { data, error } = await signUp(email, password);
       
       if (error) {
-        const errorMessage = error.message || error.msg || 'An error occurred. Please try again.';
+        // Log the full error object for debugging
+        console.log('Signup error received:', JSON.stringify(error, null, 2));
         
-        // Handle "User already registered" case specifically
-        if (errorMessage === 'User already registered' || errorMessage.includes('already registered')) {
-          toast.error('This email is already registered. Please sign in instead.');
+        // Handle case where error is a string or an object
+        const errorMessage = typeof error === 'string' ? error : (error.message || error.msg || error.error || error.detail || 'An error occurred. Please try again.');
+        console.log('Extracted error message:', errorMessage);
+        
+        // Handle "User already exists" cases - check multiple possible variations
+        if (
+          errorMessage === 'User already registered' || 
+          errorMessage.includes('already registered') ||
+          errorMessage.includes('already exists') ||
+          errorMessage.includes('Email already') ||
+          errorMessage.includes('email already') ||
+          errorMessage.includes('User with this email') ||
+          errorMessage.includes('already taken') ||
+          (typeof error === 'object' && (error.status === 422 || error.statusCode === 422)) ||
+          (typeof error === 'object' && error.code && (error.code === 'USER_EXISTS' || error.code === 'EMAIL_EXISTS'))
+        ) {
+          toast.error('You already have an account! Please log in.');
           
           // Navigate to login screen with the email pre-filled
           setTimeout(() => {
@@ -194,7 +209,7 @@ export default function SignUpScreen({ navigation }) {
         }
         
         // Handle other errors
-        console.error('Error signing up:', errorMessage);
+        console.log('Other signup error:', errorMessage);
         toast.error(errorMessage);
         return;
       }
@@ -240,11 +255,26 @@ export default function SignUpScreen({ navigation }) {
         });
       }, 800); // Increased timeout to ensure profile creation completes
     } catch (err) {
-      const errorMessage = err?.message || 'An unexpected error occurred. Please try again.';
+      // Log the full error object for debugging
+      console.log('Catch error received:', JSON.stringify(err, null, 2));
       
-      // Handle "User already registered" case in catch block too
-      if (errorMessage === 'User already registered' || errorMessage.includes('already registered')) {
-        toast.error('This email is already registered. Please sign in instead.');
+      // Handle case where error is a string or an object
+      const errorMessage = typeof err === 'string' ? err : (err?.message || err?.msg || err?.error || err?.detail || 'An unexpected error occurred. Please try again.');
+      console.log('Extracted catch error message:', errorMessage);
+      
+      // Handle "User already exists" cases in catch block too
+      if (
+        errorMessage === 'User already registered' || 
+        errorMessage.includes('already registered') ||
+        errorMessage.includes('already exists') ||
+        errorMessage.includes('Email already') ||
+        errorMessage.includes('email already') ||
+        errorMessage.includes('User with this email') ||
+        errorMessage.includes('already taken') ||
+        (typeof err === 'object' && (err.status === 422 || err.statusCode === 422)) ||
+        (typeof err === 'object' && err.code && (err.code === 'USER_EXISTS' || err.code === 'EMAIL_EXISTS'))
+      ) {
+        toast.error('You already have an account! Please log in.');
         
         // Navigate to login screen with the email pre-filled
         setTimeout(() => {
@@ -253,7 +283,7 @@ export default function SignUpScreen({ navigation }) {
         return;
       }
       
-      console.error('Unexpected error during signup:', err);
+      console.log('Unexpected signup error:', err);
       toast.error(errorMessage);
     }
   };

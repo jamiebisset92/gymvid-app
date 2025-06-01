@@ -36,6 +36,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 export default function UserWeightScreen({ navigation, route }) {
   const [weight, setWeight] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('kg'); // 'kg' or 'lbs'
+  const [userGender, setUserGender] = useState(null); // Add state for user gender
   const { updateProfile, loading } = useAuth();
   
   const userId = route.params?.userId;
@@ -61,6 +62,73 @@ export default function UserWeightScreen({ navigation, route }) {
     if (/^(\d+\.?\d*|\.\d+)$/.test(text) || text === '') {
       setWeight(text);
     }
+  };
+
+  // Calculate weight class based on gender, weight, and unit preference
+  const getWeightClass = (gender, weight, unit) => {
+    if (!gender || !weight || isNaN(parseFloat(weight))) {
+      return 'Open'; // Default
+    }
+
+    const numWeight = parseFloat(weight);
+    let weightClass = 'Open'; // Default
+    
+    // Convert weight to kg if it's in lbs for calculation
+    let weightInKg = numWeight;
+    if (unit === 'lbs') {
+      weightInKg = numWeight / 2.20462; // Convert lbs to kg
+    }
+    
+    // Weight class calculation based on kg
+    if (gender === 'Female') {
+      if (weightInKg <= 47) weightClass = '43–47kg';
+      else if (weightInKg <= 52) weightClass = '47–52kg';
+      else if (weightInKg <= 57) weightClass = '50–57kg';
+      else if (weightInKg <= 63) weightClass = '57–63kg';
+      else if (weightInKg <= 69) weightClass = '63–69kg';
+      else if (weightInKg <= 76) weightClass = '69–76kg';
+      else if (weightInKg <= 84) weightClass = '76–84kg';
+      else weightClass = '84kg+';
+    } else {
+      // For Male or other
+      if (weightInKg <= 59) weightClass = '53–59kg';
+      else if (weightInKg <= 66) weightClass = '59–66kg';
+      else if (weightInKg <= 74) weightClass = '66–74kg';
+      else if (weightInKg <= 83) weightClass = '74–83kg';
+      else if (weightInKg <= 93) weightClass = '83–93kg';
+      else if (weightInKg <= 105) weightClass = '93–105kg';
+      else if (weightInKg <= 120) weightClass = '105–120kg';
+      else weightClass = '120kg+';
+    }
+    
+    // If user prefers lbs, convert the weight class display to lbs
+    if (unit === 'lbs') {
+      // Convert kg ranges to lbs for display
+      const kgToLbsRanges = {
+        // Female weight classes
+        '43–47kg': '95–104lbs',
+        '47–52kg': '104–115lbs',
+        '50–57kg': '110–126lbs',
+        '57–63kg': '126–139lbs',
+        '63–69kg': '139–152lbs',
+        '69–76kg': '152–168lbs',
+        '76–84kg': '168–185lbs',
+        '84kg+': '185lbs+',
+        // Male weight classes
+        '53–59kg': '117–130lbs',
+        '59–66kg': '130–146lbs',
+        '66–74kg': '146–163lbs',
+        '74–83kg': '163–183lbs',
+        '83–93kg': '183–205lbs',
+        '93–105kg': '205–231lbs',
+        '105–120kg': '231–265lbs',
+        '120kg+': '265lbs+'
+      };
+      
+      weightClass = kgToLbsRanges[weightClass] || weightClass;
+    }
+    
+    return weightClass;
   };
 
   useEffect(() => {
@@ -106,7 +174,7 @@ export default function UserWeightScreen({ navigation, route }) {
         debugLog('Loading user weight data for userId:', user.id);
         const { data: profile, error } = await supabase
           .from('users')
-          .select('bodyweight, unit_pref')
+          .select('bodyweight, unit_pref, gender')
           .eq('id', user.id)
           .maybeSingle(); // Changed from .single() to .maybeSingle()
 
@@ -128,6 +196,10 @@ export default function UserWeightScreen({ navigation, route }) {
           } else {
             setSelectedUnit('kg');
             debugLog('No unit_pref found, defaulting to kg');
+          }
+          if (profile.gender) {
+            setUserGender(profile.gender);
+            debugLog('Loaded existing gender:', profile.gender);
           }
         } else { // No profile found (profile is null)
           debugLog('No profile data found for user, defaulting unit to kg.');
@@ -272,9 +344,13 @@ export default function UserWeightScreen({ navigation, route }) {
                   color={(!weight.trim() || parseFloat(weight) < 20 || parseFloat(weight) > 300) ? colors.lightGray : colors.primary} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.weightHelper}>
-              Your weight will help us grade your lifts in the GymVid Games if you decide to play!
-            </Text>
+            <View style={styles.weightClassContainer}>
+              {weight && userGender && parseFloat(weight) >= 20 && parseFloat(weight) <= 300 && (
+                <Text style={styles.weightClassText}>
+                  This places you in the <Text style={styles.weightClassName}>{getWeightClass(userGender, weight, selectedUnit)}</Text> category.
+                </Text>
+              )}
+            </View>
           </Animated.View>
         </View>
       </SafeAreaView>
@@ -418,12 +494,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 0, // Let weightInput's paddingRight handle space
   },
-  weightHelper: {
-    marginTop: 20, 
-    textAlign: 'center',
-    color: colors.gray, // Standard helper text color
-    fontSize: 16, // Standard helper text size
-    paddingHorizontal: 20, 
+  weightClassContainer: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  weightClassText: {
+    fontSize: 16,
+    color: colors.gray,
+  },
+  weightClassName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
   },
   nextButton: {
     width: 48,

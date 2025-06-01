@@ -10,12 +10,17 @@ import shutil
 import os
 import logging
 import traceback
+import asyncio
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Create a thread pool for CPU-intensive tasks
+executor = ThreadPoolExecutor(max_workers=2)  # Limit concurrent processing
 
 @router.post("/feedback_upload")
 async def feedback_upload(
@@ -31,26 +36,71 @@ async def feedback_upload(
 
     tmp_path = None
     try:
+        # Validate inputs
+        if not video.filename:
+            return {
+                "success": False,
+                "error": "No video file provided",
+                "error_type": "invalid_input"
+            }
+            
+        if not user_id or not movement:
+            return {
+                "success": False, 
+                "error": "Missing required parameters: user_id or movement",
+                "error_type": "invalid_input"
+            }
+
+        # Save uploaded video with size validation
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-            shutil.copyfileobj(video.file, tmp)
+            video_data = await video.read()
+            
+            # Check file size (limit to 200MB to prevent overload)
+            MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
+            if len(video_data) > MAX_FILE_SIZE:
+                logger.warning(f"Video file too large: {len(video_data) / 1024 / 1024:.2f}MB")
+                return {
+                    "success": False,
+                    "error": "Video file is too large. Please use a video under 200MB.",
+                    "error_type": "file_too_large"
+                }
+            
+            tmp.write(video_data)
             tmp_path = tmp.name
 
         logger.info(f"Video saved to temp path: {tmp_path}")
         logger.info(f"Temp file size: {os.path.getsize(tmp_path)} bytes")
 
-        logger.info("Starting video analysis...")
-        video_data = analyze_video(tmp_path)
-        logger.info(f"Video analysis complete. FPS: {video_data.get('fps')}, Best landmark: {video_data.get('best_landmark')}")
-        logger.info(f"Raw Y data points: {len(video_data.get('raw_y', []))}")
+        # Step 1: Video Analysis with timeout
+        try:
+            logger.info("Starting video analysis...")
+            # Run in thread pool with timeout to prevent hanging
+            loop = asyncio.get_event_loop()
+            video_data = await loop.run_in_executor(
+                executor, analyze_video, tmp_path
+            )
+            logger.info(f"Video analysis complete. FPS: {video_data.get('fps')}, Best landmark: {video_data.get('best_landmark')}")
+            logger.info(f"Raw Y data points: {len(video_data.get('raw_y', []))}")
 
-        if video_data.get('raw_y'):
-            raw_y = video_data['raw_y']
-            logger.info(f"Raw Y stats - min: {min(raw_y):.4f}, max: {max(raw_y):.4f}, range: {max(raw_y) - min(raw_y):.4f}")
+            if video_data.get('raw_y'):
+                raw_y = video_data['raw_y']
+                logger.info(f"Raw Y stats - min: {min(raw_y):.4f}, max: {max(raw_y):.4f}, range: {max(raw_y) - min(raw_y):.4f}")
+        except Exception as video_error:
+            logger.error(f"Video analysis failed: {str(video_error)}")
+            return {
+                "success": False,
+                "error": f"Video analysis failed: {str(video_error)}",
+                "error_type": "video_analysis_failed"
+            }
 
+        # Step 2: Rep Detection with error handling
         rep_data = None
         try:
             logger.info("Starting rep detection...")
-            rep_data = run_rep_detection_from_landmark_y(
+            # Run rep detection in thread pool to prevent blocking
+            loop = asyncio.get_event_loop()
+            rep_data = await loop.run_in_executor(
+                executor, run_rep_detection_from_landmark_y, 
                 video_data["raw_y"], video_data["fps"]
             )
 
@@ -66,18 +116,36 @@ async def feedback_upload(
             logger.warning(f"[⚠️] Rep detection traceback: {traceback.format_exc()}")
             rep_data = None
 
-        if isinstance(rep_data, list) and len(rep_data) > 0:
-            try:
-                collage_paths = export_keyframe_collages(tmp_path, rep_data)
-                logger.info(f"Generated {len(collage_paths)} collages from rep data")
-            except Exception as collage_error:
-                logger.warning(f"Failed to generate rep-based collages: {str(collage_error)}")
-                fallback_path = export_static_keyframe_collage(tmp_path)
+        # Step 3: Keyframe Generation with fallback
+        try:
+            if isinstance(rep_data, list) and len(rep_data) > 0:
+                try:
+                    loop = asyncio.get_event_loop()
+                    collage_paths = await loop.run_in_executor(
+                        executor, export_keyframe_collages, tmp_path, rep_data
+                    )
+                    logger.info(f"Generated {len(collage_paths)} collages from rep data")
+                except Exception as collage_error:
+                    logger.warning(f"Failed to generate rep-based collages: {str(collage_error)}")
+                    loop = asyncio.get_event_loop()
+                    fallback_path = await loop.run_in_executor(
+                        executor, export_static_keyframe_collage, tmp_path
+                    )
+                    collage_paths = [fallback_path]
+            else:
+                logger.info("Using fallback keyframes due to no valid rep data")
+                loop = asyncio.get_event_loop()
+                fallback_path = await loop.run_in_executor(
+                    executor, export_static_keyframe_collage, tmp_path
+                )
                 collage_paths = [fallback_path]
-        else:
-            logger.info("Using fallback keyframes due to no valid rep data")
-            fallback_path = export_static_keyframe_collage(tmp_path)
-            collage_paths = [fallback_path]
+        except Exception as keyframe_error:
+            logger.error(f"Keyframe generation failed: {str(keyframe_error)}")
+            return {
+                "success": False,
+                "error": "Failed to generate keyframe collage from video.",
+                "error_type": "keyframe_generation_failed"
+            }
 
         if not collage_paths or not os.path.exists(collage_paths[0]):
             return {
@@ -86,18 +154,30 @@ async def feedback_upload(
                 "error_type": "keyframe_generation_failed"
             }
 
-        logger.info("Starting GPT-4o coaching feedback generation...")
-        logger.info(f"Passing rep_data: {rep_data is not None} (has {len(rep_data) if rep_data else 0} reps)")
+        # Step 4: AI Feedback Generation with timeout
+        try:
+            logger.info("Starting GPT-4o coaching feedback generation...")
+            logger.info(f"Passing rep_data: {rep_data is not None} (has {len(rep_data) if rep_data else 0} reps)")
 
-        feedback = generate_feedback(
-            video_path=tmp_path,
-            user_id=user_id,
-            video_data={
-                "predicted_exercise": movement,
-                "feedback_depth": "standard"
-            },
-            rep_data=rep_data
-        )
+            # Run feedback generation in thread pool to prevent blocking
+            loop = asyncio.get_event_loop()
+            feedback = await loop.run_in_executor(
+                executor, generate_feedback,
+                tmp_path, user_id, 
+                {
+                    "predicted_exercise": movement,
+                    "feedback_depth": "standard"
+                },
+                rep_data
+            )
+        except Exception as feedback_error:
+            logger.error(f"Feedback generation failed: {str(feedback_error)}")
+            logger.error(f"Feedback generation traceback: {traceback.format_exc()}")
+            return {
+                "success": False,
+                "error": f"AI feedback generation failed: {str(feedback_error)}",
+                "error_type": "feedback_generation_failed"
+            }
 
         if not feedback or not isinstance(feedback, dict):
             logger.error("Feedback response is invalid or not a dictionary")
@@ -107,13 +187,14 @@ async def feedback_upload(
                 "error_type": "invalid_feedback_structure"
             }
 
-        logger.info("Coaching feedback generated")
+        logger.info("Coaching feedback generated successfully")
         logger.info(f"Form rating: {feedback.get('form_rating')}")
         logger.info(f"RPE: {feedback.get('rpe')}, TUT: {feedback.get('total_tut')}")
 
+        # Check for error feedback (form_rating of 0 indicates AI had issues)
         if feedback.get('form_rating', 0) == 0:
             logger.warning("Feedback generation returned with form_rating of 0, indicating an error")
-            if "configuration error" in feedback.get('summary', '') or "technical issue" in str(feedback.get('observations', [])):
+            if "configuration error" in feedback.get('summary', '').lower() or "technical issue" in str(feedback.get('observations', [])).lower():
                 return {
                     "success": False,
                     "feedback": feedback,
@@ -141,6 +222,10 @@ async def feedback_upload(
         }
 
     finally:
+        # Cleanup temp files
         if tmp_path and os.path.exists(tmp_path):
-            logger.info(f"Cleaning up temp file: {tmp_path}")
-            os.remove(tmp_path)
+            try:
+                logger.info(f"Cleaning up temp file: {tmp_path}")
+                os.remove(tmp_path)
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to cleanup temp file: {cleanup_error}")
