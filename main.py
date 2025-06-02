@@ -27,6 +27,8 @@ from backend.ai.analyze.rep_detection import run_rep_detection_from_landmark_y
 from backend.ai.analyze.keyframe_exporter import export_keyframes
 from backend.ai.analyze.coaching_feedback import generate_feedback
 from backend.ai.analyze import analyze_set
+from backend.ai.analyze.quick_exercise_prediction import router as quick_exercise_prediction_router
+
 
 # ✅ Load environment variables
 load_dotenv()
@@ -77,7 +79,7 @@ app.include_router(onboarding_router)
 app.include_router(check_username_router)
 app.include_router(quick_analysis_app, prefix="/analyze")
 app.include_router(feedback_upload_router, prefix="/analyze")
-app.include_router(quick_exercise_prediction.app)
+app.include_router(quick_exercise_prediction_router, prefix="/analyze")
 
 # ✅ AI set analysis
 @app.post("/analyze/log_set")

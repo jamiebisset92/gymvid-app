@@ -21,6 +21,50 @@ import { useToast } from '../components/ToastProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../hooks/useAuth';
 
+// Flag component with error handling and loading states
+const FlagComponent = ({ isoCode, size = 20 }) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  
+  useEffect(() => {
+    // Reset states when isoCode changes
+    setIsLoading(true);
+    setHasError(false);
+    
+    // Set a timeout to hide loading state after a reasonable delay
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 200);
+    
+    return () => clearTimeout(timer);
+  }, [isoCode]);
+  
+  if (hasError) {
+    // Fallback to text-based country indicator
+    return (
+      <View style={styles.flagFallback}>
+        <Text style={styles.flagFallbackText}>
+          {isoCode}
+        </Text>
+      </View>
+    );
+  }
+  
+  return (
+    <View style={styles.flagContainer}>
+      {isLoading && (
+        <View style={styles.flagPlaceholder} />
+      )}
+      <CountryFlag 
+        isoCode={isoCode} 
+        size={size}
+        style={{ opacity: isLoading ? 0 : 1 }}
+        onError={() => setHasError(true)}
+      />
+    </View>
+  );
+};
+
 // List of countries with ISO codes for flag display
 const COUNTRIES = [
   { name: "Afghanistan", code: "AF" },
@@ -220,7 +264,7 @@ const COUNTRIES = [
 ];
 
 const ProfileScreen = ({ navigation }) => {
-  const { session, setSession, loading: authLoading, updateProfileData, user: authContextUser } = useAuth();
+  const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -235,14 +279,57 @@ const ProfileScreen = ({ navigation }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
+  // Initialize session
+  useEffect(() => {
+    const getSession = async () => {
+      try {
+        // Supabase v1 method
+        const session = supabase.auth.session();
+        console.log('Initial session:', session ? 'Found session' : 'No session');
+        setSession(session);
+      } catch (error) {
+        console.error('Error in getSession:', error);
+      }
+    };
+
+    getSession();
+
+    // Listen for auth changes (v1 method)
+    const authListener = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log('Auth state changed:', event, session ? 'Has session' : 'No session');
+        setSession(session);
+      }
+    );
+
+    return () => {
+      // Defensive cleanup for different possible return structures
+      try {
+        if (authListener) {
+          if (typeof authListener.unsubscribe === 'function') {
+            authListener.unsubscribe();
+          } else if (authListener.data && typeof authListener.data.unsubscribe === 'function') {
+            authListener.data.unsubscribe();
+          } else if (authListener.subscription && typeof authListener.subscription.unsubscribe === 'function') {
+            authListener.subscription.unsubscribe();
+          }
+        }
+      } catch (error) {
+        console.warn('Error cleaning up auth listener:', error);
+      }
+    };
+  }, []);
+
   const fetchProfile = async () => {
     if (!session?.user) {
+      console.log('fetchProfile: No session or user, skipping');
       setLoading(false);
       toast.error("Not authenticated. Please log in.");
-      navigation.navigate('Login');
       return;
     }
 
+    console.log('fetchProfile: Starting fetch for user ID:', session.user.id);
+    
     try {
       setLoading(true);
       
@@ -252,11 +339,14 @@ const ProfileScreen = ({ navigation }) => {
         .eq('id', session.user.id)
         .maybeSingle();
 
+      console.log('fetchProfile: Query result:', { data, error, status });
+
       if (error && status !== 406) {
         throw error;
       }
 
       if (data) {
+        console.log('fetchProfile: Profile data found:', data);
         setProfile(data);
         if (data.avatar_url) {
           if (data.avatar_url.startsWith('http')) {
@@ -266,10 +356,8 @@ const ProfileScreen = ({ navigation }) => {
             setAvatarUrl(publicUrlData?.publicUrl);
           }
         }
-        if (!authContextUser || authContextUser.id !== data.id) {
-          updateProfileData(data);
-        }
       } else {
+        console.log('fetchProfile: No profile data, creating basic profile');
         setProfile({ id: session.user.id, email: session.user.email });
         toast.info("Profile not fully set up yet.");
       }
@@ -287,15 +375,16 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   useEffect(() => {
-    // Only fetch if we have a session and we're not already loading from auth
-    if (session?.user && !authLoading) {
+    console.log('ProfileScreen useEffect: session changed:', session ? 'Has session' : 'No session');
+    if (session?.user) {
+      console.log('ProfileScreen useEffect: User ID:', session.user.id);
       fetchProfile();
-    } else if (!session && !authLoading) {
-      // No session and auth is done loading, redirect to login
+    } else if (session === null) {
+      // Session is explicitly null (not loading), set loading to false
+      console.log('ProfileScreen useEffect: Session is null, stopping loading');
       setLoading(false);
-      navigation.navigate('Login');
     }
-  }, [session?.user?.id, authLoading]); // Only depend on user ID to avoid unnecessary refetches
+  }, [session?.user?.id]);
 
   const handleSaveField = async (field) => {
     if (!profile || !session?.user) return;
@@ -312,7 +401,6 @@ const ProfileScreen = ({ navigation }) => {
       if (error) throw error;
 
       setProfile(prev => ({ ...prev, [field]: tempValue }));
-      updateProfileData({ [field]: tempValue });
       toast.success("Profile updated!");
       setEditingField(null);
     } catch (error) {
@@ -327,7 +415,6 @@ const ProfileScreen = ({ navigation }) => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      setSession(null);
       toast.success("Signed out successfully.");
     } catch (error) {
       toast.error(`Sign out failed: ${error.message}`);
@@ -400,7 +487,6 @@ const ProfileScreen = ({ navigation }) => {
 
       setAvatarUrl(newAvatarUrl);
       setProfile(prev => ({ ...prev, avatar_url: newAvatarUrl }));
-      updateProfileData({ avatar_url: newAvatarUrl });
 
       toast.success("Avatar updated!");
 
@@ -413,7 +499,7 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   // Show loading only when actually loading and not just waiting for auth
-  if (authLoading || (loading && session)) {
+  if (loading && session) {
     return (
       <SafeAreaView style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -427,6 +513,10 @@ const ProfileScreen = ({ navigation }) => {
     return null; // Let the navigation handle redirecting to login
   }
 
+  console.log('ProfileScreen rendering with profile data:', profile);
+  console.log('ProfileScreen rendering with avatarUrl:', avatarUrl);
+  console.log('ProfileScreen country for flag:', profile?.country || 'US');
+
   return (
     <SafeAreaView style={styles.container}>
       <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
@@ -437,7 +527,7 @@ const ProfileScreen = ({ navigation }) => {
             style={styles.profileImageContainer}
           >
             <Image 
-              source={{ uri: avatarUrl || 'https://randomuser.me/api/portraits/women/44.jpg' }} 
+              source={avatarUrl ? { uri: avatarUrl } : require('../assets/images/Default Profile Icon.jpg')} 
               style={styles.profileImage} 
             />
             {uploading ? (
@@ -472,7 +562,9 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.badgesRow}>
           <View style={styles.badge}>
             <Text style={styles.badgeText}>Team </Text>
-            <CountryFlag isoCode={profile?.country || 'US'} size={20} />
+            <View style={styles.flagContainer}>
+              <FlagComponent isoCode={profile?.country || 'US'} />
+            </View>
           </View>
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{profile?.age_category || 'Open'}</Text>
@@ -483,50 +575,15 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={[styles.badgeIcon, styles.flexIcon]}>💪</Text>
           </View>
         </View>
-
-        {/* Admin section for app settings */}
-        <TouchableOpacity 
-          style={styles.adminButton}
-          onPress={() => Alert.alert(
-            'Backend Configuration',
-            'Profile images are stored via the FastAPI backend with fallback support',
-            [
-              { 
-                text: 'API Information', 
-                onPress: () => Alert.alert(
-                  'Backend API Details',
-                  'Endpoint: https://gymvid-app.onrender.com/upload/profile-image\n\nMethod: POST\nBody: FormData (file, user_id)'
-                )
-              },
-              { 
-                text: 'API Implementation', 
-                onPress: () => Alert.alert(
-                  'API Implementation',
-                  'The backend saves uploaded images to the "/uploads/profiles/" directory and eventually to AWS S3.\n\nMax file size: 3MB\nAllowed types: jpg, jpeg, png, gif, webp'
-                )
-              },
-              { 
-                text: 'Fallback System', 
-                onPress: () => Alert.alert(
-                  'Fallback System',
-                  'If the backend API is unavailable, the app uses placeholder images from randomuser.me to ensure functionality during connectivity issues.'
-                )
-              },
-              { text: 'Close', style: 'cancel' }
-            ]
-          )}
-        >
-          <Text style={styles.adminButtonText}>Admin: API Backend Information</Text>
-        </TouchableOpacity>
-
-        {/* Sign out button for testing */}
-        <TouchableOpacity 
-          style={[styles.adminButton, { backgroundColor: '#ffebee', marginTop: 10 }]}
-          onPress={handleSignOut}
-        >
-          <Text style={[styles.adminButtonText, { color: '#d32f2f' }]}>Sign Out</Text>
-        </TouchableOpacity>
       </Animated.View>
+
+      {/* Sign out button for testing */}
+      <TouchableOpacity 
+        style={[styles.adminButton, { backgroundColor: '#ffebee', marginTop: 10 }]}
+        onPress={handleSignOut}
+      >
+        <Text style={[styles.adminButtonText, { color: '#d32f2f' }]}>Sign Out</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -650,7 +707,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F2F8FF',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 5,
@@ -682,6 +739,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     overflow: 'hidden',
     marginLeft: 2,
+    width: 20,
+    height: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emojiIcon: {
     fontSize: 13,
@@ -719,6 +780,25 @@ const styles = StyleSheet.create({
     color: colors.gray,
     fontSize: 16,
     fontFamily: 'DMSans-Medium',
+  },
+  flagFallback: {
+    borderWidth: 1,
+    borderColor: colors.gray,
+    padding: 5,
+    borderRadius: 5,
+  },
+  flagFallbackText: {
+    fontSize: 12,
+    color: colors.gray,
+    fontFamily: 'DMSans-Regular',
+  },
+  flagPlaceholder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.5)',
   },
 }); 
 
