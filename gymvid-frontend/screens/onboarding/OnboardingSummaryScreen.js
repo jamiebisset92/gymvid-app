@@ -949,8 +949,8 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
         
         // Start all 4 animations at the same time with precise timing
         Animated.parallel([
-          // Country item
-          Animated.timing(countryAnim, {
+          // Gender item (first)
+          Animated.timing(genderAnim, {
             toValue: 1,
             duration: 600,
             delay: 0,
@@ -958,8 +958,8 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
             useNativeDriver: true,
           }),
           
-          // Gender item
-          Animated.timing(genderAnim, {
+          // Age Class item (second)
+          Animated.timing(ageAnim, {
             toValue: 1,
             duration: 600,
             delay: 150,
@@ -967,8 +967,8 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
             useNativeDriver: true,
           }),
           
-          // Age Class item
-          Animated.timing(ageAnim, {
+          // Weight Class item (third)
+          Animated.timing(weightAnim, {
             toValue: 1,
             duration: 600,
             delay: 300,
@@ -976,8 +976,8 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
             useNativeDriver: true,
           }),
           
-          // Weight Class item
-          Animated.timing(weightAnim, {
+          // Team item (fourth)
+          Animated.timing(countryAnim, {
             toValue: 1,
             duration: 600,
             delay: 450,
@@ -1083,6 +1083,15 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
     // Extra formatting for country (just in case it doesn't already have a flag)
     if (label === 'Team' && displayValue === 'Australia') {
       displayValue = 'Australia 🇦🇺';
+    }
+    
+    // Transform gender values for Division display
+    if (label === 'Division') {
+      if (displayValue === 'Male') {
+        displayValue = 'Men';
+      } else if (displayValue === 'Female') {
+        displayValue = 'Women';
+      }
     }
     
     return (
@@ -1217,7 +1226,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
                   }
                 ]}
               >
-                Here's a summary of your details...
+                Here's a summary of your{'\n'}details for the GymVid Games:
               </Animated.Text>
             </View>
             
@@ -1225,7 +1234,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
               style={{ 
                 width: '100%', 
                 opacity: fadeAnim,
-                marginTop: 20
+                marginTop: 8
               }}
             >
               {loading ? (
@@ -1262,14 +1271,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
               ) : (
                 <View style={styles.profileContainer}>
                   <ProfileItem 
-                    label="Team"
-                    value={userData.country}
-                    animValue={countryAnim}
-                    icon="flag-outline"
-                  />
-                  
-                  <ProfileItem 
-                    label="Gender"
+                    label="Division"
                     value={userData.gender}
                     animValue={genderAnim}
                     icon="human-male-female"
@@ -1289,8 +1291,15 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
                     icon="weight"
                   />
                   
+                  <ProfileItem 
+                    label="Team"
+                    value={userData.country}
+                    animValue={countryAnim}
+                    icon="flag-outline"
+                  />
+                  
                   <Text style={styles.helpText}>
-                    These details will be used if you decide to participate in the <Text style={styles.helpTextBold}>GymVid Games</Text> <Text style={styles.helpTextItalic}>~ (more on this later)</Text>
+                    Paricipating in the GymVid Games is voluntary - but these will be your details if you decide to get involved!
                   </Text>
                 </View>
               )}
@@ -1320,8 +1329,6 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
                   <Ionicons name="arrow-forward" size={24} color={colors.white} />
                 </TouchableOpacity>
               </Animated.View>
-              
-              <Text style={styles.hintText}>Let's get started with your training journey!</Text>
             </View>
           </View>
         </SafeAreaView>
@@ -1401,13 +1408,14 @@ const styles = StyleSheet.create({
     textShadowRadius: 1,
   },
   subtitleText: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: '400',
     marginBottom: 0,
     textAlign: 'center',
-    color: colors.gray,
+    color: '#505050',
     width: '100%',
     paddingHorizontal: 20,
+    lineHeight: 32,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -1432,7 +1440,7 @@ const styles = StyleSheet.create({
   },
   profileItem: {
     borderRadius: 16,
-    marginBottom: 16,
+    marginBottom: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.1,
@@ -1444,7 +1452,7 @@ const styles = StyleSheet.create({
   },
   profileItemGradient: {
     borderRadius: 16,
-    padding: 18,
+    padding: 24,
   },
   profileItemRow: {
     flexDirection: 'row',
@@ -1509,13 +1517,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginRight: 8,
-  },
-  hintText: {
-    marginTop: 14, // Increased from 10
-    marginBottom: 4, // Add bottom margin
-    color: colors.gray,
-    fontSize: 13,
-    textAlign: 'center',
   },
   errorContainer: {
     alignItems: 'center',

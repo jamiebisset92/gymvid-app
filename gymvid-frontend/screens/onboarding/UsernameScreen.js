@@ -1228,7 +1228,7 @@ export default function UsernameScreen({ navigation, route }) {
               >
                 <View style={styles.infoContainer}>
                   <Text style={styles.infoText}>
-                    Your username will be used to identify you on the app so you can connect with others using GymVid!
+                    Your username will be used to identify you on the app to connect with others using GymVid!
                   </Text>
                 </View>
                 
@@ -1448,11 +1448,11 @@ const styles = StyleSheet.create({
   infoContainer: {
     marginTop: 0,
     paddingHorizontal: 8,
-    marginBottom: 26,
+    marginBottom: 30,
   },
   infoText: {
     color: colors.gray,
-    fontSize: 14,
+    fontSize: 16,
     lineHeight: 20,
   },
   bottomButtonContainer: {

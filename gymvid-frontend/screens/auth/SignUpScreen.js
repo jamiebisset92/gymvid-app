@@ -164,12 +164,16 @@ export default function SignUpScreen({ navigation }) {
 
   const handleSignUp = async () => {
     if (!email || !password || !confirmPassword) {
-      toast.error('Please fill in all fields');
+      setTimeout(() => {
+        toast.error('Please fill in all fields');
+      }, 0);
       return;
     }
 
     if (password !== confirmPassword) {
-      toast.error('Passwords do not match');
+      setTimeout(() => {
+        toast.error('Passwords do not match');
+      }, 0);
       return;
     }
 
@@ -199,7 +203,10 @@ export default function SignUpScreen({ navigation }) {
           (typeof error === 'object' && (error.status === 422 || error.statusCode === 422)) ||
           (typeof error === 'object' && error.code && (error.code === 'USER_EXISTS' || error.code === 'EMAIL_EXISTS'))
         ) {
-          toast.error('You already have an account! Please log in.');
+          // Use setTimeout to avoid useInsertionEffect scheduling issues
+          setTimeout(() => {
+            toast.error('You already have an account! Please log in.');
+          }, 0);
           
           // Navigate to login screen with the email pre-filled
           setTimeout(() => {
@@ -210,7 +217,10 @@ export default function SignUpScreen({ navigation }) {
         
         // Handle other errors
         console.log('Other signup error:', errorMessage);
-        toast.error(errorMessage);
+        // Use setTimeout to avoid useInsertionEffect scheduling issues
+        setTimeout(() => {
+          toast.error(errorMessage);
+        }, 0);
         return;
       }
       
@@ -223,7 +233,10 @@ export default function SignUpScreen({ navigation }) {
       // Make sure we have a userId
       if (!userId) {
         console.error('No user ID found in signup response');
-        toast.error('Account created but could not start onboarding. Please sign in manually.');
+        // Use setTimeout to avoid useInsertionEffect scheduling issues
+        setTimeout(() => {
+          toast.error('Account created but could not start onboarding. Please sign in manually.');
+        }, 0);
         
         // Navigate to login as fallback
         navigation.reset({
@@ -274,7 +287,10 @@ export default function SignUpScreen({ navigation }) {
         (typeof err === 'object' && (err.status === 422 || err.statusCode === 422)) ||
         (typeof err === 'object' && err.code && (err.code === 'USER_EXISTS' || err.code === 'EMAIL_EXISTS'))
       ) {
-        toast.error('You already have an account! Please log in.');
+        // Use setTimeout to avoid useInsertionEffect scheduling issues
+        setTimeout(() => {
+          toast.error('You already have an account! Please log in.');
+        }, 0);
         
         // Navigate to login screen with the email pre-filled
         setTimeout(() => {
@@ -284,14 +300,20 @@ export default function SignUpScreen({ navigation }) {
       }
       
       console.log('Unexpected signup error:', err);
-      toast.error(errorMessage);
+      // Use setTimeout to avoid useInsertionEffect scheduling issues
+      setTimeout(() => {
+        toast.error(errorMessage);
+      }, 0);
     }
   };
 
   const handleSocialLogin = async (provider) => {
     const { error } = await signInWithProvider(provider);
     if (error) {
-      toast.error(error.message || 'Error signing in with ' + provider);
+      // Use setTimeout to avoid useInsertionEffect scheduling issues
+      setTimeout(() => {
+        toast.error(error.message || 'Error signing in with ' + provider);
+      }, 0);
     }
   };
 

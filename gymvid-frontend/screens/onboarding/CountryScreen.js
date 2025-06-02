@@ -231,6 +231,52 @@ const COUNTRIES = [
   { name: "Zimbabwe", code: "ZW" }
 ];
 
+// Most commonly used countries for flag preloading
+const POPULAR_COUNTRIES = ['US', 'GB', 'CA', 'AU', 'DE', 'FR', 'ES', 'IT', 'BR', 'IN', 'CN', 'JP', 'KR', 'MX', 'RU', 'ZA'];
+
+// Flag component with loading state and fallback
+const FlagComponent = ({ isoCode, size = 24, style }) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  
+  useEffect(() => {
+    // Reset states when isoCode changes
+    setIsLoading(true);
+    setHasError(false);
+    
+    // Set a timeout to hide loading state after a reasonable delay
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 200);
+    
+    return () => clearTimeout(timer);
+  }, [isoCode]);
+  
+  if (hasError) {
+    // Fallback to text-based country indicator
+    return (
+      <View style={[styles.flagFallback, { width: size, height: size * 0.75 }, style]}>
+        <Text style={[styles.flagFallbackText, { fontSize: size * 0.4 }]}>
+          {isoCode}
+        </Text>
+      </View>
+    );
+  }
+  
+  return (
+    <View style={style}>
+      {isLoading && (
+        <View style={[styles.flagPlaceholder, { width: size, height: size * 0.75 }]} />
+      )}
+      <CountryFlag 
+        isoCode={isoCode} 
+        size={size}
+        style={{ opacity: isLoading ? 0 : 1 }}
+      />
+    </View>
+  );
+};
+
 export default function CountryScreen({ navigation, route }) {
   const [country, setCountry] = useState('');
   const [countryCode, setCountryCode] = useState('');
@@ -581,76 +627,65 @@ export default function CountryScreen({ navigation, route }) {
           // Dismiss keyboard if open
           Keyboard.dismiss();
           
-          // Trigger elegant hide animation
-          setLocationUsed(true);
-          
-          // Create a world-class staggered animation sequence
+          // Create world-class animation sequence
           Animated.sequence([
-            // Phase 1: Success feedback - brief pause and success indication
+            // Success feedback
             Animated.parallel([
-              // Success pulse - larger and more dramatic
               Animated.sequence([
                 Animated.timing(locationButtonScale, {
-                  toValue: 1.15,
-                  duration: 200,
-                  easing: Easing.out(Easing.back(1.2)),
+                  toValue: 1.2,
+                  duration: 250,
+                  easing: Easing.out(Easing.back(1.5)),
                   useNativeDriver: true,
                 }),
                 Animated.timing(locationButtonScale, {
                   toValue: 1.05,
-                  duration: 180,
+                  duration: 200,
                   easing: Easing.inOut(Easing.cubic),
                   useNativeDriver: true,
                 })
-              ]),
-              // Brief color/success indication could go here (if we had state for it)
+              ])
             ]),
             
-            // Phase 2: Hold the success state briefly for user recognition
-            Animated.delay(400),
+            // Hold success state
+            Animated.delay(500),
             
-            // Phase 3: Elegant exit with overlapping animations
+            // Elegant exit
             Animated.parallel([
-              // Fade out location elements smoothly
               Animated.timing(locationElementsOpacity, {
                 toValue: 0,
-                duration: 600,
-                easing: Easing.bezier(0.4, 0.0, 0.2, 1), // Material Design decelerate
+                duration: 800,
+                easing: Easing.bezier(0.4, 0.0, 0.2, 1),
                 useNativeDriver: true,
               }),
               
-              // Scale down vertically with elegant curve
               Animated.timing(locationElementsHeight, {
-                toValue: 0.02, // Slightly higher to avoid animation glitches
-                duration: 650,
-                easing: Easing.bezier(0.4, 0.0, 0.6, 1), // Custom smooth curve
+                toValue: 0.01,
+                duration: 900,
+                easing: Easing.bezier(0.4, 0.0, 0.6, 1),
                 useNativeDriver: true,
               }),
               
-              // Scale button down as part of the exit
               Animated.sequence([
-                Animated.delay(100), // Slight delay for staggered effect
+                Animated.delay(150),
                 Animated.timing(locationButtonScale, {
-                  toValue: 0.85,
-                  duration: 500,
+                  toValue: 0.8,
+                  duration: 700,
                   easing: Easing.bezier(0.4, 0.0, 0.2, 1),
                   useNativeDriver: true,
                 })
               ]),
               
-              // Slide input up with spring for premium feel
-              Animated.sequence([
-                Animated.delay(200), // More delay for better stagger
-                Animated.spring(inputSlideUp, {
-                  toValue: -35, // Slightly more movement for dramatic effect
-                  tension: 45, // Lower tension for smoother spring
-                  friction: 12, // Higher friction for controlled bounce
-                  useNativeDriver: true,
-                })
-              ])
+              // Input slide starts in parallel but with gradual ease-in
+              Animated.timing(inputSlideUp, {
+                toValue: -5,
+                duration: 100, // Even longer for ultra-smooth
+                easing: Easing.bezier(0.0, 0.0, 0.1, 1), // Even gentler start
+                useNativeDriver: true,
+              })
             ])
           ]).start(() => {
-            // Animation complete - input field is now the focus
+            setLocationUsed(true);
             debugLog('Location-based country selection animation completed');
           });
           
@@ -819,7 +854,7 @@ export default function CountryScreen({ navigation, route }) {
       key={item.code}
     >
       <View style={styles.countryFlagContainer}>
-        <CountryFlag isoCode={item.code} size={24} />
+        <FlagComponent isoCode={item.code} size={24} />
       </View>
       <Text style={styles.dropdownItemText}>{item.name}</Text>
     </Pressable>
@@ -888,7 +923,7 @@ export default function CountryScreen({ navigation, route }) {
                         })
                       )
                     }
-                  ],
+                  ]
                 }
               ]}
             >
@@ -966,7 +1001,7 @@ export default function CountryScreen({ navigation, route }) {
                         outputRange: [0.7, 1],
                       })
                     }
-                  ],
+                  ]
                 }
               ]}
             >
@@ -982,7 +1017,7 @@ export default function CountryScreen({ navigation, route }) {
               opacity: Animated.add(
                 fadeAnim,
                 inputSlideUp.interpolate({
-                  inputRange: [-30, 0],
+                  inputRange: [-1, 0],
                   outputRange: [0, 0],
                   extrapolate: 'clamp',
                 })
@@ -993,8 +1028,8 @@ export default function CountryScreen({ navigation, route }) {
                 },
                 {
                   scale: inputSlideUp.interpolate({
-                    inputRange: [-30, 0],
-                    outputRange: [1.02, 1], // Subtle scale up when sliding
+                    inputRange: [-1, 0],
+                    outputRange: [1.01, 1],
                     extrapolate: 'clamp',
                   })
                 }
@@ -1020,7 +1055,7 @@ export default function CountryScreen({ navigation, route }) {
                 >
                   {countryCode ? (
                     <View style={styles.selectedFlagContainer}>
-                      <CountryFlag isoCode={countryCode} size={24} />
+                      <FlagComponent isoCode={countryCode} size={24} />
                     </View>
                   ) : (
                     <Ionicons name="earth-outline" size={24} color={colors.primary} style={styles.inputIcon} />
@@ -1212,7 +1247,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   helperText: {
-    marginTop: 12,
+    marginTop: 20,
     fontSize: 16,
     color: colors.gray,
     textAlign: 'center',
@@ -1422,5 +1457,28 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.gray,
     letterSpacing: -0.2,
+  },
+  flagPlaceholder: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 1,
+  },
+  flagFallback: {
+    backgroundColor: '#E8F4FD',
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: '#B8E6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  flagFallbackText: {
+    color: '#0066CC',
+    fontWeight: '600',
+    textAlign: 'center',
   },
 }); 

@@ -9,7 +9,8 @@ import {
   Dimensions,
   ScrollView,
   Platform,
-  Easing
+  Easing,
+  Image
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import colors from '../../config/colors';
@@ -44,7 +45,7 @@ export default function PaywallScreen({ navigation, route }) {
   });
   
   const [loading, setLoading] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState('annual');
+  const [selectedPlan, setSelectedPlan] = useState('platinum');
   const isFocused = useIsFocused();
   const { updateProfile } = useAuth();
   
@@ -261,7 +262,11 @@ export default function PaywallScreen({ navigation, route }) {
       <SafeAreaView style={styles.safeContainer}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>GymVid</Text>
+          <Image 
+            source={require('../../assets/images/logo.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
 
         <ScrollView 
@@ -271,84 +276,85 @@ export default function PaywallScreen({ navigation, route }) {
         >
           {/* Main Title */}
           <Text style={styles.mainTitle}>
-            Unlock your full potential today, {firstName}!
+            It's time to change the way you train {firstName}!
+          </Text>
+          
+          {/* Sub-header */}
+          <Text style={styles.subHeader}>
+            Select your plan & get started now!
           </Text>
           
           {/* Pricing Plans */}
           <View style={styles.plansContainer}>
-            {/* Annual Plan - Featured */}
+            {/* Platinum Plan - Featured */}
             <TouchableOpacity
               style={[
                 styles.planCard,
                 styles.featuredPlanCard,
-                selectedPlan === 'annual' && styles.selectedPlanCard
+                selectedPlan === 'platinum' && styles.selectedPlanCard
               ]}
-              onPress={() => handlePlanSelect('annual')}
+              onPress={() => handlePlanSelect('platinum')}
               activeOpacity={0.8}
             >
               <View style={styles.freeBadge}>
-                <Text style={styles.freeBadgeText}>3 months free</Text>
+                <Text style={styles.freeBadgeText}>Most Popular</Text>
               </View>
               
               <View style={styles.planHeader}>
-                <Text style={styles.planTitle}>Annual Plan</Text>
-                <Text style={styles.planPrice}>$8.33/mo</Text>
+                <Text style={styles.planTitle}>Platinum</Text>
+                <Text style={styles.planPrice}>$24.95</Text>
               </View>
-              <Text style={styles.planBilling}>Billed annually</Text>
-              <Text style={styles.planTotalPrice}>$99.99/yr</Text>
+              <Text style={styles.planBilling}>Billed Monthly</Text>
               
               <View style={styles.featuresContainer}>
                 <View style={styles.featureRow}>
                   <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Most popular choice</Text>
+                  <Text style={styles.featureText}>100 Coaching Credits</Text>
                 </View>
                 <View style={styles.featureRow}>
                   <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Unlimited AI form analysis</Text>
+                  <Text style={styles.featureText}>Unlimited Video Uploads</Text>
                 </View>
                 <View style={styles.featureRow}>
                   <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Advanced progress tracking</Text>
+                  <Text style={styles.featureText}>Permanent Storage of All Lifts</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                  <Text style={styles.featureText}>Custom Exercises & Detailed Analytics</Text>
                 </View>
               </View>
             </TouchableOpacity>
 
-            {/* Monthly Plan */}
+            {/* Pro Plan */}
             <TouchableOpacity
               style={[
                 styles.planCard,
-                selectedPlan === 'monthly' && styles.selectedPlanCard
+                selectedPlan === 'pro' && styles.selectedPlanCard
               ]}
-              onPress={() => handlePlanSelect('monthly')}
+              onPress={() => handlePlanSelect('pro')}
               activeOpacity={0.8}
             >
               <View style={styles.planHeader}>
-                <Text style={styles.planTitle}>Monthly Plan</Text>
-                <Text style={styles.planPrice}>$12.99/mo</Text>
+                <Text style={styles.planTitle}>Pro</Text>
+                <Text style={styles.planPrice}>$9.95</Text>
               </View>
-              <Text style={styles.planBilling}>Billed monthly</Text>
+              <Text style={styles.planBilling}>Billed Monthly</Text>
               
-              <Text style={styles.additionalNote}>
-                + Premium workout templates
-              </Text>
-            </TouchableOpacity>
-
-            {/* Free Trial */}
-            <TouchableOpacity
-              style={[
-                styles.planCard,
-                selectedPlan === 'trial' && styles.selectedPlanCard
-              ]}
-              onPress={() => handlePlanSelect('trial')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.planHeader}>
-                <Text style={styles.planTitle}>7 day Trial</Text>
-                <Text style={styles.planPrice}>$0</Text>
+              <View style={styles.featuresContainer}>
+                <View style={styles.featureRow}>
+                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                  <Text style={styles.featureText}>100 Video Uploads</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                  <Text style={styles.featureText}>Permanent Storage of All Lifts</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                  <Text style={styles.featureText}>Custom Exercises & Detailed Analytics</Text>
+                </View>
               </View>
-              <Text style={styles.planBilling}>
-                $99.99 billed annually after trial ends
-              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -362,9 +368,8 @@ export default function PaywallScreen({ navigation, route }) {
             activeOpacity={0.8}
           >
             <Text style={styles.ctaButtonText}>
-              {selectedPlan === 'annual' ? 'Continue with Annual Plan' : 
-               selectedPlan === 'monthly' ? 'Continue with Monthly Plan' :
-               'Start Free Trial'}
+              {selectedPlan === 'platinum' ? 'Continue with Platinum Plan' : 
+               'Continue with Pro Plan'}
             </Text>
           </TouchableOpacity>
           
@@ -397,11 +402,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.primary,
-    letterSpacing: -0.5,
+  logo: {
+    width: 120,
+    height: 40,
   },
   scrollView: {
     flex: 1,
@@ -415,9 +418,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1A1A1A',
     textAlign: 'center',
-    marginBottom: 40,
+    marginBottom: 16,
     lineHeight: 34,
     letterSpacing: -0.5,
+  },
+  subHeader: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 24,
   },
   plansContainer: {
     gap: 16,

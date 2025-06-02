@@ -720,21 +720,21 @@ export default function VideoPromptScreen({ navigation, route }) {
     
     // Define the image sources based on gender
     if (showMaleImages) {
-      // High-quality male weightlifting images - specific exercises (CORRECTED)
-      if (position === 'main') return { uri: 'https://source.unsplash.com/GXTfOkAQLZA?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (from user)
-      if (position === 'left') return { uri: 'https://source.unsplash.com/ui45PyGUsBY?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (from user)
-      if (position === 'right') return { uri: 'https://source.unsplash.com/fGAgXh6QQEU?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (from user)
+      // Local male weightlifting images
+      if (position === 'main') return require('../../assets/video images/M1a.jpg'); // Centre image (updated)
+      if (position === 'left') return require('../../assets/video images/M2a.jpeg'); // Left image (updated)
+      if (position === 'right') return require('../../assets/video images/M3a.jpeg'); // Right image (updated)
     } else if (showFemaleImages) {
-      // High-quality female weightlifting images - specific exercises 
-      if (position === 'main') return { uri: 'https://source.unsplash.com/LT4bLdgtBug?auto=format&fit=crop&w=1000&q=80' }; // Woman lifting (from user)
-      if (position === 'left') return { uri: 'https://source.unsplash.com/E1DKyChPV0o?auto=format&fit=crop&w=1000&q=80' }; // Woman lifting (from user)
-      if (position === 'right') return { uri: 'https://source.unsplash.com/aHqe_NrxrUk?auto=format&fit=crop&w=1000&q=80' }; // Woman lifting (from user)
+      // Local female weightlifting images
+      if (position === 'main') return require('../../assets/video images/F1.jpeg'); // Centre image
+      if (position === 'left') return require('../../assets/video images/F3.jpeg'); // Left image (swapped)
+      if (position === 'right') return require('../../assets/video images/F3a.jpeg'); // Right image (updated)
     }
     
-    // Default fallback images if gender is not set - use new MALE images as fallback
-    if (position === 'main') return { uri: 'https://source.unsplash.com/GXTfOkAQLZA?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (fallback)
-    if (position === 'left') return { uri: 'https://source.unsplash.com/ui45PyGUsBY?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (fallback)
-    if (position === 'right') return { uri: 'https://source.unsplash.com/fGAgXh6QQEU?auto=format&fit=crop&w=1000&q=80' }; // Man lifting (fallback)
+    // Default fallback images if gender is not set - use male images as fallback
+    if (position === 'main') return require('../../assets/video images/M1a.jpg'); // Centre image (fallback updated)
+    if (position === 'left') return require('../../assets/video images/M2a.jpeg'); // Left image (fallback updated)
+    if (position === 'right') return require('../../assets/video images/M3a.jpeg'); // Right image (fallback updated)
   };
 
   // Video placeholder frames

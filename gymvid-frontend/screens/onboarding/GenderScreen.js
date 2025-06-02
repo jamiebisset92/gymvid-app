@@ -24,8 +24,6 @@ export default function GenderScreen({ navigation, route }) {
   
   const [gender, setGender] = useState('');
   const [userName, setUserName] = useState('');
-  const [typingText, setTypingText] = useState(''); // State for typing effect
-  const [isTyping, setIsTyping] = useState(false); // Track if typing is active
   const { updateProfile, loading } = useAuth();
   
   // Get userId and other params from route
@@ -69,6 +67,8 @@ export default function GenderScreen({ navigation, route }) {
   const line3Anim = useRef(new Animated.Value(0)).current;
   const line4Anim = useRef(new Animated.Value(0)).current;
   const line5Anim = useRef(new Animated.Value(0)).current;
+  const profileTextAnim = useRef(new Animated.Value(0)).current;
+  const emojiBouncedAnim = useRef(new Animated.Value(0)).current;
   const helpTextAnim = useRef(new Animated.Value(0)).current;
   const letsDoItButtonAnim = useRef(new Animated.Value(0)).current;
   const letsDoItButtonScale = useRef(new Animated.Value(0.5)).current;
@@ -76,7 +76,6 @@ export default function GenderScreen({ navigation, route }) {
   const contentRevealAnim = useRef(new Animated.Value(0)).current;
   const welcomeContentFadeOut = useRef(new Animated.Value(1)).current;
   const trophyBounceAnim = useRef(new Animated.Value(0)).current;
-  const textCenterAnim = useRef(new Animated.Value(0)).current; // For smooth text centering
   
   const isFocused = useIsFocused();
 
@@ -84,65 +83,27 @@ export default function GenderScreen({ navigation, route }) {
   useEffect(() => {
     if (isFocused) {
       if (!isRevealed) {
-        // Pre-reveal: Hide progress bar
+        // Pre-reveal: Hide progress bar but still track the screen
         debugLog('GenderScreen PRE-REVEAL: Hiding progress bar.');
         setProgress(prev => ({ 
           ...prev, 
           isOnboarding: false, 
           currentScreen: 'Gender' 
         }));
+        // Update progress even in pre-reveal state
+        updateProgress('Gender');
       } else {
         // Post-reveal: Show progress bar
         debugLog('GenderScreen POST-REVEAL: Showing progress bar.');
-        console.log('👫 GenderScreen: Current progress before update:', progress);
         setProgress(prev => ({ 
           ...prev, 
           isOnboarding: true, 
           currentScreen: 'Gender' 
         }));
         updateProgress('Gender');
-        console.log('👫 GenderScreen: Called updateProgress with Gender');
       }
     }
   }, [isFocused, isRevealed, updateProgress, setProgress]);
-
-  // Simple, reliable typing effect using timers
-  const startTypingEffect = () => {
-    const fullText = "Here's what you're about to unlock...";
-    let currentIndex = 0;
-    setTypingText('');
-    setIsTyping(true);
-    
-    const typeNextCharacter = () => {
-      if (currentIndex < fullText.length) {
-        setTypingText(fullText.substring(0, currentIndex + 1));
-        currentIndex++;
-        
-        // Variable typing speed for natural feel - 50% faster than before
-        let delay = 20; // Base speed (was 40ms, now 50% faster)
-        if (fullText[currentIndex - 1] === "'") delay = 38; // Pause after apostrophe (was 75ms)
-        if (fullText[currentIndex - 1] === ' ') delay = 30; // Pause after space (was 60ms)
-        if (fullText[currentIndex - 1] === '.') delay = 50; // Longer pause after period (was 100ms)
-        
-        setTimeout(typeNextCharacter, delay);
-      } else {
-        setIsTyping(false);
-        // Smoothly animate text to center position
-        Animated.timing(textCenterAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1)
-        }).start();
-        // Notify when typing is complete
-        if (window.typingCompleteCallback) {
-          window.typingCompleteCallback();
-        }
-      }
-    };
-    
-    typeNextCharacter();
-  };
 
   // Load user's name when component mounts
   useEffect(() => {
@@ -200,12 +161,13 @@ export default function GenderScreen({ navigation, route }) {
       line3Anim.setValue(0);
       line4Anim.setValue(0);
       line5Anim.setValue(0);
+      profileTextAnim.setValue(0);
+      emojiBouncedAnim.setValue(0);
       helpTextAnim.setValue(0);
       letsDoItButtonAnim.setValue(0);
       letsDoItButtonScale.setValue(0.5);
       contentRevealAnim.setValue(0);
       welcomeContentFadeOut.setValue(1);
-      textCenterAnim.setValue(0); // Reset text centering animation
       
       // Ensure screen is visible immediately
       fadeAnim.setValue(1);
@@ -213,154 +175,204 @@ export default function GenderScreen({ navigation, route }) {
       if (!isRevealed) {
         debugLog('GenderScreen Entrance: Animating WELCOME part.');
         timer = setTimeout(() => {
-          // World-class animation sequence - FIXED SEQUENTIAL STRUCTURE
+          // SECTION 1: Header and Sub-Header with Auto Fade-Out
           Animated.sequence([
             // Phase 1: Immediate header appearance
             Animated.timing(welcomeFadeAnim, { 
               toValue: 1, 
-              duration: 300, 
+              duration: 420, // Increased from 300ms by 40%
               useNativeDriver: true, 
               easing: Easing.out(Easing.cubic) 
             }),
             
-            // Phase 2: Header (name) appears immediately after container
+            // Phase 2: Header (name) appears
             Animated.timing(welcomeNameAnim, { 
               toValue: 1, 
-              duration: 400, 
-              useNativeDriver: true, 
-              easing: Easing.bezier(0.0, 0.0, 0.2, 1) // Material Design decelerate
-            }),
-            
-            // Phase 3: Sub-header appears shortly after (no delay)
-            Animated.timing(welcomeSubtitleAnim, { 
-              toValue: 1, 
-              duration: 500, 
+              duration: 560, // Increased from 400ms by 40%
               useNativeDriver: true, 
               easing: Easing.bezier(0.0, 0.0, 0.2, 1)
             }),
             
-            // Phase 4: Text appears immediately, then typing effect introduces the content
-            Animated.sequence([
-              Animated.delay(100), // Brief pause after sub-header
-              // Make text container immediately visible (no fade-in animation)
-              Animated.timing(line1Anim, { 
-                toValue: 1, 
-                duration: 1, // Instant visibility
-                useNativeDriver: true
-              })
-            ])
-          ]).start(() => {
-            // Now start typing effect after header sequence is complete
-            startTypingEffect();
+            // Phase 3: Sub-header appears
+            Animated.timing(welcomeSubtitleAnim, { 
+              toValue: 1, 
+              duration: 700, // Increased from 500ms by 40%
+              useNativeDriver: true, 
+              easing: Easing.bezier(0.0, 0.0, 0.2, 1)
+            }),
             
-            // Set up callback to start cards when typing is complete
-            window.typingCompleteCallback = () => {
-              // Small delay after typing completes, then start cards
-              setTimeout(() => {
-                // Phase 5: Cards appear one by one with 75ms delays
-                Animated.sequence([
-                  // First card
-                  Animated.timing(line2Anim, { 
+            // Phase 3.5: Additional delay after both texts are fully visible
+            Animated.delay(800), // 800ms delay after texts appear
+            
+            // Phase 4: Auto fade out header and sub-header (removed duplicate delay)
+            Animated.parallel([
+              Animated.timing(welcomeNameAnim, { 
+                toValue: 0, 
+                duration: 840, // Increased from 600ms by 40%
+                useNativeDriver: true, 
+                easing: Easing.in(Easing.cubic)
+              }),
+              Animated.timing(welcomeSubtitleAnim, { 
+                toValue: 0, 
+                duration: 840, // Increased from 600ms by 40%
+                useNativeDriver: true, 
+                easing: Easing.in(Easing.cubic)
+              })
+            ]),
+            
+            // Phase 5: Small pause before Section 2
+            Animated.delay(300),
+            
+            // Phase 6: Make sure container is visible for SECTION 2
+            Animated.timing(welcomeFadeAnim, { 
+              toValue: 1, 
+              duration: 1,
+              useNativeDriver: true
+            }),
+            
+            // Phase 7: SECTION 2 - Show typing text container
+            Animated.timing(line1Anim, { 
+              toValue: 1, 
+              duration: 800, // Smooth fade-in instead of instant
+              useNativeDriver: true,
+              easing: Easing.out(Easing.cubic)
+            })
+          ]).start(() => {
+            // SECTION 2: Start smooth fade-in instead of typing effect
+            
+            // Start cards appearing after text fades in
+            setTimeout(() => {
+              // Cards appear one by one with 75ms delays
+              Animated.sequence([
+                // First card
+                Animated.timing(line2Anim, { 
+                  toValue: 1, 
+                  duration: 700, 
+                  useNativeDriver: true, 
+                  easing: Easing.bezier(0.0, 0.0, 0.2, 1)
+                }),
+                
+                // 75ms delay before second card
+                Animated.delay(75),
+                Animated.timing(line3Anim, { 
+                  toValue: 1, 
+                  duration: 700, 
+                  useNativeDriver: true, 
+                  easing: Easing.bezier(0.0, 0.0, 0.2, 1)
+                }),
+                
+                // 75ms delay before third card
+                Animated.delay(75),
+                Animated.timing(line4Anim, { 
+                  toValue: 1, 
+                  duration: 700, 
+                  useNativeDriver: true, 
+                  easing: Easing.bezier(0.0, 0.0, 0.2, 1)
+                }),
+                
+                // 75ms delay before fourth card
+                Animated.delay(75),
+                Animated.timing(line5Anim, { 
+                  toValue: 1, 
+                  duration: 700, 
+                  useNativeDriver: true, 
+                  easing: Easing.bezier(0.0, 0.0, 0.2, 1)
+                }),
+                
+                // Profile text appears after last card
+                Animated.delay(150),
+                Animated.timing(profileTextAnim, { 
+                  toValue: 1, 
+                  duration: 600, 
+                  useNativeDriver: true, 
+                  easing: Easing.bezier(0.0, 0.0, 0.2, 1)
+                }),
+                
+                // Final button appears after profile text
+                Animated.delay(200),
+                Animated.parallel([
+                  Animated.timing(letsDoItButtonAnim, { 
                     toValue: 1, 
-                    duration: 700, 
+                    duration: 600, 
                     useNativeDriver: true, 
                     easing: Easing.bezier(0.0, 0.0, 0.2, 1)
                   }),
-                  
-                  // 75ms delay before second card
-                  Animated.delay(75),
-                  Animated.timing(line3Anim, { 
-                    toValue: 1, 
-                    duration: 700, 
-                    useNativeDriver: true, 
-                    easing: Easing.bezier(0.0, 0.0, 0.2, 1)
-                  }),
-                  
-                  // 75ms delay before third card
-                  Animated.delay(75),
-                  Animated.timing(line4Anim, { 
-                    toValue: 1, 
-                    duration: 700, 
-                    useNativeDriver: true, 
-                    easing: Easing.bezier(0.0, 0.0, 0.2, 1)
-                  }),
-                  
-                  // 75ms delay before fourth card
-                  Animated.delay(75),
-                  Animated.timing(line5Anim, { 
-                    toValue: 1, 
-                    duration: 700, 
-                    useNativeDriver: true, 
-                    easing: Easing.bezier(0.0, 0.0, 0.2, 1)
-                  }),
-                  
-                  // Phase 6: Final help text and button appear together after last card
-                  Animated.delay(300), // Reduced from 600ms to 300ms (50% reduction)
-                  Animated.parallel([
-                    Animated.timing(letsDoItButtonAnim, { 
-                      toValue: 1, 
-                      duration: 600, 
-                      useNativeDriver: true, 
-                      easing: Easing.bezier(0.0, 0.0, 0.2, 1)
+                  // Premium button entrance with scale
+                  Animated.sequence([
+                    Animated.spring(letsDoItButtonScale, { 
+                      toValue: 1.08, 
+                      from: 0.5, 
+                      tension: 120, 
+                      friction: 8, 
+                      useNativeDriver: true 
                     }),
-                    // Premium button entrance with scale
+                    Animated.spring(letsDoItButtonScale, { 
+                      toValue: 1, 
+                      tension: 100, 
+                      friction: 10, 
+                      useNativeDriver: true 
+                    })
+                  ])
+                ])
+              ]).start(() => {
+                if (!isRevealed) { 
+                  // Start premium pulse animation for button
+                  Animated.loop(
                     Animated.sequence([
-                      Animated.spring(letsDoItButtonScale, { 
-                        toValue: 1.08, 
-                        from: 0.5, 
-                        tension: 120, 
-                        friction: 8, 
-                        useNativeDriver: true 
-                      }),
-                      Animated.spring(letsDoItButtonScale, { 
+                      Animated.timing(letsDoItButtonPulse, { 
+                        toValue: 1.03, 
+                        duration: 1500, 
+                        useNativeDriver: true, 
+                        easing: Easing.bezier(0.4, 0.0, 0.6, 1)
+                      }), 
+                      Animated.timing(letsDoItButtonPulse, { 
                         toValue: 1, 
-                        tension: 100, 
-                        friction: 10, 
-                        useNativeDriver: true 
+                        duration: 1500, 
+                        useNativeDriver: true, 
+                        easing: Easing.bezier(0.4, 0.0, 0.6, 1)
                       })
                     ])
-                  ])
-                ]).start(() => {
-                  if (!isRevealed) { 
-                    // Start premium pulse animation for button
-                    Animated.loop(
-                      Animated.sequence([
-                        Animated.timing(letsDoItButtonPulse, { 
-                          toValue: 1.03, 
-                          duration: 1500, 
-                          useNativeDriver: true, 
-                          easing: Easing.bezier(0.4, 0.0, 0.6, 1) // Custom easing for smooth pulse
-                        }), 
-                        Animated.timing(letsDoItButtonPulse, { 
-                          toValue: 1, 
-                          duration: 1500, 
-                          useNativeDriver: true, 
-                          easing: Easing.bezier(0.4, 0.0, 0.6, 1)
-                        })
-                      ])
-                    ).start();
-                    
-                    // Start subtle trophy bounce animation
-                    Animated.loop(
-                      Animated.sequence([
-                        Animated.timing(trophyBounceAnim, { 
-                          toValue: 1, 
-                          duration: 1200, 
-                          useNativeDriver: true, 
-                          easing: Easing.bezier(0.4, 0.0, 0.6, 1)
-                        }), 
-                        Animated.timing(trophyBounceAnim, { 
-                          toValue: 0, 
-                          duration: 1200, 
-                          useNativeDriver: true, 
-                          easing: Easing.bezier(0.4, 0.0, 0.6, 1)
-                        })
-                      ])
-                    ).start();
-                  }
-                });
-              }, 400); // Small delay after typing completes before cards appear
-            };
+                  ).start();
+                  
+                  // Start continuous emoji bounce animation
+                  emojiBouncedAnim.setValue(0); // Reset to initial value
+                  Animated.loop(
+                    Animated.sequence([
+                      Animated.timing(emojiBouncedAnim, { 
+                        toValue: 1, 
+                        duration: 600, 
+                        useNativeDriver: true, 
+                        easing: Easing.out(Easing.quad)
+                      }), 
+                      Animated.timing(emojiBouncedAnim, { 
+                        toValue: 0, 
+                        duration: 600, 
+                        useNativeDriver: true, 
+                        easing: Easing.in(Easing.quad)
+                      })
+                    ])
+                  ).start();
+                  
+                  // Start subtle trophy bounce animation
+                  Animated.loop(
+                    Animated.sequence([
+                      Animated.timing(trophyBounceAnim, { 
+                        toValue: 1, 
+                        duration: 1200, 
+                        useNativeDriver: true, 
+                        easing: Easing.bezier(0.4, 0.0, 0.6, 1)
+                      }), 
+                      Animated.timing(trophyBounceAnim, { 
+                        toValue: 0, 
+                        duration: 1200, 
+                        useNativeDriver: true, 
+                        easing: Easing.bezier(0.4, 0.0, 0.6, 1)
+                      })
+                    ])
+                  ).start();
+                }
+              });
+            }, 400);
           });
         }, 100);
       } else {
@@ -398,6 +410,8 @@ export default function GenderScreen({ navigation, route }) {
       line3Anim.stopAnimation();
       line4Anim.stopAnimation();
       line5Anim.stopAnimation();
+      profileTextAnim.stopAnimation();
+      emojiBouncedAnim.stopAnimation();
       helpTextAnim.stopAnimation();
       letsDoItButtonAnim.stopAnimation();
       letsDoItButtonScale.stopAnimation();
@@ -405,7 +419,6 @@ export default function GenderScreen({ navigation, route }) {
       contentRevealAnim.stopAnimation();
       welcomeContentFadeOut.stopAnimation();
       trophyBounceAnim.stopAnimation();
-      textCenterAnim.stopAnimation(); // Stop text centering animation
     };
   }, [isFocused, isRevealed]);
 
@@ -474,10 +487,19 @@ export default function GenderScreen({ navigation, route }) {
 
   // Handle Let's Do It button press
   const handleLetsDoIt = () => {
-    if (isRevealed) return;
+    console.log('🔥 handleLetsDoIt called! isRevealed:', isRevealed);
     
+    if (isRevealed) {
+      console.log('❌ Button press blocked - isRevealed is true');
+      return;
+    }
+    
+    console.log('✅ Proceeding with transition animation');
+    
+    // Stop all running animations
     letsDoItButtonPulse.stopAnimation();
     trophyBounceAnim.stopAnimation();
+    profileTextAnim.stopAnimation(); // Stop the new profile text animation
     
     // World-class transition with overlapping animations
     Animated.sequence([
@@ -491,6 +513,13 @@ export default function GenderScreen({ navigation, route }) {
         }),
         Animated.timing(letsDoItButtonAnim, { 
           toValue: 0.3, 
+          duration: 300, 
+          useNativeDriver: true, 
+          easing: Easing.in(Easing.cubic) 
+        }),
+        // Fade out profile text
+        Animated.timing(profileTextAnim, { 
+          toValue: 0, 
           duration: 300, 
           useNativeDriver: true, 
           easing: Easing.in(Easing.cubic) 
@@ -511,6 +540,37 @@ export default function GenderScreen({ navigation, route }) {
           useNativeDriver: true, 
           easing: Easing.bezier(0.4, 0.0, 0.2, 1)
         }),
+        // Fade out all SECTION 2 elements
+        Animated.timing(line1Anim, { 
+          toValue: 0, 
+          duration: 400, 
+          useNativeDriver: true, 
+          easing: Easing.in(Easing.cubic)
+        }),
+        Animated.timing(line2Anim, { 
+          toValue: 0, 
+          duration: 400, 
+          useNativeDriver: true, 
+          easing: Easing.in(Easing.cubic)
+        }),
+        Animated.timing(line3Anim, { 
+          toValue: 0, 
+          duration: 400, 
+          useNativeDriver: true, 
+          easing: Easing.in(Easing.cubic)
+        }),
+        Animated.timing(line4Anim, { 
+          toValue: 0, 
+          duration: 400, 
+          useNativeDriver: true, 
+          easing: Easing.in(Easing.cubic)
+        }),
+        Animated.timing(line5Anim, { 
+          toValue: 0, 
+          duration: 400, 
+          useNativeDriver: true, 
+          easing: Easing.in(Easing.cubic)
+        }),
         // Scale down effect for dramatic transition
         Animated.timing(welcomeNameAnim, { 
           toValue: 0.8, 
@@ -523,78 +583,82 @@ export default function GenderScreen({ navigation, route }) {
       // Set isRevealed to true - this will trigger the progress bar to show
       setIsRevealed(true); 
       
-      // Reset animation values for the form with dramatic entrance setup
+      // Reset animation values for the form with more elegant initial positions
       contentRevealAnim.setValue(0); 
-      titleAnim.setValue(50); // Start further down for more dramatic effect
-      slideAnim.setValue(80); 
+      titleAnim.setValue(40); // Start from a more subtle position
+      slideAnim.setValue(60); // Less dramatic starting position
       maleOpacity.setValue(0);
       femaleOpacity.setValue(0);
 
-      // Phase 3: Dramatic form entrance with world-class timing
+      // Phase 3: World-class smooth form entrance with premium timing
       Animated.sequence([
-        // Slight delay for anticipation
-        Animated.delay(150),
+        // Longer anticipation delay for premium feel
+        Animated.delay(200),
         
+        // Container and content reveal with overlapping animations
         Animated.parallel([
-          // Container reveals with elegant ease
+          // Container reveals with luxury ease-out curve
           Animated.timing(contentRevealAnim, { 
             toValue: 1, 
-            duration: 800, 
+            duration: 1000, // Increased duration for smoother feel
             useNativeDriver: true, 
-            easing: Easing.bezier(0.0, 0.0, 0.2, 1) // Decelerate easing
+            easing: Easing.bezier(0.25, 0.1, 0.25, 1) // Custom luxury easing
           }),
           
-          // Title entrance with bounce effect
+          // Title entrance with gentle float-in effect
           Animated.sequence([
-            Animated.delay(100),
+            Animated.delay(150), // Slight delay for layered entrance
             Animated.parallel([
               Animated.timing(titleAnim, { 
                 toValue: 0, 
-                duration: 900, 
+                duration: 1200, // Longer, more graceful
                 useNativeDriver: true, 
-                easing: Easing.bezier(0.0, 0.0, 0.2, 1)
+                easing: Easing.bezier(0.19, 1, 0.22, 1) // Smooth deceleration
               }),
-              // Subtle scale effect for premium feel
+              // Gentle scale and fade effect for premium feel
               Animated.sequence([
                 Animated.timing(fadeAnim, { 
-                  toValue: 0.95, 
-                  duration: 200, 
-                  useNativeDriver: true 
+                  toValue: 0.92, 
+                  duration: 300, 
+                  useNativeDriver: true,
+                  easing: Easing.out(Easing.cubic)
                 }),
                 Animated.spring(fadeAnim, { 
                   toValue: 1, 
-                  tension: 80, 
-                  friction: 8, 
+                  tension: 60,  // Gentler spring
+                  friction: 10, 
                   useNativeDriver: true 
                 })
               ])
             ])
           ]),
           
-          // Buttons entrance with staggered luxury timing
+          // Buttons entrance with world-class staggered timing
           Animated.sequence([
-            Animated.delay(400),
-            Animated.stagger(150, [
-              Animated.parallel([
-                Animated.timing(maleOpacity, { 
-                  toValue: 1, 
-                  duration: 700, 
-                  useNativeDriver: true, 
-                  easing: Easing.bezier(0.0, 0.0, 0.2, 1)
-                }),
-                // Subtle slide up effect
-                Animated.timing(slideAnim, { 
-                  toValue: 0, 
-                  duration: 700, 
-                  useNativeDriver: true, 
-                  easing: Easing.bezier(0.0, 0.0, 0.2, 1)
-                })
-              ]),
+            Animated.delay(500), // Longer delay for dramatic effect
+            
+            // First, slide elements up smoothly
+            Animated.timing(slideAnim, { 
+              toValue: 0, 
+              duration: 1000, // Smooth slide duration
+              useNativeDriver: true, 
+              easing: Easing.bezier(0.25, 0.1, 0.25, 1) // Luxury ease-out
+            }),
+            
+            // Then fade in buttons with elegant stagger
+            Animated.delay(100), // Small pause before buttons appear
+            Animated.stagger(200, [ // Increased stagger for more premium feel
+              Animated.timing(maleOpacity, { 
+                toValue: 1, 
+                duration: 800, // Slower, more elegant
+                useNativeDriver: true, 
+                easing: Easing.bezier(0.25, 0.1, 0.25, 1)
+              }),
               Animated.timing(femaleOpacity, { 
                 toValue: 1, 
-                duration: 700, 
+                duration: 800, // Slower, more elegant
                 useNativeDriver: true, 
-                easing: Easing.bezier(0.0, 0.0, 0.2, 1)
+                easing: Easing.bezier(0.25, 0.1, 0.25, 1)
               })
             ])
           ])
@@ -605,6 +669,7 @@ export default function GenderScreen({ navigation, route }) {
 
   // Handle button animations
   const handleLetsDoItButtonPressIn = () => {
+    console.log('🔥 Button PressIn detected! isRevealed:', isRevealed);
     if (!isRevealed) {
       Animated.spring(letsDoItButtonScale, {
         toValue: 0.92,
@@ -616,6 +681,7 @@ export default function GenderScreen({ navigation, route }) {
   };
 
   const handleLetsDoItButtonPressOut = () => {
+    console.log('🔥 Button PressOut detected! isRevealed:', isRevealed);
     if (!isRevealed) {
       Animated.spring(letsDoItButtonScale, {
         toValue: 1,
@@ -757,10 +823,17 @@ export default function GenderScreen({ navigation, route }) {
               styles.welcomeContainer,
               {
                 opacity: welcomeFadeAnim,
+                pointerEvents: 'box-none', // Allow touches to pass through to children
               }
             ]}
           >
-            <Animated.View style={styles.welcomeContent}>
+            {/* SECTION 1 - Centered Header Content */}
+            <Animated.View style={[
+              styles.section1Container,
+              {
+                opacity: welcomeFadeAnim, // Simplified - just use the main container fade
+              }
+            ]}>
               <Animated.Text
                 style={[
                   styles.welcomeTitle,
@@ -804,12 +877,14 @@ export default function GenderScreen({ navigation, route }) {
               >
                 Ready to level up your workouts?
               </Animated.Text>
-              
+            </Animated.View>
+
+            {/* SECTION 2 - Feature Content */}
+            <Animated.View style={styles.welcomeContent}>
               <Animated.Text
                 style={[
                   styles.welcomeText,
                   {
-                    textAlign: 'left', // Keep left-aligned, use transform for centering
                     opacity: line1Anim,
                     transform: [
                       {
@@ -817,21 +892,12 @@ export default function GenderScreen({ navigation, route }) {
                           inputRange: [0, 1],
                           outputRange: [10, 0],
                         })
-                      },
-                      {
-                        translateX: textCenterAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, 20], // Adjust this value to center the text properly
-                        })
                       }
                     ]
                   }
                 ]}
               >
-                {typingText}
-                {isTyping && (
-                  <Text style={[styles.welcomeText, { opacity: 0.6, color: '#007BFF' }]}>|</Text>
-                )}
+                Here's what you're about to unlock...
               </Animated.Text>
               
               <Animated.View
@@ -997,6 +1063,38 @@ export default function GenderScreen({ navigation, route }) {
               </Animated.View>
             </Animated.View>
             
+            {/* Profile creation text */}
+            <Animated.Text
+              style={[
+                styles.profileCreateText,
+                {
+                  opacity: profileTextAnim,
+                  transform: [
+                    {
+                      translateY: profileTextAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [15, 0],
+                      })
+                    }
+                  ]
+                }
+              ]}
+            >
+              Create your profile now to get started{' '}
+              <Animated.Text
+                style={{
+                  transform: [{
+                    translateY: emojiBouncedAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -8],
+                    })
+                  }]
+                }}
+              >
+                👇
+              </Animated.Text>
+            </Animated.Text>
+            
             {/* Let's Do It button */}
             <Animated.View
               style={[
@@ -1014,16 +1112,30 @@ export default function GenderScreen({ navigation, route }) {
                       })
                     }
                   ],
+                  pointerEvents: 'auto', // Ensure touch events work
+                  zIndex: 100, // Bring to front
                 }
               ]}
             >
               <TouchableOpacity
-                style={styles.letsDoItButton}
-                onPress={handleLetsDoIt}
-                onPressIn={handleLetsDoItButtonPressIn}
-                onPressOut={handleLetsDoItButtonPressOut}
+                style={[styles.letsDoItButton, { 
+                  backgroundColor: 'rgba(255,0,0,0.1)', // Temporary red tint to see button bounds
+                  zIndex: 101 
+                }]}
+                onPress={() => {
+                  console.log('🚨 DIRECT BUTTON PRESS DETECTED!');
+                  handleLetsDoIt();
+                }}
+                onPressIn={() => {
+                  console.log('🚨 DIRECT BUTTON PRESS IN!');
+                  handleLetsDoItButtonPressIn();
+                }}
+                onPressOut={() => {
+                  console.log('🚨 DIRECT BUTTON PRESS OUT!');
+                  handleLetsDoItButtonPressOut();
+                }}
                 activeOpacity={0.9}
-                disabled={isRevealed}
+                // disabled={isRevealed} // Temporarily disabled for testing
               >
                 <LinearGradient
                   colors={['#0099FF', '#0066DD', '#0044BB']}
@@ -1031,7 +1143,7 @@ export default function GenderScreen({ navigation, route }) {
                   end={{ x: 1, y: 1 }}
                   style={styles.letsDoItGradient}
                 >
-                  <Text style={styles.letsDoItButtonText}>Create Profile & Get Started!</Text>
+                  <Text style={styles.letsDoItButtonText}>Let's Go!</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </Animated.View>
@@ -1372,6 +1484,19 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 26,
   },
+  section1Container: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20, // Much less padding - higher position
+    paddingBottom: 120, // More bottom padding to push content up
+    zIndex: 10,
+  },
   welcomeContent: {
     flex: 1,
     justifyContent: 'center',
@@ -1390,13 +1515,15 @@ const styles = StyleSheet.create({
     lineHeight: 44,
   },
   welcomeText: {
-    fontSize: 18,
-    fontWeight: '400',
+    fontSize: 32,
+    fontWeight: '800',
     marginBottom: 28,
-    textAlign: 'left', // Keep left-aligned, use transform for centering
-    color: colors.primary,
+    textAlign: 'center',
+    color: '#1A1A1A',
     width: '100%',
     paddingHorizontal: 20,
+    letterSpacing: -1,
+    lineHeight: 44,
   },
   welcomeTextBold: {
     fontWeight: '700',
@@ -1415,6 +1542,8 @@ const styles = StyleSheet.create({
     marginTop: 20,
     width: '100%',
     paddingHorizontal: 20,
+    position: 'relative',
+    zIndex: 10,
   },
   letsDoItButton: {
     borderRadius: 16,
@@ -1450,7 +1579,7 @@ const styles = StyleSheet.create({
   },
   featureItem: {
     borderRadius: 20,
-    marginBottom: 18,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -1461,7 +1590,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 0, 0, 0.04)',
     width: '100%',
     maxWidth: 380,
-    height: 100,
+    height: 94,
   },
   featureItemGradient: {
     borderRadius: 20,
@@ -1513,6 +1642,15 @@ const styles = StyleSheet.create({
     color: colors.gray,
     fontSize: 22,
     fontWeight: '400',
+    lineHeight: 22,
+    paddingHorizontal: 20,
+  },
+  profileCreateText: {
+    marginTop: 10,
+    marginBottom: 20,
+    textAlign: 'center',
+    color: colors.gray,
+    fontSize: 18,
     lineHeight: 22,
     paddingHorizontal: 20,
   },

@@ -232,7 +232,9 @@ export default function LoginScreen({ navigation, setSession, route }) {
   const handleLogin = async (useBiometric = false) => {
     console.log('Login button pressed', { email, password, useBiometric });
     if (!useBiometric && (!email || !password)) {
-      toast.error('Please fill in all fields');
+      setTimeout(() => {
+        toast.error('Please fill in all fields');
+      }, 0);
       return;
     }
 
@@ -244,22 +246,28 @@ export default function LoginScreen({ navigation, setSession, route }) {
       if (result?.error) {
         let errorMsg = typeof result.error === 'string' ? result.error : (result.error && result.error.message) ? result.error.message : 'An error occurred. Please try again.';
         if (errorMsg === 'Invalid login credentials') {
-          toast.error('Incorrect password. Reset it by tapping "Forgot Password"');
+          setTimeout(() => {
+            toast.error('Incorrect password. Reset it by tapping "Forgot Password"');
+          }, 0);
         } else {
-          toast.error(errorMsg);
+          setTimeout(() => {
+            toast.error(errorMsg);
+          }, 0);
         }
       } else if (result?.session) {
         // Check if the user needs to complete onboarding
         const needsOnboarding = await checkNeedsOnboarding(result.session.user.id);
         
         if (needsOnboarding) {
-          // Show neutral toast at the top for users who need to complete onboarding
-          toast.neutral("Please finish onboarding process", { 
-            position: 'top'
-          });
+          setTimeout(() => {
+            toast.neutral("Please finish onboarding process", { 
+              position: 'top'
+            });
+          }, 0);
         } else {
-          // Show normal success toast for users with complete profiles
-          toast.success('Login successful!');
+          setTimeout(() => {
+            toast.success('Login successful!');
+          }, 0);
         }
         
         // Use a timeout to ensure session update happens after animation completes
@@ -268,11 +276,15 @@ export default function LoginScreen({ navigation, setSession, route }) {
           setSession(result.session);
         }, 300);
       } else {
-        toast.error('Unknown error occurred');
+        setTimeout(() => {
+          toast.error('Unknown error occurred');
+        }, 0);
       }
     } catch (error) {
       console.error('Login error:', error);
-      toast.error('An unexpected error occurred');
+      setTimeout(() => {
+        toast.error('An unexpected error occurred');
+      }, 0);
     } finally {
       setIsLoggingIn(false);
     }
@@ -281,7 +293,9 @@ export default function LoginScreen({ navigation, setSession, route }) {
   const handleSocialLogin = async (provider) => {
     const { error } = await signInWithProvider(provider);
     if (error) {
-      toast.error(error.message || 'Error signing in with ' + provider);
+      setTimeout(() => {
+        toast.error(error.message || 'Error signing in with ' + provider);
+      }, 0);
     }
   };
 

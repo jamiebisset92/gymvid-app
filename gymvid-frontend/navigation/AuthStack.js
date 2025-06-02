@@ -57,7 +57,7 @@ const ONBOARDING_SCREENS = {
   Paywall: 11
 };
 
-const TOTAL_ONBOARDING_STEPS = ONBOARDING_SCREENS.VideoPrompt + 1; // VideoPrompt is step 7 (0-indexed), so 8 total steps for progress bar
+const TOTAL_ONBOARDING_STEPS = 12; // Increased from 8 to 12 to make progress bar less filled on early screens
 
 // Premium stack navigator configuration to prevent screen overlapping
 const screenOptions = {

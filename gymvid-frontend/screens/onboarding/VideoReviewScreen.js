@@ -33,6 +33,7 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import * as FileSystem from 'expo-file-system';
 import { useToast } from '../../components/ToastProvider';
 import CoachingFeedbackModal from '../../components/CoachingFeedbackModal';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const debugLog = (...args) => {
   if (__DEV__) {
@@ -155,61 +156,65 @@ const GuidedPopup = ({
       setPopupPosition({ top: pTop, left: pLeft, width: popupWidth });
       setArrowStyle(arrStyleLocal);
 
-      // Enhanced entrance animation sequence with world-class polish
+      // Enhanced entrance animation sequence with beautiful, smooth transitions
       Animated.sequence([
-        // Phase 1: Graceful spotlight appearance
+        // Phase 1: Ultra-smooth spotlight appearance with elegant fade
         Animated.parallel([
+          // Main popup container with silky smooth fade-in
           Animated.timing(animValue, {
             toValue: 1,
-            duration: 400, // Longer for more elegance
-            easing: Easing.out(Easing.back(1.1)), // Subtle bounce
+            duration: 600, // Longer duration for ultimate smoothness
+            easing: Easing.bezier(0.25, 0.46, 0.45, 0.94), // Custom cubic-bezier for silk-smooth motion
             useNativeDriver: true,
           }),
+          // Spotlight scale with gentle, refined spring
           Animated.spring(spotlightScale, {
             toValue: 1,
-            tension: 70, // Slightly softer spring
-            friction: 9,
+            tension: 60, // Softer tension for smoother motion
+            friction: 12, // Higher friction for less bounce, more elegance
             useNativeDriver: true,
           }),
+          // Spotlight opacity with beautiful progressive fade
           Animated.timing(spotlightOpacity, {
             toValue: 1,
-            duration: 500, // Longer fade-in for smooth appearance
-            easing: Easing.out(Easing.cubic),
+            duration: 800, // Even longer for ultimate smoothness
+            easing: Easing.bezier(0.4, 0.0, 0.2, 1), // Material Design easing for professional feel
             useNativeDriver: true,
           }),
         ]),
-        // Phase 2: Sophisticated popup content animation
+        // Phase 2: Sophisticated popup content animation with staggered elegance
         Animated.parallel([
-          // Popup scale with refined spring
+          // Popup scale with ultra-refined spring physics
           Animated.spring(popupScale, {
             toValue: 1,
-            tension: 85, // Tighter spring for crispness
-            friction: 11,
-            delay: 80, // Slightly shorter delay
+            tension: 70, // Balanced tension for smooth yet responsive feel
+            friction: 14, // Increased friction for more controlled, elegant motion
+            delay: 150, // Slightly longer delay for better visual hierarchy
             useNativeDriver: true,
           }),
-          // Refined upward slide movement
+          // Refined upward slide with silk-smooth easing
           Animated.timing(popupTranslateY, {
             toValue: 0,
-            duration: 450, // Longer for smoothness
-            delay: 80,
-            easing: Easing.out(Easing.back(1.4)), // More pronounced but controlled bounce
+            duration: 550, // Longer for ultimate smoothness
+            delay: 120, // Staggered timing for visual sophistication
+            easing: Easing.bezier(0.25, 0.46, 0.45, 0.94), // Matching the main fade for consistency
             useNativeDriver: true,
           }),
-          // Polished arrow animation
+          // Polished arrow animation with gentle entrance
           Animated.spring(arrowScale, {
             toValue: 1,
-            tension: 120, // Crisper arrow appearance
-            friction: 9,
-            delay: 200, // Slightly earlier appearance
+            tension: 90, // Balanced for crisp yet smooth appearance
+            friction: 11, // Refined friction for controlled motion
+            delay: 280, // Later appearance for better visual flow
             useNativeDriver: true,
           }),
         ]),
-        // Stroke opacity animation
+        // Stroke opacity animation with beautiful fade progression
         Animated.timing(mainStrokeOpacity, {
           toValue: 1,
-          duration: 400,
-          easing: Easing.out(Easing.cubic),
+          duration: 500, // Longer for smoother stroke appearance
+          delay: 100, // Slight delay for better visual hierarchy
+          easing: Easing.bezier(0.4, 0.0, 0.2, 1), // Professional easing curve
           useNativeDriver: true,
         }),
       ]).start(() => {
@@ -217,58 +222,73 @@ const GuidedPopup = ({
       });
     } else {
       // debugLog(`GuidedPopup useEffect ELSE: text="${text}" - Animating out or not showing (visible=${visible}, targetLayout=${!!targetLayout}).`);
-      // Enhanced exit animation with improved timing and easing
+      // World-class exit animation sequence with silk-smooth progressive fade-out
+      
+      // First, gracefully fade out the stroke with extended timing
       Animated.timing(mainStrokeOpacity, {
         toValue: 0,
-        duration: 300, // Slightly longer for smoother fade
-        easing: Easing.out(Easing.cubic), // Smoother easing curve
+        duration: 500, // Extended duration for ultra-smooth stroke fade
+        easing: Easing.bezier(0.4, 0.0, 0.2, 1), // Material Design standard for professional feel
         useNativeDriver: true,
       }).start();
       
-      // Sophisticated exit animation sequence
-      Animated.parallel([
-        // Main popup fade out
-        Animated.timing(animValue, {
-          toValue: 0,
-          duration: 350, // Longer duration for elegance
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        // Spotlight scale down with bounce
-        Animated.spring(spotlightScale, {
-          toValue: 0.85, // Less dramatic scale change
-          tension: 60, // Softer spring
-          friction: 12,
-          useNativeDriver: true,
-        }),
-        // Popup scale with elegant ease-in
-        Animated.timing(popupScale, {
-          toValue: 0.94, // Less dramatic scale for smoother feel
-          duration: 280,
-          easing: Easing.in(Easing.back(0.8)), // Gentle ease-in-back
-          useNativeDriver: true,
-        }),
-        // Refined slide down movement
-        Animated.timing(popupTranslateY, {
-          toValue: 15, // Smaller movement for subtlety
-          duration: 320,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        // Arrow fade out
-        Animated.timing(arrowScale, {
-          toValue: 0,
-          duration: 200, // Faster arrow disappearance
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-        // Spotlight opacity with smooth fade
-        Animated.timing(spotlightOpacity, {
-          toValue: 0,
-          duration: 320,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
+      // Sophisticated exit animation sequence with staggered elegance
+      Animated.sequence([
+        // Brief pause for visual sophistication (like a breath before disappearing)
+        Animated.delay(50),
+        
+        // Phase 1: Begin graceful exit with all elements fading together
+        Animated.parallel([
+          // Main popup container with ultra-smooth progressive fade
+          Animated.timing(animValue, {
+            toValue: 0,
+            duration: 650, // Significantly longer for ultimate smoothness
+            easing: Easing.bezier(0.25, 0.46, 0.45, 0.94), // Mirror the entrance curve for consistency
+            useNativeDriver: true,
+          }),
+          
+          // Spotlight scale with gentle, refined motion
+          Animated.spring(spotlightScale, {
+            toValue: 0.95, // More subtle scale change for elegance
+            tension: 45, // Very soft spring for gentle motion
+            friction: 18, // High friction for ultra-controlled movement
+            useNativeDriver: true,
+          }),
+          
+          // Popup scale with silk-smooth timing
+          Animated.timing(popupScale, {
+            toValue: 0.98, // Very subtle scale change for refinement
+            duration: 550, // Extended for smoothness
+            easing: Easing.bezier(0.25, 0.46, 0.45, 0.94), // Consistent with main fade
+            useNativeDriver: true,
+          }),
+          
+          // Refined slide movement with barely perceptible motion
+          Animated.timing(popupTranslateY, {
+            toValue: 8, // Minimal movement for subtle elegance
+            duration: 600, // Even longer for silk-smooth motion
+            easing: Easing.bezier(0.25, 0.46, 0.45, 0.94), // Matching curve
+            useNativeDriver: true,
+          }),
+          
+          // Arrow with graceful, staggered disappearance
+          Animated.timing(arrowScale, {
+            toValue: 0,
+            duration: 400, // Extended for smoother arrow fade
+            delay: 100, // Slight delay for visual hierarchy
+            easing: Easing.bezier(0.4, 0.0, 0.2, 1), // Professional fade curve
+            useNativeDriver: true,
+          }),
+          
+          // Spotlight opacity with beautiful, extended progressive fade
+          Animated.timing(spotlightOpacity, {
+            toValue: 0,
+            duration: 700, // Longest duration for ultimate smoothness
+            delay: 80, // Slight stagger for sophisticated visual flow
+            easing: Easing.bezier(0.4, 0.0, 0.2, 1), // Material Design fade
+            useNativeDriver: true,
+          }),
+        ])
       ]).start(() => {
          // debugLog(`GuidedPopup ANIMATION OUT COMPLETE for text="${text}"`);
       });
@@ -568,9 +588,18 @@ export default function VideoReviewScreen({ navigation, route }) {
   const aiButtonScale = useRef(new Animated.Value(0.9)).current;
   const aiButtonTranslateY = useRef(new Animated.Value(10)).current;
 
+  // Animation values for bouncing arrow (similar to NameScreen.js)
+  const arrowOpacity = useRef(new Animated.Value(0)).current;
+  const arrowBounceAnim = useRef(new Animated.Value(0)).current;
+  const arrowScale = useRef(new Animated.Value(0.5)).current;
+
+  // Animation value for shine effect on AI button
+  const aiButtonShimmerAnim = useRef(new Animated.Value(0)).current;
+
   // Add button press animations to match VideoPromptScreen.js
   const [primaryButtonScale] = useState(new Animated.Value(1));
   const [secondaryButtonScale] = useState(new Animated.Value(1));
+  const [logLiftButtonPulse] = useState(new Animated.Value(1));
 
   // State for tooltips/guided popups
   const [tooltipStep, setTooltipStep] = useState(0);
@@ -581,6 +610,7 @@ export default function VideoReviewScreen({ navigation, route }) {
   }, [tooltipStep]);
 
   const [isTransitioningTooltips, setIsTransitioningTooltips] = useState(false); // New state for smooth transitions
+  const [isDismissingTooltips, setIsDismissingTooltips] = useState(false); // NEW: Emergency brake for any tooltip flashing
   const [inputsRowLayout, setInputsRowLayout] = useState(null);
   const [exerciseCardLayout, setExerciseCardLayout] = useState(null);
   const [exerciseHeaderLayout, setExerciseHeaderLayout] = useState(null);
@@ -646,6 +676,12 @@ export default function VideoReviewScreen({ navigation, route }) {
         } else {
           debugLog("TOOLTIP_DEBUG: Tooltips have been seen before, not showing.");
           setHasSeenTooltips(true);
+          
+          // AUTO-CLEAR FOR DEVELOPMENT - REMOVE THIS FOR PRODUCTION
+          if (__DEV__) {
+            debugLog("🎯 DEV MODE: Auto-clearing tooltip preferences for testing");
+            await clearTooltipPreferences();
+          }
         }
       } catch (e) {
         debugLog('Error reading tooltip pref', e); 
@@ -712,7 +748,7 @@ export default function VideoReviewScreen({ navigation, route }) {
     const headerReady = exerciseHeaderLayout && exerciseHeaderLayout.width > 0 && exerciseHeaderLayout.height > 0;
     const inputsReady = inputsRowLayout && inputsRowLayout.width > 0 && inputsRowLayout.height > 0;
 
-    if (tooltipStep === 0 && !hasSeenTooltips) {
+    if (tooltipStep === 0 && !hasSeenTooltips && !isTransitioningTooltips) {
       if (cardReady && headerReady && inputsReady) {
         debugLog('VideoReviewScreen TOOLTIP_DEBUG: ALL LAYOUTS READY & VALID. Showing first tooltip.', 
           { layoutCard: exerciseCardLayout, layoutHeader: exerciseHeaderLayout, layoutInputs: inputsRowLayout }
@@ -727,6 +763,7 @@ export default function VideoReviewScreen({ navigation, route }) {
         debugLog('VideoReviewScreen TOOLTIP_DEBUG: Waiting for all valid layouts. Current states:', {
           tooltipStep,
           hasSeenTooltips,
+          isTransitioningTooltips,
           isCardLayoutValid: cardReady,
           isHeaderLayoutValid: headerReady,
           isInputsLayoutValid: inputsReady,
@@ -738,11 +775,13 @@ export default function VideoReviewScreen({ navigation, route }) {
       }
     } else if (hasSeenTooltips) {
       debugLog('VideoReviewScreen TOOLTIP_DEBUG: Tooltips have been seen before, not showing.');
+    } else if (isTransitioningTooltips) {
+      debugLog('VideoReviewScreen TOOLTIP_DEBUG: Tooltips are transitioning, not showing.');
     } else {
       // This log helps see if tooltipStep changed from 0 for other reasons or if it's stuck
       debugLog('VideoReviewScreen TOOLTIP_DEBUG: tooltipStep is not 0, current value is:', tooltipStep);
     }
-  }, [tooltipStep, exerciseCardLayout, exerciseHeaderLayout, inputsRowLayout, hasSeenTooltips]);
+  }, [tooltipStep, exerciseCardLayout, exerciseHeaderLayout, inputsRowLayout, hasSeenTooltips, isTransitioningTooltips]);
 
   // Function to get the current user ID
   const getCurrentUserId = async () => {
@@ -1585,41 +1624,91 @@ export default function VideoReviewScreen({ navigation, route }) {
     
     // If the set is being completed (not uncompleted), trigger AI button animation
     if (!wasCompleted) {
-      debugLog('🎯 Set being completed - starting AI button animation');
-      // World-class fade-in animation for AI Coaching Feedback button
+      debugLog('🎯 Set being completed - starting AI button and arrow animations');
+      // World-class fade-in animation for AI Coaching Feedback button and bouncing arrow
       setTimeout(() => {
         Animated.parallel([
-          // Elegant fade in
+          // AI Button animations
           Animated.timing(aiButtonOpacity, {
             toValue: 1,
             duration: 600,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
-          // Gentle scale up with subtle bounce
           Animated.spring(aiButtonScale, {
             toValue: 1,
             tension: 80,
             friction: 12,
             useNativeDriver: true,
           }),
-          // Smooth upward slide
           Animated.timing(aiButtonTranslateY, {
             toValue: 0,
             duration: 500,
             easing: Easing.out(Easing.back(1.2)),
             useNativeDriver: true,
           }),
+          
+          // Arrow animations (similar to NameScreen.js)
+          Animated.sequence([
+            // Arrow entrance animation
+            Animated.parallel([
+              Animated.timing(arrowOpacity, {
+                toValue: 1,
+                duration: 400,
+                delay: 200, // Slight delay after button appears
+                easing: Easing.out(Easing.cubic),
+                useNativeDriver: true,
+              }),
+              Animated.spring(arrowScale, {
+                toValue: 1,
+                tension: 100,
+                friction: 8,
+                delay: 200,
+                useNativeDriver: true,
+              }),
+            ]),
+          ]),
         ]).start((finished) => {
-          debugLog('🎯 AI button animation completed, finished:', finished);
-          debugLog('🎯 Checking tooltip conditions - hasSeenTooltips:', hasSeenTooltips, 'tooltipStep:', tooltipStep);
-          debugLog('🎯 aiCoachingButtonLayout when animation done:', aiCoachingButtonLayout); 
+          debugLog('🎯 AI button and arrow animation completed, finished:', finished);
+          
+          // Start continuous bouncing animation for the arrow
+          if (finished) {
+            Animated.loop(
+              Animated.sequence([
+                Animated.timing(arrowBounceAnim, {
+                  toValue: 1,
+                  duration: 800,
+                  useNativeDriver: true,
+                  easing: Easing.inOut(Easing.sin),
+                }),
+                Animated.timing(arrowBounceAnim, {
+                  toValue: 0,
+                  duration: 800,
+                  useNativeDriver: true,
+                  easing: Easing.inOut(Easing.sin),
+                }),
+              ])
+            ).start();
+            
+            // Start shimmer animation for AI button
+            Animated.loop(
+              Animated.timing(aiButtonShimmerAnim, {
+                toValue: 1,
+                duration: 2000,
+                useNativeDriver: true,
+              })
+            ).start();
+          }
         });
       }, 100); // Small delay to let the checkmark animation settle
     } else {
-      debugLog('🎯 Set being uncompleted - hiding AI button');
-      // If uncompleting the set, hide the AI button
+      debugLog('🎯 Set being uncompleted - hiding AI button and arrow');
+      // If uncompleting the set, hide the AI button and arrow
+      arrowBounceAnim.stopAnimation(); // Stop the bouncing loop
+      aiButtonShimmerAnim.stopAnimation(); // Stop the shimmer animation
+      
       Animated.parallel([
+        // AI Button hide animations
         Animated.timing(aiButtonOpacity, {
           toValue: 0,
           duration: 300,
@@ -1632,6 +1721,18 @@ export default function VideoReviewScreen({ navigation, route }) {
         }),
         Animated.timing(aiButtonTranslateY, {
           toValue: 10,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        
+        // Arrow hide animations
+        Animated.timing(arrowOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(arrowScale, {
+          toValue: 0.5,
           duration: 300,
           useNativeDriver: true,
         }),
@@ -1661,6 +1762,19 @@ export default function VideoReviewScreen({ navigation, route }) {
   // Function to handle AI coaching feedback
   const handleShowCoachingFeedback = async () => {
     if (!videoUri) return;
+
+    // Set that the user has analyzed their video - this will show the Log Lift button
+    setHasAnalyzedVideo(true);
+    // Set that the button has been pressed - this will change button color and hide arrow
+    setAnalyzeButtonPressed(true);
+    
+    // Hide the bouncing arrow immediately
+    arrowBounceAnim.stopAnimation();
+    Animated.timing(arrowOpacity, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
 
     // Dismiss the keyboard first to prevent it from getting stuck
     Keyboard.dismiss();
@@ -1794,10 +1908,11 @@ export default function VideoReviewScreen({ navigation, route }) {
         
         // Structure the feedback data with the specified fields
         const feedbackResponse = {
-          form_rating: data.feedback?.form_rating || '',
-          observations: data.feedback?.observations || '',
+          form_rating: data.feedback?.form_rating || 0,
+          observations: data.feedback?.observations || [],
           summary: data.feedback?.summary || '',
-          // Keep other fields for compatibility
+          rpe: data.feedback?.rpe === "N/A" || data.feedback?.rpe === null ? '-' : data.feedback?.rpe,
+          total_tut: data.feedback?.total_tut === "N/A" || data.feedback?.total_tut === null ? '-' : data.feedback?.total_tut,
           ...data.feedback
         };
         
@@ -1877,44 +1992,56 @@ export default function VideoReviewScreen({ navigation, route }) {
     await attemptFeedbackRequest();
   };
 
-  // Enhanced handleDismissTooltip with elegant transitions
+  // Simplified handleDismissTooltip - RELIABLE AND WORKING
   const handleDismissTooltip = async () => {
     debugLog('handleDismissTooltip called with tooltipStep:', tooltipStep);
     
+    // EMERGENCY BRAKE: Immediately prevent ANY tooltip from showing
+    setIsDismissingTooltips(true);
+    
     if (tooltipStep === 1) {
-      // First popup dismissed -> smoothly transition to second popup
-      debugLog('Dismissing first popup, preparing second popup');
-      setIsTransitioningTooltips(true); // Indicate transition is in progress
+      // First popup dismissed -> transition to second
+      debugLog('Dismissing first popup, showing second after delay');
+      setIsTransitioningTooltips(true);
+      setTooltipStep(0); // Hide first tooltip immediately
       
-      // Add a graceful delay for the transition
-      // This allows the first popup's exit animation to complete 
-      // before the second popup starts its entrance animation
+      // Reduced delay by 40%: 800ms * 0.6 = 480ms
       setTimeout(() => {
-        debugLog('Starting second popup after transition delay');
-        setTooltipStep(2);
-        setIsTransitioningTooltips(false); // Transition complete
-      }, 450); // Slightly increased delay to match our enhanced exit animation
+        setTooltipStep(2); // Show second tooltip
+        setIsTransitioningTooltips(false);
+        setIsDismissingTooltips(false); // Allow tooltips again
+      }, 480);
       
     } else if (tooltipStep === 2) {
-      // Second popup dismissed -> close all tooltips
-      debugLog('Dismissing second popup');
-      setIsTransitioningTooltips(true);
+      // Second popup dismissed -> close permanently
+      debugLog('Dismissing second popup - marking as seen');
       
-      // Close all tooltips after second popup
-      setTooltipStep(0);
+      // CRITICAL FIX: Set hasSeenTooltips FIRST to prevent any flashing
       setHasSeenTooltips(true);
-      setIsTransitioningTooltips(false);
+      
+      // Then immediately hide the tooltip
+      setTooltipStep(0);
+      
+      // Keep dismissing flag active until fully processed
+      setTimeout(() => {
+        setIsDismissingTooltips(false);
+      }, 100); // Short delay to ensure all state updates are processed
+      
+      // Save to storage in background
       try { 
         await AsyncStorage.setItem('hasSeenVideoReviewTooltips_v2', 'true'); 
-        debugLog('Tooltips marked as seen after completing both popups.');
+        debugLog('Tooltips marked as seen.');
       } 
       catch (e) { debugLog('Error saving tooltip_v2 pref', e); }
       
     } else {
-      // Fallback - close tooltips but don't mark as seen (so they can show again)
-      debugLog('Unexpected tooltipStep, closing tooltips without marking as seen');
+      // Fallback - ensure no flashing
+      debugLog('Unexpected tooltipStep, closing tooltips');
+      setHasSeenTooltips(true);
       setTooltipStep(0);
-      setIsTransitioningTooltips(false); // Ensure transition state is reset
+      setTimeout(() => {
+        setIsDismissingTooltips(false);
+      }, 100);
     }
   };
   
@@ -2105,9 +2232,11 @@ export default function VideoReviewScreen({ navigation, route }) {
       if (data.success && data.feedback) {
         // Structure the feedback data
         const feedbackResponse = {
-          form_rating: data.feedback?.form_rating || '',
-          observations: data.feedback?.observations || '',
+          form_rating: data.feedback?.form_rating || 0,
+          observations: data.feedback?.observations || [],
           summary: data.feedback?.summary || '',
+          rpe: data.feedback?.rpe === "N/A" || data.feedback?.rpe === null ? '-' : data.feedback?.rpe,
+          total_tut: data.feedback?.total_tut === "N/A" || data.feedback?.total_tut === null ? '-' : data.feedback?.total_tut,
           ...data.feedback
         };
         
@@ -2163,6 +2292,35 @@ export default function VideoReviewScreen({ navigation, route }) {
       useNativeDriver: true,
     }).start();
   };
+
+  // Add state to track when AI button is pressed
+  const [hasAnalyzedVideo, setHasAnalyzedVideo] = useState(false);
+  const [analyzeButtonPressed, setAnalyzeButtonPressed] = useState(false);
+  
+  // Add useEffect for pulse animation on Log Lift button
+  useEffect(() => {
+    if (hasAnalyzedVideo && !loading) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(logLiftButtonPulse, {
+            toValue: 1.05,
+            duration: 1000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true
+          }),
+          Animated.timing(logLiftButtonPulse, {
+            toValue: 1,
+            duration: 1000,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true
+          })
+        ])
+      ).start();
+    } else {
+      logLiftButtonPulse.stopAnimation();
+      logLiftButtonPulse.setValue(1);
+    }
+  }, [hasAnalyzedVideo, loading]);
 
   return (
     <Animated.View 
@@ -2250,7 +2408,7 @@ export default function VideoReviewScreen({ navigation, route }) {
                               })
                             }
                           ]}>
-                            AI Finding Exercise{'.'.repeat(ellipsisCount)}
+                            AI Detecting Exercise{'.'.repeat(ellipsisCount)}
                           </Animated.Text>
                         </View>
                       ) : isEditingExercise ? (
@@ -2401,6 +2559,71 @@ export default function VideoReviewScreen({ navigation, route }) {
                     </View>
                   </View>
                   
+                  {/* Bouncing Arrow - positioned between exercise card and AI button */}
+                  {weight && isSetCompleted && !analyzeButtonPressed && (
+                    <Animated.View
+                      style={[
+                        styles.arrowContainerFixed,
+                        {
+                          opacity: arrowOpacity,
+                          transform: [
+                            { scale: arrowScale },
+                            { 
+                              translateY: arrowBounceAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0, 6], // Bounce 6px up and down
+                              })
+                            }
+                          ]
+                        }
+                      ]}
+                    >
+                      <Ionicons name="arrow-down" size={24} color={colors.primary} />
+                    </Animated.View>
+                  )}
+                  
+                  {/* AI Coaching Feedback Button - positioned below exercise card */}
+                  {weight && isSetCompleted && (
+                    <Animated.View
+                      style={[
+                        styles.aiCoachingButtonContainer,
+                        {
+                          opacity: aiButtonOpacity,
+                          transform: [
+                            { scale: aiButtonScale },
+                            { translateY: aiButtonTranslateY }
+                          ]
+                        }
+                      ]}
+                    >
+                      <TouchableOpacity 
+                        style={[
+                          styles.analyzeVidButton,
+                          {
+                            shadowColor: analyzeButtonPressed ? '#6B7280' : '#0066FF',
+                          }
+                        ]} 
+                        onPress={handleShowCoachingFeedback}
+                        onPressIn={handlePrimaryButtonPressIn}
+                        onPressOut={handlePrimaryButtonPressOut}
+                        disabled={loading}
+                        activeOpacity={0.9}
+                        ref={aiCoachingButtonRef}
+                        onLayout={onAiCoachingButtonLayout}
+                      >
+                        <LinearGradient
+                          colors={analyzeButtonPressed ? ['#9CA3AF', '#6B7280', '#4B5563'] : ['#0099FF', '#0066DD', '#0044BB']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.analyzeVidGradient}
+                        >
+                          <Text style={styles.analyzeVidButtonText}>Analyze My Vid</Text>
+                          <Ionicons name="sparkles" size={18} color="#fff" style={styles.analyzeVidIcon} />
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  )}
+                  
                   {/* Remove buttons from inline content - they will be positioned at bottom */}
                 </Animated.View>
               </View>
@@ -2409,8 +2632,41 @@ export default function VideoReviewScreen({ navigation, route }) {
         </KeyboardAvoidingView>
       </SafeAreaView>
       
+      {/* Log Lift Button - positioned at bottom */}
+      {weight && isSetCompleted && hasAnalyzedVideo && (
+        <View style={styles.bottomButtonContainer}>
+          <Animated.View
+            style={{
+              transform: [{ scale: Animated.multiply(secondaryButtonScale, logLiftButtonPulse) }],
+              width: '100%',
+            }}
+          >
+            <TouchableOpacity 
+              style={[
+                styles.logLiftButton,
+                loading && styles.logLiftButtonDisabled
+              ]}
+              onPress={handleLogLift}
+              onPressIn={handleSecondaryButtonPressIn}
+              onPressOut={handleSecondaryButtonPressOut}
+              disabled={loading}
+              activeOpacity={0.9}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <View style={styles.buttonContent}>
+                  <Text style={styles.logLiftButtonText}>Unlock All GymVid Features!</Text>
+                  <Ionicons name="lock-open-outline" size={24} color="#FFFFFF" style={styles.buttonIcon} />
+                </View>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      )}
+      
       <GuidedPopup
-        visible={tooltipStep === 1}
+        visible={tooltipStep === 1 && !isTransitioningTooltips && !hasSeenTooltips && !isDismissingTooltips}
         text="Our AI will detect the exercise that's being performed in the vid for you!"
         targetLayout={exerciseCardLayout}
         highlightLayout={getFirstPopupSpotlightArea(exerciseHeaderLayout)}
@@ -2420,7 +2676,7 @@ export default function VideoReviewScreen({ navigation, route }) {
         showIconButton={true}
       />
       <GuidedPopup
-        visible={tooltipStep === 2}
+        visible={tooltipStep === 2 && !isTransitioningTooltips && !hasSeenTooltips && !isDismissingTooltips}
         text="Enter the weight & reps while you wait - then tap the ✓ to log the set."
         targetLayout={inputsRowLayout}
         highlightLayout={getCustomSpotlightArea(inputsRowLayout)} 
@@ -2469,73 +2725,6 @@ export default function VideoReviewScreen({ navigation, route }) {
       
       {/* Keyboard Toolbar */}
       <KeyboardToolbar />
-      
-      {/* Bottom Buttons - positioned at bottom of screen */}
-      {weight && isSetCompleted && (
-        <Animated.View
-          style={[
-            styles.bottomButtonsContainer,
-            {
-              opacity: aiButtonOpacity,
-              transform: [
-                { scale: aiButtonScale },
-                { translateY: aiButtonTranslateY }
-              ]
-            }
-          ]}
-        >
-          {/* AI Coaching Feedback Button - Blue Primary */}
-          <Animated.View
-            style={{
-              transform: [{ scale: primaryButtonScale }],
-              width: '100%',
-            }}
-          >
-            <TouchableOpacity 
-              style={styles.primaryButton} 
-              onPress={handleShowCoachingFeedback}
-              onPressIn={handlePrimaryButtonPressIn}
-              onPressOut={handlePrimaryButtonPressOut}
-              disabled={loading}
-              activeOpacity={0.9}
-            >
-              <View style={styles.buttonContent}>
-                <Ionicons name="analytics-outline" size={24} color={colors.white} style={styles.buttonIcon} />
-                <Text style={styles.primaryButtonText}>AI Coaching Feedback</Text>
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
-          
-          {/* Log Lift Button - White Secondary */}
-          <Animated.View
-            style={{
-              transform: [{ scale: secondaryButtonScale }],
-              width: '100%',
-            }}
-          >
-            <TouchableOpacity 
-              style={[
-                styles.secondaryButton,
-                loading && styles.secondaryButtonDisabled
-              ]}
-              onPress={handleLogLift}
-              onPressIn={handleSecondaryButtonPressIn}
-              onPressOut={handleSecondaryButtonPressOut}
-              disabled={loading}
-              activeOpacity={0.9}
-            >
-              {loading ? (
-                <ActivityIndicator color="#333333" />
-              ) : (
-                <View style={styles.buttonContent}>
-                  <Ionicons name="checkmark" size={24} color="#333333" style={styles.buttonIcon} />
-                  <Text style={styles.secondaryButtonText}>Log Lift</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </Animated.View>
-        </Animated.View>
-      )}
     </Animated.View>
   );
 }
@@ -2824,10 +3013,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
-    marginRight: 8,
+    marginLeft: 8,
   },
   buttonIcon: {
-    marginLeft: 5,
+    marginLeft: 8,
   },
   exerciseEditContainer: {
     flexDirection: 'row',
@@ -2995,10 +3184,11 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   aiCoachingButtonText: {
-    color: '#6C3EF6',
-    fontSize: 16,
-    fontFamily: 'DMSans-Bold',
-    marginLeft: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 8,
   },
   keyboardToolbar: {
     flexDirection: 'row',
@@ -3085,7 +3275,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   buttonIcon: {
-    marginRight: 12,
+    marginLeft: 8,
   },
   exerciseNameTouchable: {
     flexDirection: 'row',
@@ -3097,5 +3287,109 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     zIndex: 10,
+  },
+  aiCoachingButtonContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  aiCoachingButtonTextStyle: {
+    color: '#0070E0',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  bottomButtonContainer: {
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    right: 20,
+    zIndex: 10,
+  },
+  logLiftButton: {
+    backgroundColor: '#007BFF',
+    borderRadius: 16,
+    height: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  logLiftButtonDisabled: {
+    backgroundColor: '#AACEF5',
+    shadowOpacity: 0,
+  },
+  logLiftButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  arrowContainerFixed: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 30,
+    marginTop: 8,
+    marginBottom: 8,
+    zIndex: 1,
+  },
+  aiButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  aiButtonIcon: {
+    marginRight: 6,
+  },
+  aiButtonShineOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 8,
+    overflow: 'hidden',
+    width: 60,
+    height: '100%',
+    transform: [{ skewX: '-15deg' }],
+  },
+  shimmerGradient: {
+    flex: 1,
+    borderRadius: 8,
+  },
+  analyzeVidButton: {
+    borderRadius: 50,
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+    overflow: 'hidden',
+  },
+  analyzeVidButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  analyzeVidGradient: {
+    borderRadius: 50,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  analyzeVidIcon: {
+    marginLeft: 8,
   },
 }); 
