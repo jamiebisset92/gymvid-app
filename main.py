@@ -27,8 +27,7 @@ from backend.ai.analyze.rep_detection import run_rep_detection_from_landmark_y
 from backend.ai.analyze.keyframe_exporter import export_keyframes
 from backend.ai.analyze.coaching_feedback import generate_feedback
 from backend.ai.analyze import analyze_set
-from backend.ai.analyze.quick_exercise_prediction import router as quick_exercise_prediction_router
-
+from backend.ai.analyze.quick_exercise_prediction import app as quick_exercise_prediction_router
 
 # ✅ Load environment variables
 load_dotenv()
