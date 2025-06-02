@@ -323,7 +323,7 @@ export default function PaywallScreen({ navigation, route }) {
           
           {/* Sub-header */}
           <Text style={styles.subHeader}>
-            Select your plan & get started now!
+            Select your plan & get started now:
           </Text>
           
           {/* Pricing Plans */}
@@ -333,7 +333,7 @@ export default function PaywallScreen({ navigation, route }) {
               <TouchableOpacity
                 style={[
                   styles.planCard,
-                  styles.featuredPlanCard,
+                  selectedPlan === 'platinum' ? styles.featuredPlanCard : styles.unselectedFeaturedCard,
                   selectedPlan === 'platinum' && styles.selectedPlanCard
                 ]}
                 onPress={() => handlePlanSelect('platinum')}
@@ -347,10 +347,15 @@ export default function PaywallScreen({ navigation, route }) {
                     style={styles.selectedCardGradient}
                   >
                     <View style={styles.planHeader}>
-                      <Text style={styles.planTitle}>Platinum</Text>
-                      <Text style={styles.planPrice}>$24.95</Text>
+                      <View style={styles.leftColumn}>
+                        <Text style={styles.planTitle}>Enhanced</Text>
+                        <Text style={styles.planSubtitle}>AI Powered Experience</Text>
+                      </View>
+                      <View style={styles.priceContainer}>
+                        <Text style={styles.planPrice}>$24.95</Text>
+                        <Text style={styles.perMonthText}>per month</Text>
+                      </View>
                     </View>
-                    <Text style={styles.planBilling}>Billed Monthly</Text>
                     
                     {selectedPlan === 'platinum' && (
                       <View style={styles.featuresContainer}>
@@ -384,10 +389,15 @@ export default function PaywallScreen({ navigation, route }) {
                 ) : (
                   <View style={styles.cardContent}>
                     <View style={styles.planHeader}>
-                      <Text style={styles.planTitle}>Platinum</Text>
-                      <Text style={styles.planPrice}>$24.95</Text>
+                      <View style={styles.leftColumn}>
+                        <Text style={styles.planTitle}>Enhanced</Text>
+                        <Text style={styles.planSubtitle}>AI Powered Experience</Text>
+                      </View>
+                      <View style={styles.priceContainer}>
+                        <Text style={styles.planPrice}>$24.95</Text>
+                        <Text style={styles.perMonthText}>per month</Text>
+                      </View>
                     </View>
-                    <Text style={styles.planBilling}>Billed Monthly</Text>
                     
                     {selectedPlan === 'platinum' && (
                       <View style={styles.featuresContainer}>
@@ -444,10 +454,15 @@ export default function PaywallScreen({ navigation, route }) {
                   style={styles.selectedCardGradient}
                 >
                   <View style={styles.planHeader}>
-                    <Text style={styles.planTitle}>Pro</Text>
-                    <Text style={styles.planPrice}>$9.95</Text>
+                    <View style={styles.leftColumn}>
+                      <Text style={styles.planTitle}>Standard</Text>
+                      <Text style={styles.planSubtitle}>Manual Powered Experience</Text>
+                    </View>
+                    <View style={styles.priceContainer}>
+                      <Text style={styles.planPrice}>$9.95</Text>
+                      <Text style={styles.perMonthText}>per month</Text>
+                    </View>
                   </View>
-                  <Text style={styles.planBilling}>Billed Monthly</Text>
                   
                   {selectedPlan === 'pro' && (
                     <View style={styles.featuresContainer}>
@@ -481,10 +496,15 @@ export default function PaywallScreen({ navigation, route }) {
               ) : (
                 <View style={styles.cardContent}>
                   <View style={styles.planHeader}>
-                    <Text style={styles.planTitle}>Pro</Text>
-                    <Text style={styles.planPrice}>$9.95</Text>
+                    <View style={styles.leftColumn}>
+                      <Text style={styles.planTitle}>Standard</Text>
+                      <Text style={styles.planSubtitle}>Manual Powered Experience</Text>
+                    </View>
+                    <View style={styles.priceContainer}>
+                      <Text style={styles.planPrice}>$9.95</Text>
+                      <Text style={styles.perMonthText}>per month</Text>
+                    </View>
                   </View>
-                  <Text style={styles.planBilling}>Billed Monthly</Text>
                   
                   {selectedPlan === 'pro' && (
                     <View style={styles.featuresContainer}>
@@ -529,8 +549,8 @@ export default function PaywallScreen({ navigation, route }) {
             activeOpacity={0.8}
           >
             <Text style={styles.ctaButtonText}>
-              {selectedPlan === 'platinum' ? 'Continue with Platinum Plan' : 
-               'Continue with Pro Plan'}
+              {selectedPlan === 'platinum' ? 'Continue with Enhanced Plan' : 
+               'Continue with Standard Plan'}
             </Text>
           </TouchableOpacity>
           
@@ -553,7 +573,7 @@ export default function PaywallScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
   },
   safeContainer: {
     flex: 1,
@@ -570,10 +590,12 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   scrollViewContent: {
     paddingHorizontal: 20,
     paddingBottom: 20,
+    backgroundColor: colors.background,
   },
   mainTitle: {
     fontSize: 28,
@@ -643,37 +665,40 @@ const styles = StyleSheet.create({
   planHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 4,
+    paddingTop: 8,
+  },
+  leftColumn: {
+    flexDirection: 'column',
   },
   planTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '600',
     color: '#1A1A1A',
+  },
+  planSubtitle: {
+    fontSize: 15,
+    color: '#6B7280',
+    fontWeight: '400',
+  },
+  priceContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
   },
   planPrice: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '600',
     color: '#1A1A1A',
   },
-  planBilling: {
-    fontSize: 14,
+  perMonthText: {
+    fontSize: 15,
     color: '#6B7280',
-    marginBottom: 8,
-  },
-  planTotalPrice: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 16,
-  },
-  additionalNote: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 8,
+    fontWeight: '400',
   },
   featuresContainer: {
     gap: 8,
+    marginTop: 16,
   },
   featureRow: {
     flexDirection: 'row',
@@ -690,10 +715,11 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 30,
+    paddingTop: 16,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
   },
   ctaButton: {
     backgroundColor: colors.primary,
@@ -701,7 +727,7 @@ const styles = StyleSheet.create({
     height: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -733,13 +759,21 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 14,
     padding: 20,
-    paddingTop: 28,
+    paddingTop: 16,
   },
   cardContent: {
     padding: 20,
-    paddingTop: 28,
+    paddingTop: 16,
   },
   planCardWrapper: {
     position: 'relative',
+  },
+  unselectedFeaturedCard: {
+    borderColor: '#E5E7EB',
+    shadowColor: '#E5E7EB',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
   },
 }); 

@@ -236,56 +236,46 @@ const ProfileScreen = ({ navigation }) => {
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
   const fetchProfile = async () => {
-    setLoading(true);
-    try {
-      const user = supabase.auth.user(); // V1 METHOD
-      if (!user) {
-        toast.error("Not authenticated. Please log in.");
-        setLoading(false);
-        navigation.navigate('Login'); // Redirect to login if not authenticated
-        return;
-      }
+    if (!session?.user) {
+      setLoading(false);
+      toast.error("Not authenticated. Please log in.");
+      navigation.navigate('Login');
+      return;
+    }
 
+    try {
+      setLoading(true);
+      
       const { data, error, status } = await supabase
         .from('users')
         .select(`*`)
-        .eq('id', user.id)
-        .maybeSingle(); // Use maybeSingle to handle no profile yet
+        .eq('id', session.user.id)
+        .maybeSingle();
 
       if (error && status !== 406) {
-        // 406 status means no rows found, which is fine for a new user
         throw error;
       }
 
       if (data) {
         setProfile(data);
         if (data.avatar_url) {
-          // Construct full URL for avatar if it's just a path
           if (data.avatar_url.startsWith('http')) {
             setAvatarUrl(data.avatar_url);
           } else {
-            // Assume it's a path in a public bucket
-            // You might need to adjust this based on your bucket structure
             const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.avatar_url);
             setAvatarUrl(publicUrlData?.publicUrl);
           }
         }
-        // Update auth context if needed, or ensure it's in sync
         if (!authContextUser || authContextUser.id !== data.id) {
-          updateProfileData(data); // Make sure updateProfileData can handle this
+          updateProfileData(data);
         }
       } else {
-        // If no profile data, but user is authenticated, create a basic profile object
-        // or prompt for profile completion.
-        // For now, set a minimal profile or null and let UI handle it.
-        setProfile({ id: user.id, email: user.email }); // Basic profile from auth user
+        setProfile({ id: session.user.id, email: session.user.email });
         toast.info("Profile not fully set up yet.");
       }
     } catch (error) {
-      toast.error(`Error fetching profile: ${error.message}`);
       console.error("Error fetching profile:", error);
-      // If profile fetch fails critically, consider signing out or redirecting
-      // For now, just show error and stop loading
+      toast.error(`Error fetching profile: ${error.message}`);
     } finally {
       setLoading(false);
       // Start animations once loading is complete
@@ -297,20 +287,23 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   useEffect(() => {
-    if (session) { // Only fetch if session is available
+    // Only fetch if we have a session and we're not already loading from auth
+    if (session?.user && !authLoading) {
       fetchProfile();
+    } else if (!session && !authLoading) {
+      // No session and auth is done loading, redirect to login
+      setLoading(false);
+      navigation.navigate('Login');
     }
-  }, [session]); // Re-fetch if session changes
+  }, [session?.user?.id, authLoading]); // Only depend on user ID to avoid unnecessary refetches
 
   const handleSaveField = async (field) => {
-    if (!profile) return;
+    if (!profile || !session?.user) return;
+    
     setLoading(true);
     try {
-      const user = supabase.auth.user(); // V1 METHOD
-      if (!user) throw new Error('User not authenticated');
-
       const updates = {
-        id: user.id, // Ensure ID is part of updates for upsert logic
+        id: session.user.id,
         [field]: field === 'bodyweight' ? parseFloat(tempValue) : tempValue,
         updated_at: new Date(),
       };
@@ -319,7 +312,7 @@ const ProfileScreen = ({ navigation }) => {
       if (error) throw error;
 
       setProfile(prev => ({ ...prev, [field]: tempValue }));
-      updateProfileData({ [field]: tempValue }); // Update auth context
+      updateProfileData({ [field]: tempValue });
       toast.success("Profile updated!");
       setEditingField(null);
     } catch (error) {
@@ -334,9 +327,7 @@ const ProfileScreen = ({ navigation }) => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      setSession(null); // Clear session in auth context
-      // navigation.replace('Login'); // Or your main auth flow start screen
-      // AsyncStorage.clear(); // Optional: clear all async storage on sign out
+      setSession(null);
       toast.success("Signed out successfully.");
     } catch (error) {
       toast.error(`Sign out failed: ${error.message}`);
@@ -365,13 +356,16 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const uploadAvatar = async (uri) => {
+    if (!session?.user) {
+      toast.error('User not authenticated for avatar upload.');
+      return;
+    }
+
     try {
       setUploading(true);
-      const user = supabase.auth.user(); // V1 METHOD
-      if (!user) throw new Error('User not authenticated for avatar upload.');
 
       const fileExt = uri.split('.').pop();
-      const fileName = `${user.id}.${fileExt}`;
+      const fileName = `${session.user.id}.${fileExt}`;
       const filePath = `${fileName}`;
 
       let formData = new FormData();
@@ -381,18 +375,14 @@ const ProfileScreen = ({ navigation }) => {
         type: `image/${fileExt}`,
       });
 
-      // Check if avatar exists to decide on update or upload
-      // This might be tricky if old avatar has different extension
-      // Simpler: always use upsert or overwrite
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, formData, { upsert: true }); // Use upsert: true
+        .upload(filePath, formData, { upsert: true });
 
       if (uploadError) {
         throw uploadError;
       }
 
-      // Get public URL (assuming your bucket is public or has RLS for public read)
       const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
       const newAvatarUrl = publicUrlData?.publicUrl;
 
@@ -400,10 +390,9 @@ const ProfileScreen = ({ navigation }) => {
         throw new Error("Could not get public URL for avatar.");
       }
 
-      // Update user profile with new avatar_url
       const updates = {
-        id: user.id,
-        avatar_url: newAvatarUrl, // Store the full public URL or just path based on preference
+        id: session.user.id,
+        avatar_url: newAvatarUrl,
         updated_at: new Date(),
       };
       const { error: dbError } = await supabase.from('users').upsert(updates);
@@ -411,7 +400,7 @@ const ProfileScreen = ({ navigation }) => {
 
       setAvatarUrl(newAvatarUrl);
       setProfile(prev => ({ ...prev, avatar_url: newAvatarUrl }));
-      updateProfileData({ avatar_url: newAvatarUrl }); // Update auth context
+      updateProfileData({ avatar_url: newAvatarUrl });
 
       toast.success("Avatar updated!");
 
@@ -423,7 +412,8 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  if (loading) {
+  // Show loading only when actually loading and not just waiting for auth
+  if (authLoading || (loading && session)) {
     return (
       <SafeAreaView style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -432,9 +422,14 @@ const ProfileScreen = ({ navigation }) => {
     );
   }
 
+  // If no session and auth is not loading, don't render the profile
+  if (!session?.user) {
+    return null; // Let the navigation handle redirecting to login
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
+      <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
         <View style={styles.headerRow}>
           <TouchableOpacity 
             activeOpacity={0.8}
@@ -523,7 +518,15 @@ const ProfileScreen = ({ navigation }) => {
         >
           <Text style={styles.adminButtonText}>Admin: API Backend Information</Text>
         </TouchableOpacity>
-      </View>
+
+        {/* Sign out button for testing */}
+        <TouchableOpacity 
+          style={[styles.adminButton, { backgroundColor: '#ffebee', marginTop: 10 }]}
+          onPress={handleSignOut}
+        >
+          <Text style={[styles.adminButtonText, { color: '#d32f2f' }]}>Sign Out</Text>
+        </TouchableOpacity>
+      </Animated.View>
     </SafeAreaView>
   );
 }
