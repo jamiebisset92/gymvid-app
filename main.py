@@ -20,7 +20,7 @@ from backend.api.onboarding import router as onboarding_router
 from backend.api.check_username import router as check_username_router
 from backend.api.quick_analysis import app as quick_analysis_app
 from backend.ai.analyze.feedback_upload import router as feedback_upload_router
-from backend.ai.analyze.quick_exercise_prediction import router as quick_prediction_router
+from backend.ai.analyze import quick_exercise_prediction
 from backend.utils.download_from_s3 import download_video_from_url
 from backend.ai.analyze.video_analysis import analyze_video
 from backend.ai.analyze.rep_detection import run_rep_detection_from_landmark_y
@@ -58,6 +58,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 @app.get("/")
 @app.get("/health")
 async def health_check():
+    """Simple health check endpoint"""
     return {
         "status": "healthy",
         "message": "GymVid Backend API is running",
@@ -76,7 +77,7 @@ app.include_router(onboarding_router)
 app.include_router(check_username_router)
 app.include_router(quick_analysis_app, prefix="/analyze")
 app.include_router(feedback_upload_router, prefix="/analyze")
-app.include_router(quick_prediction_router)
+app.include_router(quick_exercise_prediction.app)
 
 # ✅ AI set analysis
 @app.post("/analyze/log_set")
@@ -104,7 +105,7 @@ async def log_set(
         if os.path.exists(temp_video_path):
             os.remove(temp_video_path)
 
-# ✅ Legacy subprocess fallback route
+# ✅ Legacy subprocess route
 @app.post("/process_set")
 async def process_set(
     video: UploadFile = File(None),
@@ -137,16 +138,17 @@ async def process_set(
             check=True,
             env=env
         )
-        match = re.search(r"({.*})", result.stdout.strip(), re.DOTALL)
-        if match:
-            output = json.loads(match.group(1))
-            return JSONResponse({"success": True, "data": output, "stderr": result.stderr})
-        else:
-            raise ValueError("No valid JSON found in output.")
+        try:
+            match = re.search(r"({.*})", result.stdout.strip(), re.DOTALL)
+            if match:
+                output = json.loads(match.group(1))
+                return JSONResponse({"success": True, "data": output, "stderr": result.stderr})
+            else:
+                raise ValueError("No valid JSON found in output.")
+        except Exception as e:
+            return JSONResponse({"success": False, "error": f"Failed to parse JSON: {str(e)}", "stdout": result.stdout, "stderr": result.stderr})
     except subprocess.CalledProcessError as e:
-        return JSONResponse(status_code=500, content={"success": False, "error": f"Subprocess failed", "stdout": e.stdout, "stderr": e.stderr})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+        return JSONResponse(status_code=500, content={"success": False, "error": f"Subprocess failed with exit code {e.returncode}", "stdout": e.stdout, "stderr": e.stderr})
 
 # ✅ Coaching Feedback from video URL
 class FeedbackRequest(BaseModel):
@@ -221,7 +223,7 @@ async def analyze_feedback_file(
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
-# ✅ Debug info
+# ✅ Debug environment config
 @app.get("/debug/env")
 def debug_env():
     try:

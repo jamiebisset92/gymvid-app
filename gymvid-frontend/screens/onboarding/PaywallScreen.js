@@ -160,10 +160,14 @@ export default function PaywallScreen({ navigation, route }) {
   // Update progress tracking
   useEffect(() => {
     if (isFocused) {
-      // Update progress context with current screen
-      updateProgress('Paywall');
+      // Hide progress bar on paywall screen since it's the end of onboarding
+      setProgress(prev => ({ 
+        ...prev, 
+        isOnboarding: false, 
+        currentScreen: 'Paywall' 
+      }));
     }
-  }, [isFocused, updateProgress]);
+  }, [isFocused, setProgress]);
 
   // Run entrance animations
   useEffect(() => {
@@ -242,6 +246,51 @@ export default function PaywallScreen({ navigation, route }) {
     });
   };
 
+  // Get user's first name for personalization
+  const getUserFirstName = async () => {
+    try {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
+        return "Champion"; // fallback
+      }
+      
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', currentUserId)
+        .maybeSingle();
+        
+      if (error) {
+        console.error('Error fetching user name:', error);
+        return "Champion"; // fallback
+      }
+      
+      if (profile && profile.name) {
+        // Return just the first name if multiple names provided
+        return profile.name.split(' ')[0];
+      }
+      
+      return "Champion"; // fallback
+    } catch (err) {
+      console.error('Error in getUserFirstName:', err);
+      return "Champion"; // fallback
+    }
+  };
+
+  const [firstName, setFirstName] = useState("Champion");
+  
+  // Load user's name when component mounts
+  useEffect(() => {
+    const loadUserName = async () => {
+      const name = await getUserFirstName();
+      setFirstName(name);
+    };
+    
+    if (isFocused) {
+      loadUserName();
+    }
+  }, [isFocused]);
+
   return (
     <Animated.View 
       style={[
@@ -255,151 +304,246 @@ export default function PaywallScreen({ navigation, route }) {
       <SafeAreaView style={styles.safeContainer}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.closeButton}
-            onPress={handleContinueFree}
-          >
-            <Ionicons name="close" size={24} color="#6B7280" />
-          </TouchableOpacity>
+          <Image 
+            source={require('../../assets/images/logo.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
 
-        <View style={styles.content}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Main Title */}
           <Text style={styles.mainTitle}>
-            Choose Your Plan
+            Let's do this {firstName}!
           </Text>
           
           {/* Sub-header */}
           <Text style={styles.subHeader}>
-            Start your fitness journey with GymVid
+            Select your plan & get started now!
           </Text>
           
-          {/* Pricing Plans - Side by Side */}
-          <View style={styles.plansRow}>
-            {/* Gold Plan */}
-            <TouchableOpacity
-              style={[
-                styles.planCard,
-                selectedPlan === 'gold' && styles.selectedPlanCard
-              ]}
-              onPress={() => handlePlanSelect('gold')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.planContent}>
-                <View style={styles.radioButton}>
-                  <View style={[
-                    styles.radioInner,
-                    selectedPlan === 'gold' && styles.radioInnerSelected
-                  ]} />
-                </View>
-                
-                <View style={styles.planInfo}>
-                  <Text style={styles.planTitle}>Gold</Text>
-                  <View style={styles.planPricing}>
-                    <Text style={styles.planPrice}>$9.95</Text>
-                    <Text style={styles.planPeriod}>/month</Text>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-
+          {/* Pricing Plans */}
+          <View style={styles.plansContainer}>
             {/* Platinum Plan - Featured */}
-            <TouchableOpacity
-              style={[
-                styles.planCard,
-                styles.featuredPlanCard,
-                selectedPlan === 'platinum' && styles.selectedPlanCard
-              ]}
-              onPress={() => handlePlanSelect('platinum')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.mostPopularBadge}>
-                <Text style={styles.mostPopularText}>MOST POPULAR</Text>
-              </View>
-              
-              <View style={styles.planContent}>
-                <View style={styles.radioButton}>
-                  <View style={[
-                    styles.radioInner,
-                    selectedPlan === 'platinum' && styles.radioInnerSelected
-                  ]} />
-                </View>
-                
-                <View style={styles.planInfo}>
-                  <Text style={styles.planTitle}>Platinum</Text>
-                  <View style={styles.planPricing}>
-                    <Text style={styles.planPrice}>$24.95</Text>
-                    <Text style={styles.planPeriod}>/month</Text>
+            <View style={styles.planCardWrapper}>
+              <TouchableOpacity
+                style={[
+                  styles.planCard,
+                  styles.featuredPlanCard,
+                  selectedPlan === 'platinum' && styles.selectedPlanCard
+                ]}
+                onPress={() => handlePlanSelect('platinum')}
+                activeOpacity={0.8}
+              >
+                {selectedPlan === 'platinum' ? (
+                  <LinearGradient
+                    colors={['#ffffff', '#f8fafc', '#f1f5f9']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.selectedCardGradient}
+                  >
+                    <View style={styles.planHeader}>
+                      <Text style={styles.planTitle}>Platinum</Text>
+                      <Text style={styles.planPrice}>$24.95</Text>
+                    </View>
+                    <Text style={styles.planBilling}>Billed Monthly</Text>
+                    
+                    {selectedPlan === 'platinum' && (
+                      <View style={styles.featuresContainer}>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>AI Coaching</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>AI Video Logging</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Unlimited Video Storage</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Manual Logging</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Custom Exercises</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>The GymVid Games</Text>
+                        </View>
+                      </View>
+                    )}
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.cardContent}>
+                    <View style={styles.planHeader}>
+                      <Text style={styles.planTitle}>Platinum</Text>
+                      <Text style={styles.planPrice}>$24.95</Text>
+                    </View>
+                    <Text style={styles.planBilling}>Billed Monthly</Text>
+                    
+                    {selectedPlan === 'platinum' && (
+                      <View style={styles.featuresContainer}>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>AI Coaching</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>AI Video Logging</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Unlimited Video Storage</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Manual Logging</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Custom Exercises</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>The GymVid Games</Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {/* Feature Comparison Table */}
-          <View style={styles.featuresSection}>
-            <Text style={styles.featuresSectionTitle}>Compare Plans</Text>
-            
-            <View style={styles.featuresTable}>
-              {/* Table Header */}
-              <View style={styles.tableHeader}>
-                <Text style={styles.tableHeaderFeatures}>Features</Text>
-                <Text style={styles.tableHeaderPlan}>Gold</Text>
-                <Text style={styles.tableHeaderPlan}>Platinum</Text>
-              </View>
+                )}
+              </TouchableOpacity>
               
-              {/* Feature Rows */}
-              <View style={styles.featureRow}>
-                <Text style={styles.featureLabel}>Video Uploads</Text>
-                <Text style={styles.featureValue}>50/month</Text>
-                <Text style={[styles.featureValue, styles.unlimitedText]}>Unlimited</Text>
-              </View>
-              
-              <View style={styles.featureRow}>
-                <Text style={styles.featureLabel}>AI Video Logging</Text>
-                <Text style={styles.featureValue}>50/month</Text>
-                <Text style={[styles.featureValue, styles.unlimitedText]}>Unlimited</Text>
-              </View>
-              
-              <View style={styles.featureRow}>
-                <Text style={styles.featureLabel}>AI Coaching</Text>
-                <Text style={styles.featureValueNo}>❌</Text>
-                <Text style={[styles.featureValue, styles.unlimitedText]}>100/month</Text>
-              </View>
-              
-              <View style={styles.featureRow}>
-                <Text style={styles.featureLabel}>Manual Logging</Text>
-                <Text style={styles.featureValueYes}>✅</Text>
-                <Text style={styles.featureValueYes}>✅</Text>
-              </View>
-              
-              <View style={styles.featureRow}>
-                <Text style={styles.featureLabel}>GymVid Games</Text>
-                <Text style={styles.featureValueYes}>✅</Text>
-                <Text style={styles.featureValueYes}>✅</Text>
+              {/* Badge positioned outside the card */}
+              <View style={styles.freeBadge}>
+                <Text style={styles.freeBadgeText}>Most Popular</Text>
               </View>
             </View>
-          </View>
-        </View>
 
-        {/* Bottom CTA Button */}
+            {/* Pro Plan */}
+            <TouchableOpacity
+              style={[
+                styles.planCard,
+                selectedPlan === 'pro' && styles.selectedPlanCard
+              ]}
+              onPress={() => handlePlanSelect('pro')}
+              activeOpacity={0.8}
+            >
+              {selectedPlan === 'pro' ? (
+                <LinearGradient
+                  colors={['#ffffff', '#f8fafc', '#f1f5f9']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.selectedCardGradient}
+                >
+                  <View style={styles.planHeader}>
+                    <Text style={styles.planTitle}>Pro</Text>
+                    <Text style={styles.planPrice}>$9.95</Text>
+                  </View>
+                  <Text style={styles.planBilling}>Billed Monthly</Text>
+                  
+                  {selectedPlan === 'pro' && (
+                    <View style={styles.featuresContainer}>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="close-circle" size={20} color="#EF4444" />
+                        <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Coaching</Text>
+                      </View>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="close-circle" size={20} color="#EF4444" />
+                        <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Video Logging</Text>
+                      </View>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                        <Text style={styles.featureText}>Unlimited Video Storage</Text>
+                      </View>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                        <Text style={styles.featureText}>Manual Logging</Text>
+                      </View>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                        <Text style={styles.featureText}>Custom Exercises</Text>
+                      </View>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                        <Text style={styles.featureText}>The GymVid Games</Text>
+                      </View>
+                    </View>
+                  )}
+                </LinearGradient>
+              ) : (
+                <View style={styles.cardContent}>
+                  <View style={styles.planHeader}>
+                    <Text style={styles.planTitle}>Pro</Text>
+                    <Text style={styles.planPrice}>$9.95</Text>
+                  </View>
+                  <Text style={styles.planBilling}>Billed Monthly</Text>
+                  
+                  {selectedPlan === 'pro' && (
+                    <View style={styles.featuresContainer}>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="close-circle" size={20} color="#EF4444" />
+                        <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Coaching</Text>
+                      </View>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="close-circle" size={20} color="#EF4444" />
+                        <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Video Logging</Text>
+                      </View>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                        <Text style={styles.featureText}>Unlimited Video Storage</Text>
+                      </View>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                        <Text style={styles.featureText}>Manual Logging</Text>
+                      </View>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                        <Text style={styles.featureText}>Custom Exercises</Text>
+                      </View>
+                      <View style={styles.featureRow}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                        <Text style={styles.featureText}>The GymVid Games</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Bottom Section */}
         <View style={styles.bottomSection}>
+          {/* CTA Button */}
           <TouchableOpacity 
             style={styles.ctaButton}
             onPress={handleSubscribe}
             activeOpacity={0.8}
           >
-            <LinearGradient
-              colors={['#007BFF', '#0056CC', '#003D99']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.ctaGradient}
-            >
-              <Text style={styles.ctaButtonText}>
-                Start {selectedPlan === 'platinum' ? 'Platinum' : 'Gold'} Plan
-              </Text>
-            </LinearGradient>
+            <Text style={styles.ctaButtonText}>
+              {selectedPlan === 'platinum' ? 'Continue with Platinum Plan' : 
+               'Continue with Pro Plan'}
+            </Text>
           </TouchableOpacity>
+          
+          {/* Footer Links */}
+          <View style={styles.footerLinks}>
+            <TouchableOpacity onPress={handleContinueFree}>
+              <Text style={styles.footerLinkText}>Maybe later</Text>
+            </TouchableOpacity>
+            <Text style={styles.footerSeparator}>or</Text>
+            <TouchableOpacity>
+              <Text style={styles.footerLinkText}>Restore purchase</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     </Animated.View>
@@ -409,10 +553,7 @@ export default function PaywallScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  animatedContainer: {
-    flex: 1,
+    backgroundColor: '#F8F9FA',
   },
   safeContainer: {
     flex: 1,
@@ -420,16 +561,12 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    alignItems: 'flex-end',
+    paddingTop: 40,
+    alignItems: 'center',
   },
-  closeButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F5',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
+  logo: {
+    width: 160,
+    height: 60,
   },
   scrollView: {
     flex: 1,
@@ -439,243 +576,170 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   mainTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    textAlign: 'center',
-    marginBottom: 8,
-    lineHeight: 38,
-    letterSpacing: -0.5,
-  },
-  subHeader: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 22,
-  },
-  plansContainer: {
-    gap: 16,
-    marginBottom: 40,
-  },
-  plansRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-  },
-  planCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    position: 'relative',
-    overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  featuredPlanCard: {
-    borderColor: colors.primary,
-    borderWidth: 2,
-    elevation: 4,
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-  },
-  goldPlanCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  selectedPlanCard: {
-    borderColor: colors.primary,
-    borderWidth: 3,
-    elevation: 6,
-    shadowOpacity: 0.2,
-  },
-  mostPopularBadge: {
-    position: 'absolute',
-    top: -8,
-    left: '50%',
-    transform: [{ translateX: -40 }],
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    zIndex: 10,
-    elevation: 5,
-  },
-  mostPopularText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  planContent: {
-    padding: 12,
-    paddingTop: 20,
-    alignItems: 'center',
-  },
-  radioButton: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    marginBottom: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'transparent',
-  },
-  radioInnerSelected: {
-    backgroundColor: colors.primary,
-  },
-  planInfo: {
-    alignItems: 'center',
-  },
-  planTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  planSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textDecorationLine: 'line-through',
-  },
-  planPricing: {
-    alignItems: 'center',
-  },
-  planPrice: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.primary,
-    textAlign: 'center',
-  },
-  planPeriod: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  featuresSection: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  featuresSectionTitle: {
-    fontSize: 18,
+    fontSize: 28,
     fontWeight: '700',
     color: '#1A1A1A',
     textAlign: 'center',
     marginBottom: 16,
+    lineHeight: 34,
+    letterSpacing: -0.5,
   },
-  featuresTable: {
-    gap: 0,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    paddingVertical: 8,
-    paddingBottom: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    marginBottom: 6,
-  },
-  tableHeaderFeatures: {
-    flex: 2,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
-    textAlign: 'left',
-  },
-  tableHeaderPlan: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
+  subHeader: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#6B7280',
     textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 24,
+  },
+  plansContainer: {
+    gap: 16,
+  },
+  planCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    position: 'relative',
+  },
+  featuredPlanCard: {
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  selectedPlanCard: {
+    borderColor: colors.primary,
+    borderWidth: 3,
+    shadowColor: '#1E40AF',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+    transform: [{ scale: 1.02 }],
+  },
+  freeBadge: {
+    position: 'absolute',
+    top: -12,
+    right: 16,
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 15,
+  },
+  freeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  planHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  planTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  planPrice: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  planBilling: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  planTotalPrice: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 16,
+  },
+  additionalNote: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 8,
+  },
+  featuresContainer: {
+    gap: 8,
   },
   featureRow: {
     flexDirection: 'row',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    alignItems: 'center',
+    gap: 8,
   },
-  featureLabel: {
-    flex: 2,
-    fontSize: 13,
-    fontWeight: '500',
+  featureText: {
+    fontSize: 14,
     color: '#374151',
-    textAlign: 'left',
-  },
-  featureValue: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    textAlign: 'center',
-  },
-  featureValueNo: {
-    flex: 1,
-    fontSize: 13,
     fontWeight: '500',
+  },
+  excludedFeatureText: {
     color: '#9CA3AF',
-    textAlign: 'center',
-  },
-  featureValueYes: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#10B981',
-    textAlign: 'center',
-  },
-  unlimitedText: {
-    color: colors.primary,
   },
   bottomSection: {
     paddingHorizontal: 20,
     paddingBottom: Platform.OS === 'ios' ? 20 : 30,
-    paddingTop: 16,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: '#E5E7EB',
   },
   ctaButton: {
-    borderRadius: 12,
-    height: 50,
-    overflow: 'hidden',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-  },
-  ctaGradient: {
-    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   ctaButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  footerLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  footerLinkText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  footerSeparator: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  selectedCardGradient: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 20,
+    paddingTop: 28,
+  },
+  cardContent: {
+    padding: 20,
+    paddingTop: 28,
+  },
+  planCardWrapper: {
+    position: 'relative',
   },
 }); 
