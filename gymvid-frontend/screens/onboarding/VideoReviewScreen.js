@@ -2655,10 +2655,15 @@ export default function VideoReviewScreen({ navigation, route }) {
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <View style={styles.buttonContent}>
+                <LinearGradient
+                  colors={['#007BFF', '#0056CC', '#003D99']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.logLiftGradient}
+                >
                   <Text style={styles.logLiftButtonText}>Unlock All GymVid Features!</Text>
-                  <Ionicons name="lock-open-outline" size={24} color="#FFFFFF" style={styles.buttonIcon} />
-                </View>
+                  <Ionicons name="lock-open" size={20} color="#FFFFFF" style={styles.buttonIcon} />
+                </LinearGradient>
               )}
             </TouchableOpacity>
           </Animated.View>
@@ -2707,7 +2712,6 @@ export default function VideoReviewScreen({ navigation, route }) {
         videoThumbnail={feedbackThumbnail}
         exerciseName={exerciseName || 'Unknown Exercise'}
         setNumber={1}
-        customSubtitle={`Set 1: ${weight || '0'}kg x ${reps || '0'} Reps`}
         metrics={{
           form_rating: feedbackData?.form_rating ?? '',
           weight: weight ?? '',
@@ -3310,7 +3314,7 @@ const styles = StyleSheet.create({
   logLiftButton: {
     backgroundColor: '#007BFF',
     borderRadius: 16,
-    height: 50,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -3319,6 +3323,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 4,
+    overflow: 'hidden',
   },
   logLiftButtonDisabled: {
     backgroundColor: '#AACEF5',
@@ -3391,5 +3396,14 @@ const styles = StyleSheet.create({
   },
   analyzeVidIcon: {
     marginLeft: 8,
+  },
+  logLiftGradient: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 }); 

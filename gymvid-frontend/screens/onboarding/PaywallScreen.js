@@ -19,6 +19,7 @@ import { ProgressContext } from '../../navigation/AuthStack';
 import { useIsFocused } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../config/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const debugLog = (...args) => {
   if (__DEV__) {
@@ -241,14 +242,6 @@ export default function PaywallScreen({ navigation, route }) {
     });
   };
 
-  // Get user's first name for personalization
-  const getUserFirstName = () => {
-    // For now, return a default. In production, you'd get this from user profile
-    return "Champion";
-  };
-
-  const firstName = getUserFirstName();
-
   return (
     <Animated.View 
       style={[
@@ -262,30 +255,54 @@ export default function PaywallScreen({ navigation, route }) {
       <SafeAreaView style={styles.safeContainer}>
         {/* Header */}
         <View style={styles.header}>
-          <Image 
-            source={require('../../assets/images/logo.png')} 
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          <TouchableOpacity 
+            style={styles.closeButton}
+            onPress={handleContinueFree}
+          >
+            <Ionicons name="close" size={24} color="#6B7280" />
+          </TouchableOpacity>
         </View>
 
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollViewContent}
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={styles.content}>
           {/* Main Title */}
           <Text style={styles.mainTitle}>
-            It's time to change the way you train {firstName}!
+            Choose Your Plan
           </Text>
           
           {/* Sub-header */}
           <Text style={styles.subHeader}>
-            Select your plan & get started now!
+            Start your fitness journey with GymVid
           </Text>
           
-          {/* Pricing Plans */}
-          <View style={styles.plansContainer}>
+          {/* Pricing Plans - Side by Side */}
+          <View style={styles.plansRow}>
+            {/* Gold Plan */}
+            <TouchableOpacity
+              style={[
+                styles.planCard,
+                selectedPlan === 'gold' && styles.selectedPlanCard
+              ]}
+              onPress={() => handlePlanSelect('gold')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.planContent}>
+                <View style={styles.radioButton}>
+                  <View style={[
+                    styles.radioInner,
+                    selectedPlan === 'gold' && styles.radioInnerSelected
+                  ]} />
+                </View>
+                
+                <View style={styles.planInfo}>
+                  <Text style={styles.planTitle}>Gold</Text>
+                  <View style={styles.planPricing}>
+                    <Text style={styles.planPrice}>$9.95</Text>
+                    <Text style={styles.planPeriod}>/month</Text>
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+
             {/* Platinum Plan - Featured */}
             <TouchableOpacity
               style={[
@@ -296,93 +313,93 @@ export default function PaywallScreen({ navigation, route }) {
               onPress={() => handlePlanSelect('platinum')}
               activeOpacity={0.8}
             >
-              <View style={styles.freeBadge}>
-                <Text style={styles.freeBadgeText}>Most Popular</Text>
+              <View style={styles.mostPopularBadge}>
+                <Text style={styles.mostPopularText}>MOST POPULAR</Text>
               </View>
               
-              <View style={styles.planHeader}>
-                <Text style={styles.planTitle}>Platinum</Text>
-                <Text style={styles.planPrice}>$24.95</Text>
-              </View>
-              <Text style={styles.planBilling}>Billed Monthly</Text>
-              
-              <View style={styles.featuresContainer}>
-                <View style={styles.featureRow}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>100 Coaching Credits</Text>
+              <View style={styles.planContent}>
+                <View style={styles.radioButton}>
+                  <View style={[
+                    styles.radioInner,
+                    selectedPlan === 'platinum' && styles.radioInnerSelected
+                  ]} />
                 </View>
-                <View style={styles.featureRow}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Unlimited Video Uploads</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Permanent Storage of All Lifts</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Custom Exercises & Detailed Analytics</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* Pro Plan */}
-            <TouchableOpacity
-              style={[
-                styles.planCard,
-                selectedPlan === 'pro' && styles.selectedPlanCard
-              ]}
-              onPress={() => handlePlanSelect('pro')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.planHeader}>
-                <Text style={styles.planTitle}>Pro</Text>
-                <Text style={styles.planPrice}>$9.95</Text>
-              </View>
-              <Text style={styles.planBilling}>Billed Monthly</Text>
-              
-              <View style={styles.featuresContainer}>
-                <View style={styles.featureRow}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>100 Video Uploads</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Permanent Storage of All Lifts</Text>
-                </View>
-                <View style={styles.featureRow}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  <Text style={styles.featureText}>Custom Exercises & Detailed Analytics</Text>
+                
+                <View style={styles.planInfo}>
+                  <Text style={styles.planTitle}>Platinum</Text>
+                  <View style={styles.planPricing}>
+                    <Text style={styles.planPrice}>$24.95</Text>
+                    <Text style={styles.planPeriod}>/month</Text>
+                  </View>
                 </View>
               </View>
             </TouchableOpacity>
           </View>
-        </ScrollView>
 
-        {/* Bottom Section */}
+          {/* Feature Comparison Table */}
+          <View style={styles.featuresSection}>
+            <Text style={styles.featuresSectionTitle}>Compare Plans</Text>
+            
+            <View style={styles.featuresTable}>
+              {/* Table Header */}
+              <View style={styles.tableHeader}>
+                <Text style={styles.tableHeaderFeatures}>Features</Text>
+                <Text style={styles.tableHeaderPlan}>Gold</Text>
+                <Text style={styles.tableHeaderPlan}>Platinum</Text>
+              </View>
+              
+              {/* Feature Rows */}
+              <View style={styles.featureRow}>
+                <Text style={styles.featureLabel}>Video Uploads</Text>
+                <Text style={styles.featureValue}>50/month</Text>
+                <Text style={[styles.featureValue, styles.unlimitedText]}>Unlimited</Text>
+              </View>
+              
+              <View style={styles.featureRow}>
+                <Text style={styles.featureLabel}>AI Video Logging</Text>
+                <Text style={styles.featureValue}>50/month</Text>
+                <Text style={[styles.featureValue, styles.unlimitedText]}>Unlimited</Text>
+              </View>
+              
+              <View style={styles.featureRow}>
+                <Text style={styles.featureLabel}>AI Coaching</Text>
+                <Text style={styles.featureValueNo}>❌</Text>
+                <Text style={[styles.featureValue, styles.unlimitedText]}>100/month</Text>
+              </View>
+              
+              <View style={styles.featureRow}>
+                <Text style={styles.featureLabel}>Manual Logging</Text>
+                <Text style={styles.featureValueYes}>✅</Text>
+                <Text style={styles.featureValueYes}>✅</Text>
+              </View>
+              
+              <View style={styles.featureRow}>
+                <Text style={styles.featureLabel}>GymVid Games</Text>
+                <Text style={styles.featureValueYes}>✅</Text>
+                <Text style={styles.featureValueYes}>✅</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Bottom CTA Button */}
         <View style={styles.bottomSection}>
-          {/* CTA Button */}
           <TouchableOpacity 
             style={styles.ctaButton}
             onPress={handleSubscribe}
             activeOpacity={0.8}
           >
-            <Text style={styles.ctaButtonText}>
-              {selectedPlan === 'platinum' ? 'Continue with Platinum Plan' : 
-               'Continue with Pro Plan'}
-            </Text>
+            <LinearGradient
+              colors={['#007BFF', '#0056CC', '#003D99']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.ctaGradient}
+            >
+              <Text style={styles.ctaButtonText}>
+                Start {selectedPlan === 'platinum' ? 'Platinum' : 'Gold'} Plan
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
-          
-          {/* Footer Links */}
-          <View style={styles.footerLinks}>
-            <TouchableOpacity onPress={handleContinueFree}>
-              <Text style={styles.footerLinkText}>Maybe later</Text>
-            </TouchableOpacity>
-            <Text style={styles.footerSeparator}>or</Text>
-            <TouchableOpacity>
-              <Text style={styles.footerLinkText}>Restore purchase</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </SafeAreaView>
     </Animated.View>
@@ -392,7 +409,10 @@ export default function PaywallScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
+  },
+  animatedContainer: {
+    flex: 1,
   },
   safeContainer: {
     flex: 1,
@@ -400,11 +420,16 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
-  logo: {
-    width: 120,
-    height: 40,
+  closeButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
   },
   scrollView: {
     flex: 1,
@@ -414,142 +439,243 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   mainTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
     color: '#1A1A1A',
     textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 34,
+    marginBottom: 8,
+    lineHeight: 38,
     letterSpacing: -0.5,
   },
   subHeader: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '500',
     color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 24,
+    marginBottom: 24,
+    lineHeight: 22,
   },
   plansContainer: {
     gap: 16,
+    marginBottom: 40,
+  },
+  plansRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
   },
   planCard: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: '#E5E7EB',
     position: 'relative',
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   featuredPlanCard: {
     borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
+    borderWidth: 2,
     elevation: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  goldPlanCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   selectedPlanCard: {
     borderColor: colors.primary,
+    borderWidth: 3,
+    elevation: 6,
+    shadowOpacity: 0.2,
   },
-  freeBadge: {
+  mostPopularBadge: {
     position: 'absolute',
     top: -8,
-    right: 16,
-    backgroundColor: '#10B981',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    left: '50%',
+    transform: [{ translateX: -40 }],
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    zIndex: 10,
+    elevation: 5,
   },
-  freeBadgeText: {
+  mostPopularText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
-  planHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  planContent: {
+    padding: 12,
+    paddingTop: 20,
     alignItems: 'center',
-    marginBottom: 4,
+  },
+  radioButton: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    marginBottom: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'transparent',
+  },
+  radioInnerSelected: {
+    backgroundColor: colors.primary,
+  },
+  planInfo: {
+    alignItems: 'center',
   },
   planTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#1A1A1A',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  planSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textDecorationLine: 'line-through',
+  },
+  planPricing: {
+    alignItems: 'center',
   },
   planPrice: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.primary,
+    textAlign: 'center',
+  },
+  planPeriod: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  featuresSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  featuresSectionTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#1A1A1A',
-  },
-  planBilling: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 8,
-  },
-  planTotalPrice: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
+    textAlign: 'center',
     marginBottom: 16,
   },
-  additionalNote: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 8,
+  featuresTable: {
+    gap: 0,
   },
-  featuresContainer: {
-    gap: 8,
+  tableHeader: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingBottom: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    marginBottom: 6,
+  },
+  tableHeaderFeatures: {
+    flex: 2,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#374151',
+    textAlign: 'left',
+  },
+  tableHeaderPlan: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#374151',
+    textAlign: 'center',
   },
   featureRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  featureText: {
-    fontSize: 14,
-    color: '#374151',
+  featureLabel: {
+    flex: 2,
+    fontSize: 13,
     fontWeight: '500',
+    color: '#374151',
+    textAlign: 'left',
+  },
+  featureValue: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    textAlign: 'center',
+  },
+  featureValueNo: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  featureValueYes: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#10B981',
+    textAlign: 'center',
+  },
+  unlimitedText: {
+    color: colors.primary,
   },
   bottomSection: {
     paddingHorizontal: 20,
     paddingBottom: Platform.OS === 'ios' ? 20 : 30,
+    paddingTop: 16,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: '#F1F5F9',
   },
   ctaButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    height: 56,
+    borderRadius: 12,
+    height: 50,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  ctaGradient: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: 12,
   },
   ctaButtonText: {
     color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-  footerLinks: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  footerLinkText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  footerSeparator: {
-    fontSize: 14,
-    color: '#9CA3AF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 }); 
