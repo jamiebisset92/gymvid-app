@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import json
 import re
+import time
 
 # ✅ Import utils and AI modules
 from backend.utils.aws_utils import download_file_from_s3
@@ -43,6 +44,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ✅ Add logging middleware for debugging
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    print(f"🌐 Incoming request: {request.method} {request.url}")
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    print(f"🌐 Request processed in {process_time:.2f}s - Status: {response.status_code}")
+    return response
+
 # ✅ Global error handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -64,14 +75,18 @@ async def health_check():
         "status": "healthy",
         "message": "GymVid Backend API is running",
         "version": "1.0.0",
+        "server_time": time.time(),
         "endpoints": {
-            "exercise_prediction": "/quick_exercise_prediction",
-            "coaching_feedback": "/analyze/feedback_upload",
-            "health": "/health"
-        }
+            "exercise_prediction": "/analyze/quick_exercise_prediction",
+            "coaching_feedback": "/analyze/feedback_upload", 
+            "health": "/health",
+            "debug": "/debug/env"
+        },
+        "temp_directory": os.path.join(os.path.expanduser("~"), "tmp", "gymvid_temp")
     }
 
 # ✅ Routers
+print("🔧 Mounting routers...")
 app.include_router(manual_log_router)
 app.include_router(profile_image_router)
 app.include_router(onboarding_router)
@@ -79,6 +94,8 @@ app.include_router(check_username_router)
 app.include_router(quick_analysis_app, prefix="/analyze")
 app.include_router(feedback_upload_router, prefix="/analyze")
 app.include_router(quick_exercise_prediction_router, prefix="/analyze")
+print("✅ All routers mounted successfully")
+print("📍 Quick exercise prediction available at: /analyze/quick_exercise_prediction")
 
 # ✅ AI set analysis
 @app.post("/analyze/log_set")

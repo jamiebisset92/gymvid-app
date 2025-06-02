@@ -5,16 +5,20 @@ import os
 import cv2
 import numpy as np
 
-BASE_DISK_PATH = "/mnt/data"
+# Use a more reliable base path that works across different environments
+BASE_DISK_PATH = os.path.join(tempfile.gettempdir(), "gymvid_temp")
 
 from backend.ai.analyze.exercise_prediction import predict_exercise
 
 app = APIRouter()
 
-def simple_export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_dir: str = os.path.join(BASE_DISK_PATH, "quick_collages")) -> list:
+def simple_export_evenly_spaced_collage(video_path: str, total_frames: int = 4, output_dir: str = None) -> list:
     """
     Simple, robust collage generation using only OpenCV (no ffmpeg or PIL dependencies)
     """
+    if output_dir is None:
+        output_dir = os.path.join(BASE_DISK_PATH, "quick_collages")
+        
     try:
         os.makedirs(output_dir, exist_ok=True)
         cap = cv2.VideoCapture(video_path)
@@ -83,14 +87,16 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
         if ext not in [".mp4", ".mov", ".webm", ".avi"]:
             ext = ".mp4"
 
-        # Save uploaded video
-        tmp_path = os.path.join(BASE_DISK_PATH, f"uploaded_video_{video.filename}")
-        with open(tmp_path, "wb") as tmp:
-
+        # Save uploaded video to a proper temp file
+        os.makedirs(BASE_DISK_PATH, exist_ok=True)
+        
+        # Create a secure temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext, dir=BASE_DISK_PATH) as tmp_file:
             contents = await video.read()
             if not contents:
                 raise ValueError("Uploaded video file is empty or could not be read.")
-            tmp.write(contents)
+            tmp_file.write(contents)
+            tmp_path = tmp_file.name
 
         print(f"📼 Saved temp video to: {tmp_path}")
         print(f"📼 Video size: {len(contents)} bytes")
@@ -123,15 +129,19 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
 
         # Call exercise prediction with error handling
         try:
+            print("🤖 Calling AI prediction service...")
             prediction = predict_exercise(collage_path, model="gpt-4o")
+            print(f"🤖 AI prediction completed: {prediction}")
         except Exception as prediction_error:
             print(f"❌ AI Prediction failed: {str(prediction_error)}")
-            return JSONResponse(status_code=502, content={
-                "error": f"AI prediction service error: {str(prediction_error)}",
+            # Return success with fallback instead of error status
+            return JSONResponse(status_code=200, content={
                 "exercise_name": "Unable to Detect: Enter Manually",
                 "equipment": "Unknown",
                 "variation": "",
-                "confidence": 0
+                "confidence": 0,
+                "error": f"AI prediction service error: {str(prediction_error)}",
+                "prediction_details": {"error": str(prediction_error)}
             })
 
         # Handle prediction errors
@@ -200,11 +210,15 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
 async def test_exercise_prediction():
     """Test endpoint to verify prediction pipeline using existing collage"""
     try:
-        test_collage_path = os.path.join(BASE_DISK_PATH, "quick_collages", "quick_collage.jpg")
+        test_collage_dir = os.path.join(BASE_DISK_PATH, "quick_collages")
+        test_collage_path = os.path.join(test_collage_dir, "quick_collage.jpg")
 
         if not os.path.exists(test_collage_path):
             return JSONResponse(status_code=404, content={
-                "error": "No test collage found. Run quick_exercise_prediction first."
+                "error": "No test collage found. Run quick_exercise_prediction first.",
+                "expected_path": test_collage_path,
+                "base_dir": BASE_DISK_PATH,
+                "collage_dir_exists": os.path.exists(test_collage_dir)
             })
 
         prediction = predict_exercise(test_collage_path, model="gpt-4o")
@@ -214,12 +228,14 @@ async def test_exercise_prediction():
             "prediction": prediction,
             "collage_path": test_collage_path,
             "collage_exists": os.path.exists(test_collage_path),
-            "collage_size": os.path.getsize(test_collage_path)
+            "collage_size": os.path.getsize(test_collage_path),
+            "base_disk_path": BASE_DISK_PATH
         }
 
     except Exception as e:
         import traceback
         return JSONResponse(status_code=500, content={
             "error": str(e),
-            "traceback": traceback.format_exc()
+            "traceback": traceback.format_exc(),
+            "base_disk_path": BASE_DISK_PATH
         })

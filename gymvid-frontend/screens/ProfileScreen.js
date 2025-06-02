@@ -359,7 +359,6 @@ const ProfileScreen = ({ navigation }) => {
       } else {
         console.log('fetchProfile: No profile data, creating basic profile');
         setProfile({ id: session.user.id, email: session.user.email });
-        toast.info("Profile not fully set up yet.");
       }
     } catch (error) {
       console.error("Error fetching profile:", error);
