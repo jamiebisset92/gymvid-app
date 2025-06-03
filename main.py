@@ -91,7 +91,7 @@ app.include_router(manual_log_router)
 app.include_router(profile_image_router)
 app.include_router(onboarding_router)
 app.include_router(check_username_router)
-app.include_router(quick_analysis_app, prefix="/analyze")
+# app.include_router(quick_analysis_app, prefix="/analyze")  # REMOVED: Conflicts with newer implementation
 app.include_router(feedback_upload_router, prefix="/analyze")
 app.include_router(quick_exercise_prediction_router, prefix="/analyze")
 # Add quick exercise prediction at root level for frontend compatibility
