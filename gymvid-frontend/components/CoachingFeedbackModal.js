@@ -25,6 +25,26 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
   const tut = feedback?.total_tut ? `${feedback.total_tut}s` : '-';
   const formRating = feedback?.form_rating || 'N/A';
 
+  // Function to get RIR text based on RPE
+  const getRIRText = (rpe) => {
+    if (!rpe || rpe === '-' || rpe === 'N/A') return null;
+    
+    const rpeValue = parseFloat(rpe);
+    const rirLookup = {
+      10.0: "(No More Reps in the Tank - Failure Achieved)",
+      9.5: "(Possibly 1 Rep in the Tank Before Failure)",
+      9.0: "(Possibly 1-2 Reps in the Tank Before Failure)",
+      8.5: "(Possibly 2-3 Reps in the Tank Before Failure)",
+      8.0: "(Possibly 3-4 Reps in the Tank Before Failure)",
+      7.5: "(At Least 4+ Reps in the Tank Before Failure)",
+      7.0: "(At Least 5+ Reps in the Tank Before Failure)"
+    };
+    
+    return rirLookup[rpeValue] || null;
+  };
+
+  const rirText = getRIRText(rpe);
+
   return (
     <Modal
       visible={visible}
@@ -98,6 +118,14 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
                   </View>
                 </View>
               </View>
+              
+              {/* Add RIR Card */}
+              {rirText && (
+                <View style={styles.rirCard}>
+                  <Text style={styles.rirText}>👉 {rirText.replace(/[()]/g, '')}</Text>
+                </View>
+              )}
+              
               {feedback.observations && feedback.observations.map((item, idx) => (
                 <View key={idx} style={styles.feedbackBlockCustom}>
                   {item.observation ? <><Text style={styles.feedbackHeaderCustom}>👀 Observation</Text><Text style={styles.feedbackTextCustom}>{item.observation}</Text></> : null}
@@ -106,7 +134,7 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
               ))}
               {feedback.summary && (
                 <View style={styles.feedbackBlockCustom}>
-                  <Text style={styles.feedbackHeaderCustom}>👉 Summary</Text>
+                  <Text style={styles.feedbackHeaderCustom}>✅ Summary</Text>
                   <Text style={styles.feedbackTextCustom}>{feedback.summary}</Text>
                 </View>
               )}
@@ -134,7 +162,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     paddingHorizontal: 20,
     minHeight: 340,
-    maxHeight: '80%',
+    maxHeight: '84%',
   },
   headerRowCustom: {
     flexDirection: 'row',
@@ -170,7 +198,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   setSubtitleContainer: {
-    marginBottom: 18,
+    marginBottom: 5,
   },
   setSubtitleTrue: {
     fontSize: 15,
@@ -296,5 +324,22 @@ const styles = StyleSheet.create({
     color: colors.gray,
     marginBottom: 2,
     lineHeight: 20,
+  },
+  rirCard: {
+    marginBottom: 18,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  rirText: {
+    fontSize: 15,
+    fontFamily: 'DMSans-Bold',
+    color: colors.darkGray,
+    textAlign: 'left',
   },
 }); 

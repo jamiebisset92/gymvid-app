@@ -973,6 +973,18 @@ export default function VideoReviewScreen({ navigation, route }) {
     };
   }, [navigation, videoUri]);
 
+  // Handle skip to paywall
+  const handleSkipToPaywall = () => {
+    debugLog('🎯 SKIP BUTTON PRESSED - navigating directly to PaywallScreen');
+    
+    navigation.navigate('Paywall', {
+      continueOnboarding: continueOnboarding, // Pass through the onboarding flag
+      fromVideoReview: true, // Flag to indicate we came from video review
+      userId: userId,
+      skipped: true // Flag to indicate they skipped exercise logging
+    });
+  };
+
   // Toggle video playback
   const togglePlayback = async () => {
     if (videoRef.current) {
@@ -1190,8 +1202,47 @@ export default function VideoReviewScreen({ navigation, route }) {
       return 'Unable to Detect: Enter Manually';
     }
     
+    // Function to remove duplicate words intelligently
+    const removeDuplicateWords = (components) => {
+      // First, split all components into individual words
+      const allWords = [];
+      const componentWordMap = components.map(component => {
+        const words = component.split(' ').filter(word => word.trim() !== '');
+        allWords.push(...words.map(word => word.toLowerCase()));
+        return { component, words };
+      });
+      
+      // Track which words we've already used (case-insensitive)
+      const usedWords = new Set();
+      const result = [];
+      
+      // Process each component
+      componentWordMap.forEach(({ component, words }) => {
+        // Filter out words that are already used
+        const uniqueWords = words.filter(word => {
+          const lowerWord = word.toLowerCase();
+          if (usedWords.has(lowerWord)) {
+            return false; // Skip duplicate word
+          }
+          usedWords.add(lowerWord);
+          return true;
+        });
+        
+        // If the component still has unique words, add them
+        if (uniqueWords.length > 0) {
+          result.push(uniqueWords.join(' '));
+        }
+      });
+      
+      return result;
+    };
+    
+    // Remove duplicate words from components
+    const deduplicatedComponents = removeDuplicateWords(components);
+    debugLog('🔍 Deduplicated components:', deduplicatedComponents);
+    
     // Join components with spaces for "Equipment Variation Movement" format
-    const fullName = components.join(' ');
+    const fullName = deduplicatedComponents.join(' ');
     debugLog('🔍 Full exercise name:', fullName);
     
     return fullName;
@@ -2337,7 +2388,7 @@ export default function VideoReviewScreen({ navigation, route }) {
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.touchableContent}>
-              {/* Header with back button */}
+              {/* Header with back button and skip button */}
               <View style={styles.header}>
                 <TouchableOpacity 
                   style={styles.backButton} 
@@ -2346,7 +2397,13 @@ export default function VideoReviewScreen({ navigation, route }) {
                 >
                   <Ionicons name="chevron-back" size={24} color={colors.gray} />
                 </TouchableOpacity>
-                <View style={styles.headerSpacer} />
+                <TouchableOpacity 
+                  style={styles.skipButton} 
+                  onPress={handleSkipToPaywall}
+                  activeOpacity={0.6}
+                >
+                  <Text style={styles.skipButtonText}>Skip</Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.contentContainer}>
@@ -2679,6 +2736,7 @@ export default function VideoReviewScreen({ navigation, route }) {
         onClose={handleDismissTooltip}
         forcePositionBelow={true}
         showIconButton={true}
+        verticalOffset={52}
       />
       <GuidedPopup
         visible={tooltipStep === 2 && !isTransitioningTooltips && !hasSeenTooltips && !isDismissingTooltips}
@@ -2748,8 +2806,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    height: 60, 
-    paddingTop: 15, 
+    height: 80, // Increased from 60 to accommodate more padding
+    paddingTop: 35, // Increased from 15 to add more space above
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -3405,5 +3463,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  skipButton: {
+    position: 'absolute',
+    right: 20,
+    top: 22.5, 
+    zIndex: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  skipButtonText: {
+    color: colors.gray,
+    fontSize: 16,
+    fontWeight: '400',
+    letterSpacing: -0.2,
   },
 }); 

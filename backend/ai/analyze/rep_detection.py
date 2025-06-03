@@ -44,13 +44,13 @@ def run_rep_detection_from_landmark_y(
 
     rep_data = []
     rir_lookup = {
-        10.0: "(Possibly 0 Reps in the Tank)",
-        9.5: "(Possibly 0-1 Reps in the Tank)",
-        9.0: "(Possibly 1-2 Reps in the Tank)",
-        8.5: "(Possibly 2-3 Reps in the Tank)",
-        8.0: "(Possibly 3-4 Reps in the Tank)",
-        7.5: "(Possibly 4+ Reps in the Tank)",
-        7.0: "(Possibly 5+ Reps in the Tank)"
+        10.0: "(No More Reps in the Tank - Failure Achieved)",
+        9.5: "(Possibly 1 Rep in the Tank Before Failure)",
+        9.0: "(Possibly 1-2 Reps in the Tank Before Failure)",
+        8.5: "(Possibly 2-3 Reps in the Tank Before Failure)",
+        8.0: "(Possibly 3-4 Reps in the Tank Before Failure)",
+        7.5: "(At Least 4+ Reps in the Tank Before Failure)",
+        7.0: "(At Least 5+ Reps in the Tank Before Failure)"
     }
 
     for idx, rep in enumerate(rep_frames):

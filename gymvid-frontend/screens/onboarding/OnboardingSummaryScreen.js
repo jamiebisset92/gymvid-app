@@ -1325,8 +1325,15 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
                   activeOpacity={0.9}
                   disabled={loading || fetchError}
                 >
-                  <Text style={styles.nextButtonText}>Continue</Text>
-                  <Ionicons name="arrow-forward" size={24} color={colors.white} />
+                  <LinearGradient
+                    colors={['#007BFF', '#0056CC', '#003D99']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.nextButtonGradient}
+                  >
+                    <Text style={styles.nextButtonText}>Continue</Text>
+                    <Ionicons name="arrow-forward" size={24} color={colors.white} />
+                  </LinearGradient>
                 </TouchableOpacity>
               </Animated.View>
             </View>
@@ -1495,22 +1502,24 @@ const styles = StyleSheet.create({
     marginTop: 6, // Add margin to move button down within footer
   },
   nextButton: {
-    backgroundColor: '#007BFF',
     borderRadius: 16,
     height: 50,
     width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 4,
+    overflow: 'hidden',
   },
-  nextButtonDisabled: {
-    backgroundColor: '#AACEF5',
-    shadowOpacity: 0,
+  nextButtonGradient: {
+    flex: 1,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 24,
   },
   nextButtonText: {
     color: '#FFFFFF',
