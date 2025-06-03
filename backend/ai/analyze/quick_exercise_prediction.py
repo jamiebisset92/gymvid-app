@@ -77,6 +77,16 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
     collage_path = None
     try:
         print("🎬 === QUICK EXERCISE PREDICTION STARTED ===")
+        print(f"🎬 BASE_DISK_PATH: {BASE_DISK_PATH}")
+        print(f"🎬 BASE_DISK_PATH exists: {os.path.exists(BASE_DISK_PATH)}")
+        
+        # Ensure base directory exists
+        try:
+            os.makedirs(BASE_DISK_PATH, exist_ok=True)
+            print(f"🎬 Created/verified BASE_DISK_PATH: {BASE_DISK_PATH}")
+        except Exception as dir_error:
+            print(f"❌ Error creating BASE_DISK_PATH: {str(dir_error)}")
+            raise ValueError(f"Cannot create temp directory: {str(dir_error)}")
         
         # Validate file upload
         if not video.filename:
@@ -88,8 +98,6 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
             ext = ".mp4"
 
         # Save uploaded video to a proper temp file
-        os.makedirs(BASE_DISK_PATH, exist_ok=True)
-        
         # Create a secure temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext, dir=BASE_DISK_PATH) as tmp_file:
             contents = await video.read()
@@ -100,11 +108,14 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
 
         print(f"📼 Saved temp video to: {tmp_path}")
         print(f"📼 Video size: {len(contents)} bytes")
+        print(f"📼 Temp file exists: {os.path.exists(tmp_path)}")
 
         # Use simple, robust collage generation
         try:
+            print("🖼️ Starting collage generation...")
             collage_paths = simple_export_evenly_spaced_collage(tmp_path, total_frames=4)
             collage_path = collage_paths[0]
+            print(f"🖼️ Primary collage method succeeded: {collage_path}")
         except Exception as collage_error:
             print(f"❌ Primary collage generation failed: {str(collage_error)}")
             # Try fallback method using different approach
@@ -202,6 +213,8 @@ async def quick_exercise_prediction(video: UploadFile = File(...)):
                 if os.getenv("ENVIRONMENT") == "production":
                     os.remove(collage_path)
                     print(f"🧹 Cleaned up collage: {collage_path}")
+                else:
+                    print(f"🔍 Keeping collage for debugging: {collage_path}")
             except Exception as cleanup_error:
                 print(f"⚠️ Failed to cleanup collage: {cleanup_error}")
 

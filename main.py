@@ -94,8 +94,11 @@ app.include_router(check_username_router)
 app.include_router(quick_analysis_app, prefix="/analyze")
 app.include_router(feedback_upload_router, prefix="/analyze")
 app.include_router(quick_exercise_prediction_router, prefix="/analyze")
+# Add quick exercise prediction at root level for frontend compatibility
+app.include_router(quick_exercise_prediction_router)
 print("✅ All routers mounted successfully")
-print("📍 Quick exercise prediction available at: /analyze/quick_exercise_prediction")
+print("📍 Quick exercise prediction available at: /quick_exercise_prediction")
+print("📍 Quick exercise prediction also available at: /analyze/quick_exercise_prediction")
 
 # ✅ AI set analysis
 @app.post("/analyze/log_set")
@@ -264,6 +267,36 @@ def debug_env():
         "mediapipe_version": mediapipe_version,
         "model": os.getenv("GYMVID_AI_MODEL", "gpt-4o"),
     }
+
+# ✅ Test endpoint for quick exercise prediction
+@app.post("/test-quick-prediction")
+async def test_quick_prediction():
+    """Simple test endpoint to verify the prediction system is working"""
+    try:
+        import tempfile
+        from backend.ai.analyze.quick_exercise_prediction import BASE_DISK_PATH
+        
+        # Test temp directory creation
+        os.makedirs(BASE_DISK_PATH, exist_ok=True)
+        collage_dir = os.path.join(BASE_DISK_PATH, "quick_collages")
+        os.makedirs(collage_dir, exist_ok=True)
+        
+        return {
+            "status": "success",
+            "message": "Quick prediction system is ready",
+            "base_disk_path": BASE_DISK_PATH,
+            "collage_dir": collage_dir,
+            "temp_dir_exists": os.path.exists(BASE_DISK_PATH),
+            "collage_dir_exists": os.path.exists(collage_dir),
+            "temp_dir_writable": os.access(BASE_DISK_PATH, os.W_OK) if os.path.exists(BASE_DISK_PATH) else False
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
 
 # ✅ Run locally
 if __name__ == "__main__":

@@ -56,6 +56,18 @@ export default function PaywallScreen({ navigation, route }) {
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const logoAnim = useRef(new Animated.Value(0)).current;
+  const titleAnim = useRef(new Animated.Value(0)).current;
+  const subtitleAnim = useRef(new Animated.Value(0)).current;
+  const plan1Anim = useRef(new Animated.Value(0)).current;
+  const plan2Anim = useRef(new Animated.Value(0)).current;
+  const footerAnim = useRef(new Animated.Value(0)).current;
+  const logoScaleAnim = useRef(new Animated.Value(0.8)).current;
+  const titleSlideAnim = useRef(new Animated.Value(50)).current;
+  const subtitleSlideAnim = useRef(new Animated.Value(30)).current;
+  const plan1SlideAnim = useRef(new Animated.Value(40)).current;
+  const plan2SlideAnim = useRef(new Animated.Value(40)).current;
+  const footerSlideAnim = useRef(new Animated.Value(30)).current;
 
   // Function to get current user ID
   const getCurrentUserId = async () => {
@@ -171,34 +183,139 @@ export default function PaywallScreen({ navigation, route }) {
 
   // Run entrance animations
   useEffect(() => {
-    const animationSequence = [
-      // Fade in the entire view first
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
+    const startAnimations = () => {
+      // Reset all animations
+      fadeAnim.setValue(0);
+      logoAnim.setValue(0);
+      logoScaleAnim.setValue(0.8);
+      titleAnim.setValue(0);
+      titleSlideAnim.setValue(50);
+      subtitleAnim.setValue(0);
+      subtitleSlideAnim.setValue(30);
+      plan1Anim.setValue(0);
+      plan1SlideAnim.setValue(40);
+      plan2Anim.setValue(0);
+      plan2SlideAnim.setValue(40);
+      footerAnim.setValue(0);
+      footerSlideAnim.setValue(30);
+
+      // Create a beautiful staggered animation sequence
+      const animationSequence = Animated.stagger(120, [
+        // 1. Fade in the entire view first
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 600,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        
+        // 2. Logo entrance with scale and fade
+        Animated.parallel([
+          Animated.timing(logoAnim, {
+            toValue: 1,
+            duration: 800,
+            easing: Easing.out(Easing.back(1.2)),
+            useNativeDriver: true,
+          }),
+          Animated.spring(logoScaleAnim, {
+            toValue: 1,
+            tension: 60,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ]),
+        
+        // 3. Title entrance with slide and fade
+        Animated.parallel([
+          Animated.timing(titleAnim, {
+            toValue: 1,
+            duration: 700,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.spring(titleSlideAnim, {
+            toValue: 0,
+            tension: 50,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ]),
+        
+        // 4. Subtitle entrance
+        Animated.parallel([
+          Animated.timing(subtitleAnim, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.spring(subtitleSlideAnim, {
+            toValue: 0,
+            tension: 50,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ]),
+        
+        // 5. First plan card entrance
+        Animated.parallel([
+          Animated.timing(plan1Anim, {
+            toValue: 1,
+            duration: 700,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.spring(plan1SlideAnim, {
+            toValue: 0,
+            tension: 50,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ]),
+        
+        // 6. Second plan card entrance
+        Animated.parallel([
+          Animated.timing(plan2Anim, {
+            toValue: 1,
+            duration: 700,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.spring(plan2SlideAnim, {
+            toValue: 0,
+            tension: 50,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ]),
+        
+        // 7. Footer entrance
+        Animated.parallel([
+          Animated.timing(footerAnim, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.spring(footerSlideAnim, {
+            toValue: 0,
+            tension: 50,
+            friction: 8,
+            useNativeDriver: true,
+          })
+        ])
+      ]);
       
-      // Slide in content from right
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ];
+      // Start the animation sequence
+      animationSequence.start();
+    };
     
-    // Start the animation sequence
-    Animated.parallel(animationSequence).start();
+    // Start animations on mount
+    startAnimations();
     
     // Set up a focus listener for when returning to this screen
     const unsubFocus = navigation.addListener('focus', () => {
-      // Reset animations
-      fadeAnim.setValue(0);
-      slideAnim.setValue(30);
-      
-      // Restart the animation sequence
-      Animated.parallel(animationSequence).start();
+      startAnimations();
     });
     
     return () => {
@@ -297,19 +414,26 @@ export default function PaywallScreen({ navigation, route }) {
         styles.container, 
         { 
           opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }]
         }
       ]}
     >
       <SafeAreaView style={styles.safeContainer}>
         {/* Header */}
-        <View style={styles.header}>
+        <Animated.View 
+          style={[
+            styles.header,
+            {
+              opacity: logoAnim,
+              transform: [{ scale: logoScaleAnim }]
+            }
+          ]}
+        >
           <Image 
             source={require('../../assets/images/logo.png')} 
             style={styles.logo}
             resizeMode="contain"
           />
-        </View>
+        </Animated.View>
 
         <ScrollView 
           style={styles.scrollView}
@@ -317,19 +441,43 @@ export default function PaywallScreen({ navigation, route }) {
           showsVerticalScrollIndicator={false}
         >
           {/* Main Title */}
-          <Text style={styles.mainTitle}>
+          <Animated.Text 
+            style={[
+              styles.mainTitle,
+              {
+                opacity: titleAnim,
+                transform: [{ translateY: titleSlideAnim }]
+              }
+            ]}
+          >
             Let's do this {firstName}!
-          </Text>
+          </Animated.Text>
           
           {/* Sub-header */}
-          <Text style={styles.subHeader}>
+          <Animated.Text 
+            style={[
+              styles.subHeader,
+              {
+                opacity: subtitleAnim,
+                transform: [{ translateY: subtitleSlideAnim }]
+              }
+            ]}
+          >
             Select your plan & get started now:
-          </Text>
+          </Animated.Text>
           
           {/* Pricing Plans */}
           <View style={styles.plansContainer}>
             {/* Platinum Plan - Featured */}
-            <View style={styles.planCardWrapper}>
+            <Animated.View 
+              style={[
+                styles.planCardWrapper,
+                {
+                  opacity: plan1Anim,
+                  transform: [{ translateY: plan1SlideAnim }]
+                }
+              ]}
+            >
               <TouchableOpacity
                 style={[
                   styles.planCard,
@@ -435,113 +583,130 @@ export default function PaywallScreen({ navigation, route }) {
               <View style={styles.freeBadge}>
                 <Text style={styles.freeBadgeText}>Most Popular</Text>
               </View>
-            </View>
+            </Animated.View>
 
             {/* Pro Plan */}
-            <TouchableOpacity
+            <Animated.View
               style={[
-                styles.planCard,
-                selectedPlan === 'pro' && styles.selectedPlanCard
+                {
+                  opacity: plan2Anim,
+                  transform: [{ translateY: plan2SlideAnim }]
+                }
               ]}
-              onPress={() => handlePlanSelect('pro')}
-              activeOpacity={0.8}
             >
-              {selectedPlan === 'pro' ? (
-                <LinearGradient
-                  colors={['#ffffff', '#f8fafc', '#f1f5f9']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.selectedCardGradient}
-                >
-                  <View style={styles.planHeader}>
-                    <View style={styles.leftColumn}>
-                      <Text style={styles.planTitle}>Standard</Text>
-                      <Text style={styles.planSubtitle}>Manual Powered Experience</Text>
+              <TouchableOpacity
+                style={[
+                  styles.planCard,
+                  selectedPlan === 'pro' && styles.selectedPlanCard
+                ]}
+                onPress={() => handlePlanSelect('pro')}
+                activeOpacity={0.8}
+              >
+                {selectedPlan === 'pro' ? (
+                  <LinearGradient
+                    colors={['#ffffff', '#f8fafc', '#f1f5f9']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.selectedCardGradient}
+                  >
+                    <View style={styles.planHeader}>
+                      <View style={styles.leftColumn}>
+                        <Text style={styles.planTitle}>Standard</Text>
+                        <Text style={styles.planSubtitle}>Manual Powered Experience</Text>
+                      </View>
+                      <View style={styles.priceContainer}>
+                        <Text style={styles.planPrice}>$9.95</Text>
+                        <Text style={styles.perMonthText}>per month</Text>
+                      </View>
                     </View>
-                    <View style={styles.priceContainer}>
-                      <Text style={styles.planPrice}>$9.95</Text>
-                      <Text style={styles.perMonthText}>per month</Text>
+                    
+                    {selectedPlan === 'pro' && (
+                      <View style={styles.featuresContainer}>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="close-circle" size={20} color="#EF4444" />
+                          <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Coaching</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="close-circle" size={20} color="#EF4444" />
+                          <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Video Logging</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Unlimited Video Storage</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Manual Logging</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Custom Exercises</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>The GymVid Games</Text>
+                        </View>
+                      </View>
+                    )}
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.cardContent}>
+                    <View style={styles.planHeader}>
+                      <View style={styles.leftColumn}>
+                        <Text style={styles.planTitle}>Standard</Text>
+                        <Text style={styles.planSubtitle}>Manual Powered Experience</Text>
+                      </View>
+                      <View style={styles.priceContainer}>
+                        <Text style={styles.planPrice}>$9.95</Text>
+                        <Text style={styles.perMonthText}>per month</Text>
+                      </View>
                     </View>
+                    
+                    {selectedPlan === 'pro' && (
+                      <View style={styles.featuresContainer}>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="close-circle" size={20} color="#EF4444" />
+                          <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Coaching</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="close-circle" size={20} color="#EF4444" />
+                          <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Video Logging</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Unlimited Video Storage</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Manual Logging</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>Custom Exercises</Text>
+                        </View>
+                        <View style={styles.featureRow}>
+                          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                          <Text style={styles.featureText}>The GymVid Games</Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                  
-                  {selectedPlan === 'pro' && (
-                    <View style={styles.featuresContainer}>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="close-circle" size={20} color="#EF4444" />
-                        <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Coaching</Text>
-                      </View>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="close-circle" size={20} color="#EF4444" />
-                        <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Video Logging</Text>
-                      </View>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                        <Text style={styles.featureText}>Unlimited Video Storage</Text>
-                      </View>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                        <Text style={styles.featureText}>Manual Logging</Text>
-                      </View>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                        <Text style={styles.featureText}>Custom Exercises</Text>
-                      </View>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                        <Text style={styles.featureText}>The GymVid Games</Text>
-                      </View>
-                    </View>
-                  )}
-                </LinearGradient>
-              ) : (
-                <View style={styles.cardContent}>
-                  <View style={styles.planHeader}>
-                    <View style={styles.leftColumn}>
-                      <Text style={styles.planTitle}>Standard</Text>
-                      <Text style={styles.planSubtitle}>Manual Powered Experience</Text>
-                    </View>
-                    <View style={styles.priceContainer}>
-                      <Text style={styles.planPrice}>$9.95</Text>
-                      <Text style={styles.perMonthText}>per month</Text>
-                    </View>
-                  </View>
-                  
-                  {selectedPlan === 'pro' && (
-                    <View style={styles.featuresContainer}>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="close-circle" size={20} color="#EF4444" />
-                        <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Coaching</Text>
-                      </View>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="close-circle" size={20} color="#EF4444" />
-                        <Text style={[styles.featureText, styles.excludedFeatureText]}>AI Video Logging</Text>
-                      </View>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                        <Text style={styles.featureText}>Unlimited Video Storage</Text>
-                      </View>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                        <Text style={styles.featureText}>Manual Logging</Text>
-                      </View>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                        <Text style={styles.featureText}>Custom Exercises</Text>
-                      </View>
-                      <View style={styles.featureRow}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                        <Text style={styles.featureText}>The GymVid Games</Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
-            </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
           </View>
         </ScrollView>
 
-        {/* Bottom Section */}
-        <View style={styles.bottomSection}>
+        {/* Bottom Section - Positioned absolutely at bottom */}
+        <Animated.View 
+          style={[
+            styles.bottomSection,
+            {
+              opacity: footerAnim,
+              transform: [{ translateY: footerSlideAnim }]
+            }
+          ]}
+        >
           {/* CTA Button */}
           <TouchableOpacity 
             style={styles.ctaButton}
@@ -564,7 +729,7 @@ export default function PaywallScreen({ navigation, route }) {
               <Text style={styles.footerLinkText}>Restore purchase</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </SafeAreaView>
     </Animated.View>
   );
@@ -577,6 +742,7 @@ const styles = StyleSheet.create({
   },
   safeContainer: {
     flex: 1,
+    position: 'relative',
   },
   header: {
     paddingHorizontal: 20,
@@ -594,7 +760,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 180, // Make room for fixed footer
     backgroundColor: colors.background,
   },
   mainTitle: {
@@ -714,12 +880,21 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   bottomSection: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   ctaButton: {
     backgroundColor: colors.primary,
