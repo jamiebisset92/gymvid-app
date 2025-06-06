@@ -148,7 +148,7 @@ Return JSON only:
   "coaching_feedback": {{
     "form_rating": integer (1–10),
     "observations": [
-      {{ "header": "1-2 word topic", "observation": "...", "tip": "..." }}
+      {{ "header": "1-3 word topic", "observation": "...", "tip": "..." }}
     ],
     "summary": "..."
   }}
