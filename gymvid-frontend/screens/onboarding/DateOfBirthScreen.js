@@ -284,8 +284,11 @@ export default function DateOfBirthScreen({ navigation, route }) {
       ]}
     >
       <SafeAreaView style={styles.safeContainer}>
-        {/* Header spacer - to account for the global progress bar */}
-        <View style={styles.header} />
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButtonHeader} onPress={handleBack} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={24} color={colors.gray} />
+          </TouchableOpacity>
+        </View>
         
         <View style={styles.contentContainer}>
           <Animated.Text
@@ -312,7 +315,7 @@ export default function DateOfBirthScreen({ navigation, route }) {
             <View style={styles.dateContainer}>
               <Text style={styles.dateText}>{formatDate(dateOfBirth)}</Text>
               <View style={styles.dateIconContainer}>
-                <Ionicons name="calendar" size={24} color={colors.primary} />
+                <Ionicons name="calendar" size={24} color="#6b7280" />
               </View>
             </View>
 
@@ -347,14 +350,6 @@ export default function DateOfBirthScreen({ navigation, route }) {
         </View>
         
         <View style={styles.bottomButtonContainer}>
-          <TouchableOpacity 
-            style={styles.backButtonBottom} 
-            onPress={handleBack}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.gray} />
-          </TouchableOpacity>
-          
           <TouchableOpacity 
             style={[styles.nextButton, age < 16 && styles.nextButtonDisabled]}
             onPress={handleContinue}
@@ -497,9 +492,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 30,
     paddingTop: 10,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 0, 0, 0.05)',
@@ -510,16 +503,19 @@ const styles = StyleSheet.create({
     elevation: 3,
     backdropFilter: 'blur(10px)',
   },
-  backButtonBottom: {
-    height: 56,
-    width: 56,
-    borderRadius: 16,
+  backButtonHeader: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.lightGray,
-    marginRight: 10,
+    position: 'absolute',
+    left: 20,
+    top: 10,
+    zIndex: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -527,13 +523,13 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   nextButton: {
-    backgroundColor: '#007BFF',
+    backgroundColor: '#1e1e1e',
     borderRadius: 16,
     height: 56,
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -541,7 +537,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   nextButtonDisabled: {
-    backgroundColor: '#AACEF5',
+    backgroundColor: '#d1d5db',
     shadowOpacity: 0,
   },
   nextButtonText: {

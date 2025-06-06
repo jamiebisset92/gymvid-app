@@ -24,7 +24,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import FeedScreen from '../screens/FeedScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import LogWorkoutScreen from '../screens/LogWorkoutScreen';
-import HomeScreen from '../screens/HomeScreen';
 import SettingsScreen from '../screens/ProfileScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
@@ -463,7 +462,8 @@ export default function AuthStack({ setSession, initialRouteName = 'Login', init
           {progress.isOnboarding && (
             <OnboardingProgressBar 
               current={progress.current} 
-              total={progress.total} 
+              total={progress.total}
+              currentScreen={progress.currentScreen}
             />
           )}
         </View>

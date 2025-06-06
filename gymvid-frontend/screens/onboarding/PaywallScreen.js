@@ -30,20 +30,71 @@ const debugLog = (...args) => {
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function PaywallScreen({ navigation, route }) {
-  // Get exercise data from route params if available
-  const exerciseLogged = route.params?.exerciseLogged;
-  const videoLogged = route.params?.videoLogged;
-  const userId = route.params?.userId;
-  const continueOnboarding = route.params?.continueOnboarding || false;
-  const fromVideoReview = route.params?.fromVideoReview || false;
+  // Safely extract and convert route params to prevent object type errors
+  const safeParams = route.params || {};
   
-  debugLog('PaywallScreen params:', { 
-    exerciseLogged, 
-    videoLogged, 
-    userId, 
-    continueOnboarding,
-    fromVideoReview 
-  });
+  // Get exercise data from route params if available - ensure they're not objects
+  const exerciseLogged = (() => {
+    const param = safeParams.exerciseLogged;
+    if (!param || typeof param === 'string' || typeof param === 'number' || typeof param === 'boolean') {
+      return param;
+    }
+    return null; // Return null if it's an object to prevent crashes
+  })();
+  
+  const videoLogged = (() => {
+    const param = safeParams.videoLogged;
+    if (!param || typeof param === 'string' || typeof param === 'number' || typeof param === 'boolean') {
+      return param;
+    }
+    return null; // Return null if it's an object to prevent crashes
+  })();
+  
+  const userId = (() => {
+    const param = safeParams.userId;
+    if (!param) return null;
+    if (typeof param === 'string') return param;
+    if (typeof param === 'number') return String(param);
+    return null; // Return null if it's an object
+  })();
+  
+  const continueOnboarding = Boolean(safeParams.continueOnboarding);
+  const fromVideoReview = Boolean(safeParams.fromVideoReview);
+  const skipped = Boolean(safeParams.skipped);
+  
+  // Safe logging to prevent crashes
+  useEffect(() => {
+    try {
+      // Safely convert all parameters to strings to prevent object logging crashes
+      const safeParams = {
+        exerciseLogged: exerciseLogged ? 'present' : 'undefined',
+        videoLogged: videoLogged ? 'present' : 'undefined', 
+        userId: (() => {
+          if (!userId) return 'undefined';
+          if (typeof userId === 'string') return userId;
+          if (typeof userId === 'number') return String(userId);
+          return 'object_type';
+        })(),
+        continueOnboarding: (() => {
+          if (typeof continueOnboarding === 'boolean') return String(continueOnboarding);
+          return 'undefined';
+        })(),
+        fromVideoReview: (() => {
+          if (typeof fromVideoReview === 'boolean') return String(fromVideoReview);
+          return 'undefined';
+        })(),
+        skipped: (() => {
+          if (typeof skipped === 'boolean') return String(skipped);
+          return 'undefined';
+        })()
+      };
+      
+      debugLog('PaywallScreen params:', safeParams);
+    } catch (error) {
+      console.error('Error logging PaywallScreen params:', error);
+      debugLog('PaywallScreen params: [logging failed - params present but not loggable]');
+    }
+  }, [route.params]);
   
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('platinum');
@@ -368,7 +419,7 @@ export default function PaywallScreen({ navigation, route }) {
     try {
       const currentUserId = await getCurrentUserId();
       if (!currentUserId) {
-        return "Champion"; // fallback
+        return null; // Return null instead of "Champion"
       }
       
       const { data: profile, error } = await supabase
@@ -379,7 +430,7 @@ export default function PaywallScreen({ navigation, route }) {
         
       if (error) {
         console.error('Error fetching user name:', error);
-        return "Champion"; // fallback
+        return null; // Return null instead of "Champion"
       }
       
       if (profile && profile.name) {
@@ -387,14 +438,14 @@ export default function PaywallScreen({ navigation, route }) {
         return profile.name.split(' ')[0];
       }
       
-      return "Champion"; // fallback
+      return null; // Return null instead of "Champion"
     } catch (err) {
       console.error('Error in getUserFirstName:', err);
-      return "Champion"; // fallback
+      return null; // Return null instead of "Champion"
     }
   };
 
-  const [firstName, setFirstName] = useState("Champion");
+  const [firstName, setFirstName] = useState(null);
   
   // Load user's name when component mounts
   useEffect(() => {
@@ -409,7 +460,8 @@ export default function PaywallScreen({ navigation, route }) {
   }, [isFocused]);
 
   return (
-    <Animated.View 
+    <LinearGradient
+      colors={['#f4f4f4', '#fefefe']}
       style={[
         styles.container, 
         { 
@@ -450,7 +502,7 @@ export default function PaywallScreen({ navigation, route }) {
               }
             ]}
           >
-            Let's do this {firstName}!
+            {firstName ? `Let's do this ${firstName}!` : "Let's get started!"}
           </Animated.Text>
           
           {/* Sub-header */}
@@ -731,14 +783,14 @@ export default function PaywallScreen({ navigation, route }) {
           </View>
         </Animated.View>
       </SafeAreaView>
-    </Animated.View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    position: 'relative',
   },
   safeContainer: {
     flex: 1,
@@ -756,12 +808,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   scrollViewContent: {
     paddingHorizontal: 20,
     paddingBottom: 180, // Make room for fixed footer
-    backgroundColor: colors.background,
   },
   mainTitle: {
     fontSize: 28,
@@ -800,7 +850,7 @@ const styles = StyleSheet.create({
   },
   selectedPlanCard: {
     borderColor: colors.primary,
-    borderWidth: 3,
+    borderWidth: 1.5,
     shadowColor: '#1E40AF',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
@@ -897,7 +947,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   ctaButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#1c1c1e',
     borderRadius: 16,
     height: 56,
     alignItems: 'center',

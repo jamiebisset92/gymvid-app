@@ -341,7 +341,7 @@ export default function UserWeightScreen({ navigation, route }) {
                 <Ionicons 
                   name="arrow-forward" 
                   size={24} 
-                  color={(!weight.trim() || parseFloat(weight) < 20 || parseFloat(weight) > 300) ? colors.lightGray : colors.primary} />
+                  color={(!weight.trim() || parseFloat(weight) < 20 || parseFloat(weight) > 300) ? colors.lightGray : "#6b7280"} />
               </TouchableOpacity>
             </View>
             <View style={styles.weightClassContainer}>

@@ -42,6 +42,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { Video } from 'expo-av';
 import * as MediaLibrary from 'expo-media-library';
 import * as VideoThumbnails from 'expo-video-thumbnails';
+import * as FileSystem from 'expo-file-system';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // API base URL for uploads
 const API_URL = 'https://gymvid-app.onrender.com';
@@ -132,6 +134,381 @@ const VideoPreviewModal = ({ visible, videoUri, onClose }) => {
   );
 };
 
+// Add these helper functions from VideoReviewScreen.js after the existing helper functions
+const ABBREVIATIONS = {
+  // Equipment
+  'Barbell': 'BB',
+  'Dumbbell': 'DB', 
+  'Dumbell': 'DB',
+  'Cable': 'Cbl',
+  'Machine': 'Mch',
+  'Kettlebell': 'KB',
+  'Resistance': 'Res',
+  'Band': 'Bd',
+  'Bodyweight': 'BW',
+  'Smith': 'Sm',
+  'Hammer': 'Hmr',
+  'Preacher': 'Prch',
+  
+  // Variations
+  'Romanian': 'Rom',
+  'Bulgarian': 'Bulg', 
+  'Sumo': 'Sumo',
+  'Conventional': 'Conv',
+  'Close-Grip': 'CG',
+  'Close Grip': 'CG',
+  'Wide-Grip': 'WG',
+  'Wide Grip': 'WG',
+  'Reverse': 'Rev',
+  'Overhead': 'OH',
+  'Underhand': 'UH',
+  'Overhand': 'OH',
+  'Single-Arm': 'SA',
+  'Single Arm': 'SA',
+  'Alternating': 'Alt',
+  'Incline': 'Inc',
+  'Decline': 'Dec',
+  'Deficit': 'Def',
+  'Paused': 'Psd',
+  'Tempo': 'Tmp',
+  'Eccentric': 'Ecc',
+  'Isometric': 'Iso',
+  'Explosive': 'Exp',
+  'Jump': 'Jmp',
+  'Plyometric': 'Plyo',
+  'Assisted': 'Ast',
+  'Unassisted': 'Unast',
+  'Lateral': 'Lat',
+  'Medial': 'Med',
+  'Front': 'Fr',
+  'Back': 'Bk',
+  'Side': 'Sd',
+  'Cross': 'X',
+  'High': 'Hi',
+  'Low': 'Lo',
+  'Mid': 'Mid',
+  'Upper': 'Up',
+  'Lower': 'Lwr',
+  'Inner': 'In',
+  'Outer': 'Out',
+  'Seated': 'Std',
+  'Standing': 'Stnd',
+  'Lying': 'Ly',
+  'Prone': 'Pr',
+  'Supine': 'Sup',
+  
+  // Common words
+  'Exercise': 'Ex',
+  'Workout': 'WO',
+  'Training': 'Tr',
+  'Strength': 'Str',
+  'Power': 'Pwr',
+  'Cardio': 'Card',
+  'Isolation': 'Iso',
+  'Compound': 'Comp',
+  'with': 'w/',
+  'and': '&',
+  'the': '',
+  'of': '',
+  'for': '',
+  'in': '',
+  'on': '',
+  'at': '',
+  'to': '',
+  'from': '',
+  'Chain': 'Chn',
+  'Chains': 'Chns',
+  'Weight': 'Wt',
+  'Plate': 'Pl',
+  'Plates': 'Pls'
+};
+
+const smartAbbreviate = (text) => {
+  if (!text || text.length <= 29) return text;
+  
+  let abbreviated = text;
+  
+  // Apply abbreviations if over 31 characters
+  if (text.length > 31) {
+    for (const [full, abbrev] of Object.entries(ABBREVIATIONS)) {
+      const regex = new RegExp(`\\b${full}\\b`, 'gi');
+      abbreviated = abbreviated.replace(regex, abbrev);
+    }
+  }
+  
+  // If still too long, truncate at word boundary
+  if (abbreviated.length > 29) {
+    const words = abbreviated.split(' ');
+    let truncated = '';
+    
+    for (let i = 0; i < words.length; i++) {
+      const testString = truncated + (truncated ? ' ' : '') + words[i];
+      if (testString.length <= 26) { // Leave room for "..."
+        truncated = testString;
+      } else {
+        break;
+      }
+    }
+    
+    if (truncated !== abbreviated) {
+      abbreviated = truncated + '...';
+    }
+  }
+  
+  return abbreviated;
+};
+
+const buildFullExerciseName = (data) => {
+  console.log('🔍 Building exercise name from data:', data);
+  
+  // Handle different response formats - backend returns exercise_name as the movement
+  const equipment = data.equipment || data.Equipment || '';
+  const variation = data.variation || data.Variation || '';
+  const exerciseName = data.exercise_name || data.Exercise_name || data.exercise || data.predicted_exercise || data.movement || '';
+  
+  console.log('🔍 Extracted components:', { equipment, variation, exerciseName });
+  
+  // Filter out "Unknown", "None", null, or empty values
+  const components = [equipment, variation, exerciseName]
+    .filter(component => 
+      component && 
+      component.trim() !== '' && 
+      component.toLowerCase() !== 'unknown' && 
+      component.toLowerCase() !== 'none'
+    );
+  
+  console.log('🔍 Filtered components:', components);
+  
+  if (components.length === 0) {
+    return 'Unable to Detect: Enter Manually';
+  }
+  
+  // Function to remove duplicate words intelligently
+  const removeDuplicateWords = (components) => {
+    // First, split all components into individual words
+    const allWords = [];
+    const componentWordMap = components.map(component => {
+      const words = component.split(' ').filter(word => word.trim() !== '');
+      allWords.push(...words.map(word => word.toLowerCase()));
+      return { component, words };
+    });
+    
+    // Track which words we've already used (case-insensitive)
+    const usedWords = new Set();
+    const result = [];
+    
+    // Process each component
+    componentWordMap.forEach(({ component, words }) => {
+      // Filter out words that are already used
+      const uniqueWords = words.filter(word => {
+        const lowerWord = word.toLowerCase();
+        if (usedWords.has(lowerWord)) {
+          return false; // Skip duplicate word
+        }
+        usedWords.add(lowerWord);
+        return true;
+      });
+      
+      // If the component still has unique words, add them
+      if (uniqueWords.length > 0) {
+        result.push(uniqueWords.join(' '));
+      }
+    });
+    
+    return result;
+  };
+  
+  // Remove duplicate words from components
+  const deduplicatedComponents = removeDuplicateWords(components);
+  console.log('🔍 Deduplicated components:', deduplicatedComponents);
+  
+  // Join components with spaces for "Equipment Variation Movement" format
+  const fullName = deduplicatedComponents.join(' ');
+  console.log('🔍 Full exercise name:', fullName);
+  
+  return fullName;
+};
+
+// Function to check server health before making requests
+const checkServerHealth = async () => {
+  try {
+    console.log('Checking server health...');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for health check
+    
+    const response = await fetch('https://gymvid-app.onrender.com/', {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    const isHealthy = response.ok;
+    console.log('Server health check result:', isHealthy ? 'HEALTHY' : 'UNHEALTHY', 'Status:', response.status);
+    
+    return isHealthy;
+  } catch (error) {
+    console.log('Server health check failed:', error.message);
+    return false;
+  }
+};
+
+// API function to predict exercise (same as VideoReviewScreen.js)
+const predictExercise = async (videoUri, retryCount = 0) => {
+  const MAX_RETRIES = 3;
+  const TIMEOUT_MS = retryCount === 0 ? 45000 : 30000;
+  
+  try {
+    console.log('Predicting exercise for video:', videoUri, `(attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+    
+    // Show appropriate user feedback based on attempt
+    if (retryCount === 0) {
+      console.log('First attempt at exercise prediction');
+    } else if (retryCount === 1) {
+      Toast.show('Server is starting up, please wait...', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+    } else if (retryCount === 2) {
+      Toast.show('Almost there, trying one more time...', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+    }
+    
+    // Verify the video file exists
+    const fileInfo = await FileSystem.getInfoAsync(videoUri);
+    if (!fileInfo.exists) {
+      throw new Error('Video file not found at URI: ' + videoUri);
+    }
+    console.log('Video file verified - Size:', fileInfo.size, 'URI:', fileInfo.uri);
+    
+    // Check file size
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+    if (fileInfo.size > MAX_FILE_SIZE) {
+      console.warn('Video file is very large:', (fileInfo.size / 1024 / 1024).toFixed(2), 'MB');
+      Toast.show('Video file is too large. Please use a shorter video.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+      return 'Unable to Detect: Enter Manually';
+    }
+    
+    const formData = new FormData();
+    
+    // Ensure proper URI format
+    let properUri = fileInfo.uri;
+    if (Platform.OS === 'ios' && !properUri.startsWith('file://')) {
+      properUri = `file://${properUri}`;
+    }
+    
+    formData.append('video', {
+      uri: properUri,
+      name: 'workout_video.mp4',
+      type: 'video/mp4',
+    });
+
+    console.log('FormData prepared with video URI:', properUri);
+    console.log('Making request to:', 'https://gymvid-app.onrender.com/quick_exercise_prediction');
+
+    // Create an AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.log(`Request aborted after ${TIMEOUT_MS}ms timeout`);
+    }, TIMEOUT_MS);
+
+    try {
+      const response = await fetch('https://gymvid-app.onrender.com/quick_exercise_prediction', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      console.log('Response received - Status:', response.status, 'OK:', response.ok);
+      
+      if (!response.ok) {
+        if (response.status === 504 || response.status === 502) {
+          throw new Error('Gateway timeout - server is overloaded');
+        } else if (response.status === 503) {
+          throw new Error('Service unavailable - server is down');
+        } else if (response.status >= 500) {
+          throw new Error(`Server error (${response.status}) - please try again`);
+        }
+        
+        const errorText = await response.text();
+        console.log('Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('🔍 PREDICTION RESPONSE:', JSON.stringify(data, null, 2));
+      
+      // Clear any retry messages on success - removed Toast notification
+      
+      // Handle different possible response formats with enhanced processing
+      const fullExerciseName = buildFullExerciseName(data);
+      console.log('Built full exercise name:', fullExerciseName);
+      
+      return fullExerciseName;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      // Check if it's an abort error
+      if (fetchError.name === 'AbortError') {
+        throw new Error(`Request timeout after ${TIMEOUT_MS / 1000}s - server is taking too long`);
+      }
+      
+      throw fetchError;
+    }
+  } catch (error) {
+    console.error('Error predicting exercise:', error);
+    console.log('Full error details:', {
+      message: error.message,
+      name: error.name,
+      retryCount: retryCount
+    });
+    
+    // Determine if we should retry based on the error type
+    const shouldRetry = (
+      (error.message.includes('timeout') || 
+       error.message.includes('504') || 
+       error.message.includes('502') ||
+       error.message.includes('503') ||
+       error.message.includes('Gateway timeout') ||
+       error.message.includes('Service unavailable') ||
+       error.message.includes('overloaded')) && 
+      retryCount < MAX_RETRIES
+    );
+    
+    if (shouldRetry) {
+      console.log(`Retrying exercise prediction (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
+      
+      // Exponential backoff: wait longer between retries
+      const backoffDelay = Math.min(2000 * Math.pow(2, retryCount), 8000); // 2s, 4s, 8s max
+      console.log(`Waiting ${backoffDelay}ms before retry...`);
+      
+      await new Promise(resolve => setTimeout(resolve, backoffDelay));
+      
+      return predictExercise(videoUri, retryCount + 1);
+    }
+    
+    // Show user-friendly error message based on error type
+    if (error.message && (error.message.includes('timeout') || error.message.includes('504') || error.message.includes('Gateway timeout'))) {
+      console.error('⚠️ Backend server is overloaded or cold-starting');
+      Toast.show('Server is busy. Exercise detection unavailable - please enter manually.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+    } else if (error.message && error.message.includes('Network request failed')) {
+      console.error('⚠️ Network Error: Cannot connect to backend server');
+      Toast.show('Network error. Please check your connection.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+    } else if (error.message && (error.message.includes('503') || error.message.includes('Service unavailable'))) {
+      console.error('⚠️ Backend service is temporarily unavailable');
+      Toast.show('Service temporarily down. Please enter exercise manually.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+    } else {
+      console.error('⚠️ Unknown error during exercise prediction:', error.message);
+      Toast.show('Unable to detect exercise. Please enter manually.', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+    }
+    
+    // Return graceful fallback
+    return 'Unable to Detect: Enter Manually';
+  }
+};
+
 export default function NewBlankWorkoutScreen({ navigation = {} }) {
   const [exercises, setExercises] = useState([]);
   const [showPicker, setShowPicker] = useState(false);
@@ -207,6 +584,32 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
 
   const [previewVideo, setPreviewVideo] = useState(null);
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+
+  // Add state for ellipsis animation (add this with other useState hooks)
+  const [ellipsisCount, setEllipsisCount] = useState(0);
+  
+  // Add state for AI coaching feedback caching  
+  const [cachedFeedback, setCachedFeedback] = useState({});
+  const [currentVideoFeedbackKey, setCurrentVideoFeedbackKey] = useState(null);
+
+  // Add debug logging function
+  const debugLog = (...args) => {
+    if (__DEV__) {
+      console.log('[NEW-BLANK-WORKOUT]', ...args);
+    }
+  };
+
+  useEffect(() => {
+    let interval;
+    if (exercises.some(ex => ex.isPlaceholder)) {
+      interval = setInterval(() => {
+        setEllipsisCount(prev => (prev + 1) % 4);
+      }, 500);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [exercises]);
 
   useLayoutEffect(() => {
     nav.getParent()?.setOptions({
@@ -908,7 +1311,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   // Helper to generate a unique id
   const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 9);
 
-  // Replace handleAddVideoAI with the new flow
+  // Replace handleAddVideoAI with the new implementation
   const handleAddVideoAI = async () => {
     let placeholderId = null;
     
@@ -940,82 +1343,97 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
 
       const videoUri = result.assets[0].uri;
 
-      // Show placeholder card
+      // Generate thumbnail for the video
+      const { uri: thumbnailUri } = await VideoThumbnails.getThumbnailAsync(videoUri, {
+        time: 0,
+        quality: 0.5,
+      });
+
+      // Add placeholder card IMMEDIATELY with smooth animation
       placeholderId = generateId();
-      setPendingCards(prev => [
-        ...prev,
-        { id: placeholderId, videoUri }
-      ]);
-
-      // Upload video directly to process_set endpoint
-      const formData = new FormData();
-      formData.append('video', {
-        uri: videoUri,
-        type: 'video/mp4',
-        name: videoUri.split('/').pop()
-      });
-      formData.append('user_id', user_id);
-      formData.append('coaching', 'false');
-
-      console.log('Uploading video to process_set...');
-      const response = await fetch('https://gymvid-app.onrender.com/process_set', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        body: formData,
-      });
-
-      const json = await response.json();
-      console.log('Process set response:', json);
-
-      if (!json.success || !json.data) {
-        throw new Error(json.message || 'Video analysis failed');
-      }
-
-      // Remove placeholder card if it exists
-      if (placeholderId) {
-        setPendingCards(prev => prev.filter(card => card.id !== placeholderId));
-      }
-
-      // Add new exercise with analyzed data
-      setExercises(prev => [
-        ...prev,
-        {
+      const placeholderExercise = {
+        id: placeholderId,
+        name: 'AI Detecting Exercise...',
+        isPlaceholder: true,
+        videoUri,
+        thumbnailUri,
+        sets: [{
           id: generateId(),
-          name: json.data.exercise_prediction?.movement || 'New Exercise',
-          sets: [
-            {
-              id: generateId(),
-              weight: json.data.weight_estimation?.estimated_weight_kg?.toString() || '',
-              weightUnit: weightUnits,
-              reps: json.data.rep_data?.length?.toString() || '',
-              rpe: '',
-              tut: '',
-              completed: false,
-              video: json.data.video_url,
-              thumbnail_url: json.data.thumbnail_url,
-              canAnalyzeForm: !!json.data.coaching_feedback,
-              ai_analysis: {
-                exercise_name: json.data.exercise_prediction?.movement,
-                confidence: json.data.exercise_prediction?.confidence || 0,
-                equipment: json.data.exercise_prediction?.equipment,
-                variation: json.data.exercise_prediction?.variation
-              }
-            }
-          ]
-        }
-      ]);
+          weight: '',
+          reps: '',
+          completed: false,
+          localVideo: videoUri,
+          thumbnail: thumbnailUri,
+        }]
+      };
 
-      // Expand the newly added exercise
-      setExpandedExercises(prev => ({ ...prev, [exercises.length]: true }));
+      // Add to exercises array immediately
+      setExercises(prev => [...prev, placeholderExercise]);
+      
+      // Expand the placeholder immediately for smooth transition
+      setExpandedExercises(prev => ({ ...prev, [placeholderId]: true }));
+
+      // Predict exercise using the same method as VideoReviewScreen.js
+      console.log('Starting exercise prediction...');
+      const fullExerciseName = await predictExercise(videoUri);
+      
+      // Process the exercise name with smart abbreviation system
+      const processedExerciseName = smartAbbreviate(fullExerciseName);
+      
+      // Replace placeholder with actual exercise data
+      setExercises(prev => prev.map(ex => {
+        if (ex.id === placeholderId) {
+          const newId = generateId(); // New ID for the actual exercise
+          // Update expanded exercises state with new ID
+          setExpandedExercises(prevExpanded => {
+            const newExpanded = { ...prevExpanded };
+            delete newExpanded[placeholderId]; // Remove old placeholder ID
+            newExpanded[newId] = true; // Add new exercise ID
+            return newExpanded;
+          });
+          
+          return {
+            id: newId,
+            name: processedExerciseName,
+            fullName: fullExerciseName, // Store full name for tooltip
+            sets: [
+              {
+                id: generateId(),
+                weight: '',
+                weightUnit: weightUnits,
+                reps: '',
+                rpe: '',
+                tut: '',
+                completed: false,
+                localVideo: videoUri,
+                thumbnail: thumbnailUri,
+                isVideoSet: true,
+                // Remove ai_analysis to prevent grey card
+              }
+            ]
+          };
+        }
+        return ex;
+      }));
+
+      // Show helpful message if prediction failed
+      if (fullExerciseName === 'Unable to Detect: Enter Manually') {
+        setTimeout(() => {
+          Toast.show('Tap the exercise name to edit it manually', { duration: Toast.durations.LONG, position: Toast.positions.BOTTOM });
+        }, 1000);
+      }
 
     } catch (error) {
       console.error('Video upload/analysis error:', error?.response?.data || error.message);
       
-      // Remove placeholder card if it exists
+      // Remove placeholder if it exists
       if (placeholderId) {
-        setPendingCards(prev => prev.filter(card => card.id !== placeholderId));
+        setExercises(prev => prev.filter(ex => ex.id !== placeholderId));
+        setExpandedExercises(prev => {
+          const newExpanded = { ...prev };
+          delete newExpanded[placeholderId];
+          return newExpanded;
+        });
       }
 
       // Show error toast
@@ -1268,151 +1686,277 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   };
 
   const handleShowCoachingFeedback = async (exerciseId, setId, videoUrl, thumbnailUrl, subExerciseId = null) => {
-    // Get the set from the exercises array
+    if (!videoUrl) return;
+
+    // Dismiss the keyboard first to prevent it from getting stuck
+    Keyboard.dismiss();
+    
+    // Get the exercise to extract the name
     const exercise = exercises.find(e => e.id === exerciseId);
     if (!exercise) return;
-
-    const set = subExerciseId 
-      ? exercise.exercises?.find(e => e.id === subExerciseId)?.sets?.find(s => s.id === setId)
-      : exercise.sets?.find(s => s.id === setId);
-
-    if (!set || !set.video_url) return;
-
-    // Don't proceed if already loading or has successful feedback
-    if (set.coaching?.status === 'loading' || set.coaching?.status === 'success') {
+    
+    let exerciseName = '';
+    let set = null;
+    let weight = '';
+    let reps = '';
+    
+    if (exercise.isSuperset && subExerciseId) {
+      const subExercise = exercise.exercises.find(ex => ex.id === subExerciseId);
+      if (subExercise) {
+        exerciseName = subExercise.name;
+        set = subExercise.sets.find(s => s.id === setId);
+      }
+    } else {
+      exerciseName = exercise.name;
+      set = exercise.sets.find(s => s.id === setId);
+    }
+    
+    if (set) {
+      weight = set.weight || '';
+      reps = set.reps || '';
+    }
+    
+    // Create a unique key for this video + exercise + weight + reps combination
+    const feedbackKey = `${videoUrl}_${exerciseName}_${weight}_${reps}`;
+    setCurrentVideoFeedbackKey(feedbackKey);
+    
+    // Check if we already have cached feedback for this exact combination
+    if (cachedFeedback[feedbackKey]) {
+      debugLog('Using cached feedback for:', feedbackKey);
+      
+      // Show modal with cached data
       setFeedbackModalVisible(true);
       setFeedbackLoading(false);
-      setFeedbackData(set.coaching?.feedback);
+      setFeedbackData(cachedFeedback[feedbackKey]);
       setFeedbackThumbnail(thumbnailUrl);
       setFeedbackVideoUrl(videoUrl);
+      setFeedbackExerciseId(exerciseId);
+      setFeedbackSetId(setId);
+      return;
+    }
+    
+    // Check if we have preloaded feedback for this video + exercise (without weight/reps)
+    const preloadKey = `${videoUrl}_${exerciseName}_preload`;
+    if (cachedFeedback[preloadKey]) {
+      debugLog('Using preloaded feedback for:', preloadKey);
+      
+      // Show modal with preloaded data
+      setFeedbackModalVisible(true);
+      setFeedbackLoading(false);
+      setFeedbackData(cachedFeedback[preloadKey]);
+      setFeedbackThumbnail(thumbnailUrl);
+      setFeedbackVideoUrl(videoUrl);
+      setFeedbackExerciseId(exerciseId);
+      setFeedbackSetId(setId);
+      
+      // Cache it also under the specific weight/reps key for future use
+      setCachedFeedback(prev => ({
+        ...prev,
+        [feedbackKey]: cachedFeedback[preloadKey]
+      }));
+      
       return;
     }
 
-    // Set loading state
-    setExercises(prev => prev.map(ex => {
-      if (ex.id !== exerciseId) return ex;
-      if (subExerciseId) {
-        return {
-          ...ex,
-          exercises: ex.exercises.map(subEx => {
-            if (subEx.id !== subExerciseId) return subEx;
-            return {
-              ...subEx,
-              sets: subEx.sets.map(s => 
-                s.id === setId 
-                  ? { ...s, coaching: { status: 'loading', feedback: null } }
-                  : s
-              )
-            };
-          })
-        };
-      }
-      return {
-        ...ex,
-        sets: ex.sets.map(s => 
-          s.id === setId 
-            ? { ...s, coaching: { status: 'loading', feedback: null } }
-            : s
-        )
-      };
-    }));
-
-    // Show modal with loading state
+    // Show modal with loading state for new feedback
     setFeedbackModalVisible(true);
     setFeedbackLoading(true);
     setFeedbackData(null);
     setFeedbackThumbnail(thumbnailUrl);
     setFeedbackVideoUrl(videoUrl);
+    setFeedbackExerciseId(exerciseId);
+    setFeedbackSetId(setId);
+    
+    // Let users know this will take some time
+    Toast.show('AI analysis in progress - this may take a few minutes...', { 
+      duration: Toast.durations.LONG, 
+      position: Toast.positions.BOTTOM 
+    });
 
-    try {
-      const user = supabase.auth.user(); // V1 METHOD
-      const user_id = user?.id;
-      if (!user_id) throw new Error('User not authenticated');
-
-      const response = await fetch(`${API_URL}/analyze/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id,
-          movement: set.exerciseName || 'Unknown',
-          video_url: set.video_url
-        })
-      });
-
-      const data = await response.json();
-      if (!data.success) throw new Error('Failed to get coaching feedback');
-
-      // Update state with success
-      setExercises(prev => prev.map(ex => {
-        if (ex.id !== exerciseId) return ex;
-        if (subExerciseId) {
-          return {
-            ...ex,
-            exercises: ex.exercises.map(subEx => {
-              if (subEx.id !== subExerciseId) return subEx;
-              return {
-                ...subEx,
-                sets: subEx.sets.map(s => 
-                  s.id === setId 
-                    ? { ...s, coaching: { status: 'success', feedback: data.feedback } }
-                    : s
-                )
-              };
-            })
-          };
+    // Retry logic for coaching feedback
+    const MAX_RETRIES = 2;
+    let retryCount = 0;
+    
+    const attemptFeedbackRequest = async () => {
+      try {
+        // Get current user ID
+        const user = supabase.auth.user(); // V1 METHOD
+        const currentUserId = user?.id;
+        if (!currentUserId) {
+          throw new Error('User not authenticated');
         }
-        return {
-          ...ex,
-          sets: ex.sets.map(s => 
-            s.id === setId 
-              ? { ...s, coaching: { status: 'success', feedback: data.feedback } }
-              : s
-          )
-        };
-      }));
 
-      setFeedbackLoading(false);
-      setFeedbackData(data.feedback);
+        console.log('Sending coaching feedback request with user_id:', currentUserId, `(attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+        console.log('Video URL:', videoUrl);
+        console.log('Exercise name:', exerciseName || 'Unknown Exercise');
 
-    } catch (error) {
-      console.error('Error getting coaching feedback:', error);
-      
-      // Update state with error
-      setExercises(prev => prev.map(ex => {
-        if (ex.id !== exerciseId) return ex;
-        if (subExerciseId) {
-          return {
-            ...ex,
-            exercises: ex.exercises.map(subEx => {
-              if (subEx.id !== subExerciseId) return subEx;
-              return {
-                ...subEx,
-                sets: subEx.sets.map(s => 
-                  s.id === setId 
-                    ? { ...s, coaching: { status: 'error', feedback: null } }
-                    : s
-                )
-              };
-            })
-          };
+        // Use expo-file-system to confirm the file exists and retrieve proper URI
+        const fileInfo = await FileSystem.getInfoAsync(videoUrl);
+        if (!fileInfo.exists) {
+          throw new Error('Video file not found');
         }
-        return {
-          ...ex,
-          sets: ex.sets.map(s => 
-            s.id === setId 
-              ? { ...s, coaching: { status: 'error', feedback: null } }
-              : s
-          )
-        };
-      }));
 
-      setFeedbackLoading(false);
-      setFeedbackData(null);
-      Toast.show('Failed to get coaching feedback. Please try again.', { 
-        duration: Toast.durations.SHORT, 
-        position: Toast.positions.BOTTOM 
-      });
-    }
+        console.log('File verified, exists:', fileInfo.exists, 'URI:', fileInfo.uri, 'Size:', fileInfo.size);
+
+        // Create FormData for file upload with proper React Native/Expo formatting
+        const formData = new FormData();
+        
+        // Ensure proper URI format for iOS/Expo
+        let properUri = fileInfo.uri;
+        if (Platform.OS === 'ios' && !properUri.startsWith('file://')) {
+          properUri = `file://${properUri}`;
+        }
+        
+        // Add the video file with exact structure required for React Native FormData
+        formData.append('video', {
+          uri: properUri,
+          name: 'workout_video.mp4',
+          type: 'video/mp4',
+        });
+        
+        // Add other form fields as plain text
+        formData.append('user_id', currentUserId);
+        formData.append('movement', exerciseName);
+
+        console.log('FormData created with proper URI:', properUri);
+        console.log('Making request to backend - no timeout, allowing full processing time...');
+
+        // Make the request without any timeout - let backend take as long as needed
+        const response = await fetch('https://gymvid-app.onrender.com/analyze/feedback_upload', {
+          method: 'POST',
+          body: formData,
+          // No AbortController or timeout - let the AI analysis complete naturally
+        });
+
+        console.log('Response received, status:', response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.log('Response error text:', errorText);
+          
+          // Handle different HTTP errors
+          if (response.status === 504 || response.status === 502) {
+            throw new Error('Gateway timeout - server is overloaded');
+          } else if (response.status === 503) {
+            throw new Error('Service unavailable - server is down');
+          } else if (response.status >= 500) {
+            throw new Error(`Server error (${response.status}) - please try again`);
+          }
+          
+          throw new Error(`Upload failed with status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ Coaching feedback received:', data);
+        
+        // Always process the feedback if we got a response
+        // Even error feedback should be shown to the user gracefully
+        setFeedbackLoading(false);
+        
+        // Structure the feedback data with the specified fields
+        const feedbackResponse = {
+          form_rating: data.feedback?.form_rating || 0,
+          observations: data.feedback?.observations || [],
+          summary: data.feedback?.summary || '',
+          rpe: data.feedback?.rpe === "N/A" || data.feedback?.rpe === null ? '-' : data.feedback?.rpe,
+          total_tut: data.feedback?.total_tut === "N/A" || data.feedback?.total_tut === null ? '-' : data.feedback?.total_tut,
+          ...data.feedback
+        };
+        
+        // Log if this is error feedback but still show it to the user
+        if (feedbackResponse.form_rating === 0) {
+          console.log('⚠️ Received error feedback with form_rating 0 - showing to user');
+        }
+        
+        setFeedbackData(feedbackResponse);
+        
+        // Cache the feedback for this specific combination
+        setCachedFeedback(prev => ({
+          ...prev,
+          [feedbackKey]: feedbackResponse
+        }));
+        
+        console.log('Feedback cached for key:', feedbackKey);
+
+      } catch (error) {
+        console.log('Coaching feedback error:', {
+          message: error.message,
+          name: error.name,
+          retryCount: retryCount
+        });
+        
+        // Determine if we should retry - only for server errors, not timeouts
+        const shouldRetry = (
+          (error.message.includes('504') || 
+           error.message.includes('502') ||
+           error.message.includes('503') ||
+           error.message.includes('Gateway timeout') ||
+           error.message.includes('Service unavailable') ||
+           error.message.includes('overloaded')) && 
+          retryCount < MAX_RETRIES
+        );
+        
+        if (shouldRetry) {
+          retryCount++;
+          console.log(`Retrying coaching feedback (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
+          
+          // Show user feedback
+          if (retryCount === 1) {
+            Toast.show('Server is starting up, retrying...', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+          } else if (retryCount === 2) {
+            Toast.show('Last attempt, please wait...', { duration: Toast.durations.SHORT, position: Toast.positions.BOTTOM });
+          }
+          
+          // Exponential backoff
+          const backoffDelay = Math.min(2000 * Math.pow(2, retryCount - 1), 8000);
+          console.log(`Waiting ${backoffDelay}ms before retry...`);
+          
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+          return attemptFeedbackRequest();
+        }
+        
+        // All retries failed - show error and close modal
+        console.error('❌ Error uploading video for feedback after all retries:', error);
+        
+        setFeedbackLoading(false);
+        setFeedbackData(null);
+        setFeedbackModalVisible(false);
+        
+        // Show specific error message based on error type
+        if (error.message && error.message.includes('Network request failed')) {
+          Toast.show("Network error. Please check your connection and try again.", { 
+            duration: Toast.durations.LONG, 
+            position: Toast.positions.BOTTOM,
+            backgroundColor: '#FF3B30',
+            textColor: '#FFFFFF'
+          });
+        } else if (error.message && (error.message.includes('503') || error.message.includes('Service unavailable'))) {
+          Toast.show("Service temporarily down. Please try again later.", { 
+            duration: Toast.durations.LONG, 
+            position: Toast.positions.BOTTOM,
+            backgroundColor: '#FF3B30',
+            textColor: '#FFFFFF'
+          });
+        } else if (error.message && (error.message.includes('504') || error.message.includes('Gateway timeout'))) {
+          Toast.show("Server is busy. Please try again later or enter feedback manually.", { 
+            duration: Toast.durations.LONG, 
+            position: Toast.positions.BOTTOM,
+            backgroundColor: '#FF3B30',
+            textColor: '#FFFFFF'
+          });
+        } else {
+          Toast.show("We couldn't generate feedback for this video. Try uploading a clearer angle or a different set.", { 
+            duration: Toast.durations.LONG, 
+            position: Toast.positions.BOTTOM,
+            backgroundColor: '#FF3B30',
+            textColor: '#FFFFFF'
+          });
+        }
+      }
+    };
+
+    // Start the attempt
+    await attemptFeedbackRequest();
   };
 
   useEffect(() => {
@@ -1465,13 +2009,15 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
   };
 
   const closePreview = () => {
-    setIsPreviewVisible(false);
     setPreviewVideo(null);
   };
 
   return (
     <RootSiblingParent>
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <LinearGradient 
+        colors={['#f4f4f4', '#fefefe']} 
+        style={{ flex: 1 }}
+      >
         <View style={{ flex: 1, flexDirection: 'column' }}>
           <View style={[
             styles.header, 
@@ -1519,16 +2065,6 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
               </View>
             </View>
           </View>
-          {pendingCards.map(card => (
-            <View key={card.id} style={styles.exerciseTableCard}>
-              <View style={styles.tableHeaderRow}>
-                <Text style={styles.exerciseTableTitle}>Analyzing your lift...</Text>
-              </View>
-              <View style={{ alignItems: 'center', justifyContent: 'center', height: 180 }}>
-                <ActivityIndicator size="large" color={colors.primary} />
-              </View>
-            </View>
-          ))}
           <DraggableFlatList
             data={exercises}
             onDragBegin={index => {
@@ -1574,16 +2110,25 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                   rightThreshold={5} // Reduce the swipe threshold to bring the delete button closer
                 >
                   <TouchableOpacity
-                    onPress={() => toggleExerciseExpanded(exercise.id)}
+                    onPress={() => !exercise.isPlaceholder && toggleExerciseExpanded(exercise.id)}
                     // REMOVE onLongPress={drag} from here
-                    disabled={isActive}
-                    activeOpacity={0.95}
+                    disabled={isActive || exercise.isPlaceholder}
+                    activeOpacity={exercise.isPlaceholder ? 1 : 0.95}
                     style={{ opacity: faded ? 0.4 : 1 }}
                   >
                     <View style={styles.exerciseTableCard}>
                       {/* Card Header with expand/collapse and options */}
                       <View style={styles.exerciseTableHeader}>
-                        {exercise.isSuperset ? (
+                        {exercise.isPlaceholder ? (
+                          <View style={styles.exerciseLoadingContainer}>
+                            <View style={styles.loadingSpinnerContainer}>
+                              <ActivityIndicator size="small" color={colors.primary} />
+                            </View>
+                            <Text style={styles.exerciseLoadingText}>
+                              AI Detecting Exercise{'.'.repeat(ellipsisCount)}
+                            </Text>
+                          </View>
+                        ) : exercise.isSuperset ? (
                           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Ionicons name="repeat" size={20} color={colors.primary} style={{ marginRight: 8 }} />
                             <Text style={[styles.exerciseTableTitle, { color: colors.primary, fontSize: 17, fontFamily: 'DMSans-Regular' }]}>Superset</Text>
@@ -1591,23 +2136,14 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                         ) : (
                           <Text style={styles.exerciseTableTitle}>{exercise.name}</Text>
                         )}
-                        <View style={styles.headerButtons}>
+                        {!exercise.isPlaceholder && (
                           <TouchableOpacity 
                             style={styles.optionsButton}
                             onPress={() => handleExerciseOptions(exercise.id)}
                           >
                             <Ionicons name="ellipsis-horizontal" size={20} color={colors.gray} />
                           </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={styles.expandButton}
-                          >
-                            <Ionicons 
-                              name={expanded ? "chevron-down" : "chevron-forward"} 
-                              size={20} 
-                              color={colors.gray} 
-                            />
-                          </TouchableOpacity>
-                        </View>
+                        )}
                       </View>
                       {/* Collapsed Superset View */}
                       {!expanded && exercise.isSuperset ? (
@@ -1644,7 +2180,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                   </View>
                                   <TextInput
                                     style={styles.tableCellInputHeaderInput}
-                                    value={weightUnits}
+                                    value={`Weight (${weightUnits})`}
                                     editable={false}
                                     selectTextOnFocus={false}
                                     pointerEvents="none"
@@ -1666,7 +2202,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                     />
                                   ) : null}
                                   <View style={styles.tableCellIconHeader}>
-                                    <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
+                                    <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 11, fontWeight: '500' }}>GymVid</Text>
                                   </View>
                                   <View style={styles.tableCellCheckHeader}>
                                     <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
@@ -1844,13 +2380,13 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                         </>
                       ) : null}
                       {/* Collapsed Normal Exercise View */}
-                      {!expanded && !exercise.isSuperset ? (
+                      {!expanded && !exercise.isSuperset && !exercise.isPlaceholder ? (
                         <Text style={styles.exerciseTableSubtitle}>
                           {`${exercise.sets.filter(s => s.completed).length} sets completed`}
                         </Text>
                       ) : null}
                       {/* Expanded Normal Exercise View */}
-                      {expanded && !exercise.isSuperset ? (
+                      {expanded && !exercise.isSuperset && !exercise.isPlaceholder ? (
                         <>
                           <View style={styles.tableContainer}>
                             {/* Normal expanded header row */}
@@ -1858,9 +2394,12 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                               <View style={styles.tableCellSetHeader}>
                                 <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}>#</Text>
                               </View>
+                              <View style={styles.tableCellIconHeader}>
+                                <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 11, fontWeight: '500' }}>GymVid</Text>
+                              </View>
                               <TextInput
                                 style={styles.tableCellInputHeaderInput}
-                                value={weightUnits}
+                                value={`Weight (${weightUnits})`}
                                 editable={false}
                                 selectTextOnFocus={false}
                                 pointerEvents="none"
@@ -1881,9 +2420,6 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                   pointerEvents="none"
                                 />
                               ) : null}
-                              <View style={styles.tableCellIconHeader}>
-                                <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
-                              </View>
                               <View style={styles.tableCellCheckHeader}>
                                 <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 12 }}> </Text>
                               </View>
@@ -1897,6 +2433,27 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                               >
                                 <View style={styles.tableRow}>
                                   <Text style={styles.tableCellSet}>{setIdx + 1}</Text>
+                                  {set.thumbnail || set.thumbnail_url ? (
+                                    <TouchableOpacity 
+                                      style={styles.thumbnailContainer}
+                                      onPress={() => handleVideoPreview(set)}
+                                    >
+                                      <Image 
+                                        source={{ uri: set.thumbnail || set.thumbnail_url }} 
+                                        style={styles.thumbnail}
+                                        resizeMode="cover"
+                                      />
+                                    </TouchableOpacity>
+                                  ) : (
+                                    <TouchableOpacity 
+                                      style={styles.cameraButtonContainer}
+                                      onPress={() => handleVideoUpload(exercise.id, set.id)}
+                                    >
+                                      <View style={styles.cameraButtonInner}>
+                                        <Ionicons name="camera-outline" size={24} color={colors.gray} />
+                                      </View>
+                                    </TouchableOpacity>
+                                  )}
                                   <TextInput
                                     style={styles.tableCellInput}
                                     value={set.weight?.toString() ?? ''}
@@ -1936,27 +2493,6 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                                       returnKeyType="done"
                                       inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
                                     />
-                                  )}
-                                  {set.thumbnail || set.thumbnail_url ? (
-                                    <TouchableOpacity 
-                                      style={styles.thumbnailContainer}
-                                      onPress={() => handleVideoPreview(set)}
-                                    >
-                                      <Image 
-                                        source={{ uri: set.thumbnail || set.thumbnail_url }} 
-                                        style={styles.thumbnail}
-                                        resizeMode="cover"
-                                      />
-                                    </TouchableOpacity>
-                                  ) : (
-                                    <TouchableOpacity 
-                                      style={styles.cameraButtonContainer}
-                                      onPress={() => handleVideoUpload(exercise.id, set.id)}
-                                    >
-                                      <View style={styles.cameraButtonInner}>
-                                        <Ionicons name="camera-outline" size={24} color={colors.gray} />
-                                      </View>
-                                    </TouchableOpacity>
                                   )}
                                   <TouchableOpacity
                                     style={styles.tableCellCheck}
@@ -2049,6 +2585,95 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
                             <Text style={styles.addSetText}>Add set</Text>
                           </TouchableOpacity>
                         </>
+                      ) : null}
+                      {/* Placeholder Exercise View - shows loading table exactly like VideoReviewScreen.js */}
+                      {exercise.isPlaceholder ? (
+                        <View style={styles.tableContainer}>
+                          <View style={styles.tableHeaderRow}>
+                            <View style={styles.tableCellSetHeader}>
+                              <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 11, fontWeight: '500' }}>#</Text>
+                            </View>
+                            <View style={styles.tableCellIconHeader}>
+                              <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 11, fontWeight: '500' }}>GymVid</Text>
+                            </View>
+                            <TextInput
+                              style={styles.tableCellInputHeaderInput}
+                              value={`Weight (${weightUnits})`}
+                              editable={false}
+                              selectTextOnFocus={false}
+                              pointerEvents="none"
+                            />
+                            <TextInput
+                              style={styles.tableCellInputHeaderInput}
+                              value="Reps"
+                              editable={false}
+                              selectTextOnFocus={false}
+                              pointerEvents="none"
+                            />
+                            {enableExertionTracking ? (
+                              <TextInput
+                                style={styles.tableCellInputHeaderInputNarrow}
+                                value={exertionMetric}
+                                editable={false}
+                                selectTextOnFocus={false}
+                                pointerEvents="none"
+                              />
+                            ) : null}
+                            <View style={styles.tableCellCheckHeader}>
+                              <Text style={{ color: colors.gray, textAlign: 'center', fontSize: 11, fontWeight: '500' }}> </Text>
+                            </View>
+                          </View>
+                          <View style={styles.tableRow}>
+                            <Text style={styles.tableCellSet}>1</Text>
+                            {exercise.sets[0]?.thumbnail ? (
+                              <TouchableOpacity 
+                                style={styles.thumbnailContainer}
+                                onPress={() => handleVideoPreview({ localVideo: exercise.videoUri })}
+                              >
+                                <Image 
+                                  source={{ uri: exercise.sets[0].thumbnail }} 
+                                  style={styles.thumbnail}
+                                  resizeMode="cover"
+                                />
+                              </TouchableOpacity>
+                            ) : (
+                              <View style={styles.cameraButtonContainer}>
+                                <View style={styles.cameraButtonInner}>
+                                  <Ionicons name="camera-outline" size={24} color={colors.gray} />
+                                </View>
+                              </View>
+                            )}
+                            <TextInput 
+                              style={[styles.tableCellInput, styles.tableCellInputDisabled]}
+                              placeholder="0"
+                              placeholderTextColor="#AAAAAA"
+                              editable={false}
+                            />
+                            <TextInput 
+                              style={[styles.tableCellInput, styles.tableCellInputDisabled]}
+                              placeholder="0"
+                              placeholderTextColor="#AAAAAA"
+                              editable={false}
+                            />
+                            {enableExertionTracking && (
+                              <TextInput 
+                                style={[styles.tableCellInputNarrow, styles.tableCellInputDisabled]}
+                                placeholder="-"
+                                placeholderTextColor="#AAAAAA"
+                                editable={false}
+                              />
+                            )}
+                            <View style={styles.tableCellCheck}>
+                              <View style={styles.checkSquare}>
+                                <Ionicons 
+                                  name="checkmark-sharp" 
+                                  size={24} 
+                                  color={colors.lightGray} 
+                                />
+                              </View>
+                            </View>
+                          </View>
+                        </View>
                       ) : null}
                     </View>
                   </TouchableOpacity>
@@ -2584,7 +3209,7 @@ export default function NewBlankWorkoutScreen({ navigation = {} }) {
           videoUri={previewVideo}
           onClose={closePreview}
         />
-      </View>
+      </LinearGradient>
     </RootSiblingParent>
   );
 }
@@ -2597,7 +3222,6 @@ const styles = StyleSheet.create({
   header: {
     padding: 20,
     paddingBottom: 10,
-    backgroundColor: colors.background,
     position: 'relative',
   },
   headerRow: {
@@ -2630,12 +3254,12 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.10,
         shadowRadius: 8,
       },
       android: {
-        elevation: 2,
+        elevation: 4,
       },
     }),
   },
@@ -2694,7 +3318,7 @@ const styles = StyleSheet.create({
   tableCellInput: {
     flex: 1,
     height: 48,
-    backgroundColor: colors.lightGray,
+    backgroundColor: '#F5F5F5',
     borderRadius: 12,
     fontSize: 16,
     color: colors.darkGray,
@@ -2739,7 +3363,7 @@ const styles = StyleSheet.create({
     width: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 0,
+    marginLeft: 5,
   },
   tableCellCheckHeader: {
     width: 48,
@@ -2747,7 +3371,7 @@ const styles = StyleSheet.create({
     color: colors.gray,
     textAlign: 'center',
     fontFamily: 'DMSans-Bold',
-    marginLeft: 0,
+    marginLeft: 5,
   },
   cameraCornerBox: {
     width: 48,
@@ -2893,14 +3517,19 @@ const styles = StyleSheet.create({
   },
   aiVideoButton: {
     flex: 1,
-    backgroundColor: '#23253A',
+    backgroundColor: '#27272a',
     borderRadius: 18,
     height: 56,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   aiVideoButtonText: {
-    color: '#fff',
+    color: '#F9FAFB',
     fontSize: 15,
     fontFamily: 'DMSans-Bold',
   },
@@ -3282,7 +3911,7 @@ const styles = StyleSheet.create({
   tableCellInputNarrow: {
     flex: 1,
     height: 48,
-    backgroundColor: colors.lightGray,
+    backgroundColor: '#F5F5F5',
     borderRadius: 12,
     fontSize: 16,
     color: colors.darkGray,
@@ -3297,10 +3926,10 @@ const styles = StyleSheet.create({
     height: 15,
     backgroundColor: 'white',
     borderRadius: 0,
-    fontSize: 12,
+    fontSize: 11,
     color: colors.gray,
     textAlign: 'center',
-    fontFamily: 'DMSans-Bold',
+    fontWeight: '500',
     marginHorizontal: 2,
     paddingHorizontal: 2,
     paddingVertical: 0,
@@ -3311,10 +3940,10 @@ const styles = StyleSheet.create({
     height: 15,
     backgroundColor: 'white',
     borderRadius: 0,
-    fontSize: 12,
+    fontSize: 11,
     color: colors.gray,
     textAlign: 'center',
-    fontFamily: 'DMSans-Bold',
+    fontWeight: '500',
     marginHorizontal: 2,
     paddingHorizontal: 2,
     paddingVertical: 0,
@@ -3674,5 +4303,33 @@ const styles = StyleSheet.create({
     height: 47,
     borderRadius: 12,
     marginHorizontal: 0, // Adjust margin to bring it closer to the tick button
+  },
+  exerciseLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    height: '100%',
+  },
+  loadingSpinnerContainer: {
+    marginRight: 10,
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exerciseLoadingText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.gray,
+    letterSpacing: -0.3,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    lineHeight: 24,
+    textAlignVertical: 'center',
+    marginTop: Platform.OS === 'ios' ? -1 : 0,
+  },
+  tableCellInputDisabled: {
+    backgroundColor: '#F5F5F5',
+    color: '#999999',
+    opacity: 0.6,
   },
 }); 

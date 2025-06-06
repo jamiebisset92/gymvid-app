@@ -2,8 +2,9 @@ import 'react-native-gesture-handler';
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Font from 'expo-font';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RootSiblingParent } from 'react-native-root-siblings';
@@ -12,7 +13,6 @@ import { View, StyleSheet, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { supabase } from './config/supabase';
-import HomeScreen from './screens/HomeScreen';
 import WorkoutStack from './navigation/WorkoutStack';
 import ProfileScreen from './screens/ProfileScreen';
 import FeedScreen from './screens/FeedScreen';
@@ -20,6 +20,13 @@ import AuthStack from './navigation/AuthStack';
 import colors from './config/colors';
 import { ToastProvider } from './components/ToastProvider';
 import LogWorkoutScreen from './screens/LogWorkoutScreen';
+import GymVidGamesScreen from './screens/GymVidGamesScreen';
+
+// Import workout screens
+import NewBlankWorkoutScreen from './screens/workout/NewBlankWorkoutScreen';
+import QuickLogScreen from './screens/workout/QuickLogScreen';
+import SavedWorkoutsScreen from './screens/workout/SavedWorkoutsScreen';
+import ExploreWorkoutsScreen from './screens/workout/ExploreWorkoutsScreen';
 
 // Create a debug logging function that only logs in development
 const debugLog = (...args) => {
@@ -35,6 +42,124 @@ global.forceAppReload = () => {
 
 SplashScreen.preventAutoHideAsync();
 const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
+
+// Create a placeholder component for the workout tab
+const WorkoutPlaceholder = () => null;
+
+// Create a component that wraps the tab navigator with workout screens
+function MainTabsWithWorkoutStack() {
+  const [workoutModalVisible, setWorkoutModalVisible] = useState(false);
+  const navigation = useNavigation();
+
+  const handleWorkoutNavigation = (screenName) => {
+    setWorkoutModalVisible(false);
+    navigation.navigate(screenName);
+  };
+
+  return (
+    <>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          tabBarShowLabel: false, // Remove all labels
+          tabBarIcon: ({ color, size, focused }) => {
+            if (route.name === 'Feed') {
+              return <Ionicons name={focused ? 'grid' : 'grid-outline'} size={26} color={color} />;
+            }
+            if (route.name === 'Progress') {
+              return <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={26} color={color} />;
+            }
+            if (route.name === 'Settings') {
+              return <Ionicons name={focused ? 'settings' : 'settings-outline'} size={26} color={color} />;
+            }
+            if (route.name === 'Profile') {
+              return <Ionicons name={focused ? 'person' : 'person-outline'} size={26} color={color} />;
+            }
+            if (route.name === 'Workout') {
+              return null; // We'll handle this separately
+            }
+          },
+          tabBarStyle: {
+            backgroundColor: colors.white,
+            borderTopWidth: 1,
+            borderTopColor: '#EEEEEE',
+            elevation: 0,
+            shadowOpacity: 0,
+            height: 80, // Increased height to accommodate larger bottom padding
+            paddingBottom: 34, // Increased for iOS swipe bar
+            paddingTop: 10,
+          },
+          tabBarActiveTintColor: '#000000',
+          tabBarInactiveTintColor: '#CCCCCC',
+        })}
+      >
+        <Tab.Screen 
+          name="Profile" 
+          component={ProfileScreen}
+          options={{
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons name={focused ? 'person' : 'person-outline'} size={26} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Feed" 
+          component={FeedScreen} 
+          options={{
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons name={focused ? 'search' : 'search-outline'} size={26} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Workout" 
+          component={WorkoutPlaceholder}
+          listeners={{
+            tabPress: (e) => {
+              // Prevent default behavior
+              e.preventDefault();
+              // Show the workout modal instead
+              setWorkoutModalVisible(true);
+            },
+          }}
+          options={{
+            tabBarIcon: ({ focused, color, size }) => (
+              <View style={styles.tabBarWorkoutButtonCenter}>
+                <Ionicons name="add" size={28} color="#fff" />
+              </View>
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Progress" 
+          component={GymVidGamesScreen}
+          options={{
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons name={focused ? 'trophy' : 'trophy-outline'} size={26} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Settings" 
+          component={ProfileScreen}
+          options={{
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons name={focused ? 'settings' : 'settings-outline'} size={26} color={color} />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+      
+      {/* WorkoutStack Modal Overlay */}
+      <WorkoutStack
+        visible={workoutModalVisible}
+        onClose={() => setWorkoutModalVisible(false)}
+        navigation={{ navigate: handleWorkoutNavigation }}
+      />
+    </>
+  );
+}
 
 export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);
@@ -302,7 +427,7 @@ export default function App() {
   let ComponentToRender;
   
   if (!session) {
-              // No session - show auth screens
+    // No session - show auth screens
     ComponentToRender = (
       <AuthStack 
         setSession={safeSetSession} 
@@ -310,7 +435,7 @@ export default function App() {
       />
     );
   } else if (onboardingState.needsOnboarding) {
-              // Session exists but onboarding incomplete - show onboarding in auth stack
+    // Session exists but onboarding incomplete - show onboarding in auth stack
     console.log("👤 Rendering onboarding flow starting at:", onboardingState.startScreen);
     ComponentToRender = (
       <AuthStack 
@@ -323,97 +448,15 @@ export default function App() {
       />
     );
   } else {
-              // Session exists and onboarding complete - show main app
+    // Session exists and onboarding complete - show main app with stack navigator
     ComponentToRender = (
-              <Tab.Navigator
-                screenOptions={({ route }) => ({
-                  headerShown: false,
-                  tabBarIcon: ({ color, size, focused }) => {
-                    if (route.name === 'Feed') {
-              return <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />;
-                    }
-                    if (route.name === 'Progress') {
-              return <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={size} color={color} />;
-                    }
-                    if (route.name === 'Settings') {
-              return <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />;
-                    }
-                    if (route.name === 'Workout') {
-                      return null; // We'll handle this separately
-                    }
-                  },
-                  tabBarStyle: {
-                    backgroundColor: colors.white,
-                    borderTopWidth: 1,
-                    borderTopColor: '#EEEEEE',
-                    elevation: 0,
-                    shadowOpacity: 0,
-                    height: 90, // Increased height for more padding
-                    paddingBottom: 24, // More bottom padding for iPhone swipe bar
-                    paddingTop: 0,
-                  },
-                  tabBarActiveTintColor: 'black',
-                  tabBarInactiveTintColor: '#CCCCCC',
-                  tabBarLabelStyle: {
-                    fontFamily: 'DMSans-Medium',
-                    fontSize: 12,
-                    marginBottom: 5,
-                  },
-                })}
-              >
-        <Tab.Screen 
-          name="Profile" 
-          component={ProfileScreen}
-          options={{
-            tabBarLabel: 'Profile',
-            tabBarIcon: ({ focused, color, size }) => (
-              <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
-            ),
-          }}
-        />
-                <Tab.Screen 
-                  name="Feed" 
-                  component={FeedScreen} 
-                  options={{
-            tabBarLabel: 'Feed',
-            tabBarIcon: ({ focused, color, size }) => (
-              <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />
-            ),
-          }}
-        />
-        <Tab.Screen 
-          name="Workout" 
-          component={WorkoutStack} 
-          options={{
-            tabBarLabel: () => null,
-            tabBarIcon: ({ focused, color, size }) => (
-              <View style={styles.tabBarWorkoutButtonPremium}>
-                <Ionicons name="barbell" size={32} color="#fff" />
-              </View>
-            ),
-                  }}
-                />
-                <Tab.Screen 
-                  name="Progress" 
-                  component={HomeScreen}
-                  options={{
-            tabBarLabel: 'Progress',
-            tabBarIcon: ({ focused, color, size }) => (
-              <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={size} color={color} />
-            ),
-                  }}
-                />
-                <Tab.Screen 
-                  name="Settings" 
-                  component={ProfileScreen}
-                  options={{
-            tabBarLabel: 'Settings',
-            tabBarIcon: ({ focused, color, size }) => (
-              <Ionicons name={focused ? 'settings' : 'settings-outline'} size={size} color={color} />
-            ),
-                  }}
-                />
-              </Tab.Navigator>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="MainTabs" component={MainTabsWithWorkoutStack} />
+        <Stack.Screen name="NewBlankWorkout" component={NewBlankWorkoutScreen} />
+        <Stack.Screen name="QuickLog" component={QuickLogScreen} />
+        <Stack.Screen name="SavedWorkouts" component={SavedWorkoutsScreen} />
+        <Stack.Screen name="ExploreWorkouts" component={ExploreWorkoutsScreen} />
+      </Stack.Navigator>
     );
   }
 
@@ -484,5 +527,18 @@ const styles = StyleSheet.create({
     shadowRadius: 9,
     elevation: 7,
     zIndex: 10,
+  },
+  tabBarWorkoutButtonCenter: {
+    height: 48,
+    width: 48,
+    borderRadius: 24,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
   },
 }); 

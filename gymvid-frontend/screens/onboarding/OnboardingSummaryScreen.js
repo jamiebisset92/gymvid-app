@@ -838,24 +838,8 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
         
         debugLog('All fields received, proceeding to display profile');
         
-        // Format country with flag if available
+        // Format country without flag
         let formattedCountry = profile.country || 'Unknown';
-        // If country doesn't already include a flag emoji, append the flag if we have a mapping
-        if (formattedCountry && !(/\p{Emoji}/u.test(formattedCountry))) {
-          // This is a simplified check - in a real app, you'd have a complete mapping of countries to flag emojis
-          const countryFlags = {
-            'Australia': '🇦🇺',
-            'United States': '🇺🇸',
-            'UK': '🇬🇧',
-            'Canada': '🇨🇦',
-            // Add more as needed
-          };
-          
-          const flag = countryFlags[formattedCountry];
-          if (flag) {
-            formattedCountry = `${formattedCountry} ${flag}`;
-          }
-        }
         
         // Instead of directly setting user data, use our enhanced function
         // that does additional checks against AsyncStorage
@@ -1080,11 +1064,6 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
     let displayValue = value || '-';
     let iconName = icon || 'information-outline';
     
-    // Extra formatting for country (just in case it doesn't already have a flag)
-    if (label === 'Team' && displayValue === 'Australia') {
-      displayValue = 'Australia 🇦🇺';
-    }
-    
     // Transform gender values for Division display
     if (label === 'Division') {
       if (displayValue === 'Male') {
@@ -1141,7 +1120,7 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
         >
           <View style={styles.profileItemRow}>
             <View style={styles.profileItemLabelContainer}>
-              <MaterialCommunityIcons name={iconName} size={20} color={colors.primary} style={styles.profileItemIcon} />
+              <Text style={styles.profileItemIcon}>{iconName}</Text>
               <Text style={styles.profileItemLabel}>{label}</Text>
             </View>
             <Text style={styles.profileItemValue}>{displayValue}</Text>
@@ -1274,28 +1253,28 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
                     label="Division"
                     value={userData.gender}
                     animValue={genderAnim}
-                    icon="human-male-female"
+                    icon="🏆"
                   />
                   
                   <ProfileItem 
                     label="Age Class"
                     value={userData.ageCategory}
                     animValue={ageAnim}
-                    icon="calendar-outline"
+                    icon="🎓"
                   />
                   
                   <ProfileItem 
                     label="Weight Class"
                     value={userData.weightClass}
                     animValue={weightAnim}
-                    icon="weight"
+                    icon="⚖️"
                   />
                   
                   <ProfileItem 
                     label="Team"
                     value={userData.country}
                     animValue={countryAnim}
-                    icon="flag-outline"
+                    icon="🌎"
                   />
                   
                   <Text style={styles.helpText}>
@@ -1325,15 +1304,8 @@ export default function OnboardingSummaryScreen({ navigation, route }) {
                   activeOpacity={0.9}
                   disabled={loading || fetchError}
                 >
-                  <LinearGradient
-                    colors={['#007BFF', '#0056CC', '#003D99']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.nextButtonGradient}
-                  >
-                    <Text style={styles.nextButtonText}>Continue</Text>
-                    <Ionicons name="arrow-forward" size={24} color={colors.white} />
-                  </LinearGradient>
+                  <Text style={styles.nextButtonText}>Continue</Text>
+                  <Ionicons name="arrow-forward" size={24} color="#F9FAFB" />
                 </TouchableOpacity>
               </Animated.View>
             </View>
@@ -1472,6 +1444,8 @@ const styles = StyleSheet.create({
   },
   profileItemIcon: {
     marginRight: 8,
+    fontSize: 20,
+    textAlign: 'center',
   },
   profileItemLabel: {
     fontSize: 17,
@@ -1502,15 +1476,18 @@ const styles = StyleSheet.create({
     marginTop: 6, // Add margin to move button down within footer
   },
   nextButton: {
+    backgroundColor: '#27272a',
     borderRadius: 16,
-    height: 50,
+    height: 56,
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 3,
   },
   nextButtonGradient: {
     flex: 1,
@@ -1522,7 +1499,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   nextButtonText: {
-    color: '#FFFFFF',
+    color: '#F9FAFB',
     fontSize: 18,
     fontWeight: '600',
     marginRight: 8,
@@ -1607,7 +1584,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   helpText: {
-    marginTop: 15,
+    marginTop: 5,
     marginBottom: 20,
     color: colors.gray,
     fontSize: 14,

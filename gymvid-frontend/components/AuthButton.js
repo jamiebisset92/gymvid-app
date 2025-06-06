@@ -54,7 +54,7 @@ export default function AuthButton({
       case 'social-google':
         return '#DB4437';
       case 'social-apple':
-        return colors.white;
+        return '#000';
       case 'text':
         return colors.primary;
       default:
@@ -135,8 +135,12 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   appleButton: {
-    backgroundColor: '#000',
-    borderWidth: 0,
+    backgroundColor: colors.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   textButton: {
     backgroundColor: 'transparent',
@@ -162,7 +166,7 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans-Medium',
   },
   appleButtonText: {
-    color: colors.white,
+    color: '#757575',
     fontSize: 16,
     fontFamily: 'DMSans-Medium',
   },

@@ -30,6 +30,7 @@ export default function NameScreen({ navigation, route }) {
     
     // State for reveal animation
     const [isRevealed, setIsRevealed] = useState(false);
+    const [isGetStartedPressed, setIsGetStartedPressed] = useState(false);
     
     // Log parameters immediately when component mounts
     useEffect(() => {
@@ -69,23 +70,17 @@ export default function NameScreen({ navigation, route }) {
     useEffect(() => {
       console.log('📱 NameScreen Focus/Reveal Effect: isFocused:', isFocused, 'isRevealed:', isRevealed);
       if (isFocused) {
-        if (!isRevealed) {
-          // Pre-reveal: Explicitly hide the progress bar by setting isOnboarding to false.
-          // Keep currentScreen as 'Name' so context knows where we are logically.
-          console.log('📱 NameScreen PRE-REVEAL: Hiding progress bar.');
-          setProgress(prev => ({ 
-            ...prev, 
-            isOnboarding: false, 
-            currentScreen: 'Name' 
-          }));
-        } else {
-          // Post-reveal: Show progress bar immediately when revealed
-          console.log('📱 NameScreen POST-REVEAL: Showing progress bar.');
-          // Call updateProgress immediately without timeout
-          updateProgress('Name');
-        }
+        // Always show progress bar during onboarding - NameScreen starts at 0%
+        console.log('📱 NameScreen: Showing progress bar at 0%');
+        setProgress(prev => ({ 
+          ...prev, 
+          isOnboarding: true, 
+          currentScreen: 'Name' 
+        }));
+        // Update progress immediately
+        updateProgress('Name');
       }
-    }, [isFocused, isRevealed, updateProgress, setProgress]); // setProgress is needed here
+    }, [isFocused, updateProgress, setProgress]);
 
     // Run entrance animation logic (this effect mainly handles visual animations)
     useEffect(() => {
@@ -308,6 +303,7 @@ export default function NameScreen({ navigation, route }) {
     // Handle Get Started button animations
     const handleGetStartedButtonPressIn = () => {
       if (!isRevealed) {
+        setIsGetStartedPressed(true);
         Animated.spring(getStartedButtonScale, {
           toValue: 0.92,
           tension: 200,
@@ -319,6 +315,7 @@ export default function NameScreen({ navigation, route }) {
 
     const handleGetStartedButtonPressOut = () => {
       if (!isRevealed) {
+        setIsGetStartedPressed(false);
         Animated.spring(getStartedButtonScale, {
           toValue: 1,
           tension: 100,
@@ -538,7 +535,7 @@ export default function NameScreen({ navigation, route }) {
                     }
                   ]}
                 >
-                  <Ionicons name="arrow-down" size={32} color={colors.primary} />
+                  <Ionicons name="arrow-down" size={32} color="#3b82f6" />
                 </Animated.View>
 
               </Animated.View>
@@ -564,7 +561,12 @@ export default function NameScreen({ navigation, route }) {
                 ]}
               >
                 <TouchableOpacity
-                  style={styles.getStartedButton}
+                  style={[
+                    styles.getStartedButton,
+                    isGetStartedPressed && {
+                      shadowOpacity: 0.5,
+                    }
+                  ]}
                   onPress={handleGetStarted}
                   onPressIn={handleGetStartedButtonPressIn}
                   onPressOut={handleGetStartedButtonPressOut}
@@ -572,7 +574,7 @@ export default function NameScreen({ navigation, route }) {
                   disabled={isRevealed}
                 >
                   <LinearGradient
-                    colors={['#0099FF', '#0066DD', '#0044BB']}
+                    colors={isGetStartedPressed ? ['#3f3f46', '#3f3f46', '#3f3f46'] : ['#27272a', '#27272a', '#27272a']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.getStartedGradient}
@@ -642,7 +644,7 @@ export default function NameScreen({ navigation, route }) {
                           <Ionicons 
                             name="arrow-forward" 
                             size={24} 
-                            color={!name.trim() ? colors.lightGray : colors.primary} 
+                            color={!name.trim() ? colors.lightGray : "#6b7280"} 
                           />
                         </TouchableOpacity>
                       </View>
@@ -801,11 +803,11 @@ const styles = StyleSheet.create({
   },
   getStartedButton: {
     borderRadius: 50,
-    shadowColor: '#0066FF',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
-    elevation: 8,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.4)',
     overflow: 'hidden',
@@ -819,7 +821,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   getStartedButtonText: {
-    color: '#FFFFFF',
+    color: '#F9FAFB',
     fontSize: 19,
     fontWeight: '700',
     letterSpacing: 0.5,

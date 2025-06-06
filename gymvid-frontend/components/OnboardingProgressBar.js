@@ -7,15 +7,47 @@ import { LinearGradient } from 'expo-linear-gradient';
  * OnboardingProgressBar - A premium, modern progress bar for the onboarding flow.
  * 
  * @param {Object} props
- * @param {number} props.current - Current step index (0-based)
- * @param {number} props.total - Total number of steps
+ * @param {number} props.current - Current step index (0-based) [DEPRECATED - use currentScreen instead]
+ * @param {number} props.total - Total number of steps [DEPRECATED - use currentScreen instead]
+ * @param {string} props.currentScreen - Current screen name for progress calculation
  */
-const OnboardingProgressBar = ({ current, total }) => {
+const OnboardingProgressBar = ({ current, total, currentScreen }) => {
+  // Define fixed progress mapping for each onboarding screen
+  const SCREEN_PROGRESS_MAP = {
+    'Name': 0,                    // 0%
+    'Gender': 12.5,              // 12.5%
+    'DateOfBirth': 25,           // 25%
+    'UserWeight': 37.5,          // 37.5%
+    'Country': 50,               // 50%
+    'Username': 62.5,            // 62.5%
+    'OnboardingSummary': 75,     // 75%
+    'VideoPrompt': 87.5,         // 87.5%
+    'VideoReview': 100           // 100%
+  };
+
+  // Calculate progress percentage based on current screen
+  let progressPercentage;
+  if (currentScreen && SCREEN_PROGRESS_MAP.hasOwnProperty(currentScreen)) {
+    progressPercentage = SCREEN_PROGRESS_MAP[currentScreen];
+  } else if (current !== undefined && total !== undefined) {
+    // Fallback to legacy calculation if currentScreen not provided
+    progressPercentage = (current / total) * 100;
+  } else {
+    // Default to 0 if no valid input
+    progressPercentage = 0;
+  }
+
+  // Ensure percentage is between 0 and 100
+  progressPercentage = Math.max(0, Math.min(100, progressPercentage));
+  
+  // Convert percentage to decimal for animation (0-1 range)
+  const progressDecimal = progressPercentage / 100;
+
   // Log progress values for debugging
-  console.log('📊 ProgressBar: Received current:', current, 'total:', total, 'percentage:', (current / total * 100).toFixed(1) + '%');
+  console.log('📊 ProgressBar: Screen:', currentScreen, 'Progress:', progressPercentage.toFixed(1) + '%');
   
   // Create animated values for progress transitions and effects
-  const progressAnim = useRef(new Animated.Value(current / total)).current;
+  const progressAnim = useRef(new Animated.Value(progressDecimal)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const isFocused = useIsFocused();
@@ -46,7 +78,7 @@ const OnboardingProgressBar = ({ current, total }) => {
     if (isFocused) {
       // Progress animation with spring for premium feel
       Animated.spring(progressAnim, {
-        toValue: current / total,
+        toValue: progressDecimal,
         friction: 7,
         tension: 40,
         useNativeDriver: false,
@@ -66,7 +98,7 @@ const OnboardingProgressBar = ({ current, total }) => {
         })
       ]).start();
     }
-  }, [current, total, isFocused]);
+  }, [progressDecimal, isFocused]);
 
   return (
     <View style={[styles.progressWrapper, { paddingTop: topPadding }]} pointerEvents="none">

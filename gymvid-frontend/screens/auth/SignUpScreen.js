@@ -421,7 +421,7 @@ export default function SignUpScreen({ navigation }) {
                     styles.bottomButtonContainer,
                     {
                       shadowOpacity,
-                      shadowColor: colors.primary,
+                      shadowColor: '#000',
                       shadowRadius: 10,
                       shadowOffset: { width: 0, height: 4 },
                       elevation: shadowOpacity.interpolate({
@@ -437,7 +437,8 @@ export default function SignUpScreen({ navigation }) {
                       disabled={loading}
                       loading={loading}
                       loadingText="Creating Account..."
-                      style={styles.signUpButton}
+                      style={[styles.signUpButton, { backgroundColor: '#27272a' }]}
+                      activeStyle={styles.signUpButtonActive}
                     />
                   </Animated.View>
                 </Animated.View>
@@ -533,6 +534,17 @@ const styles = StyleSheet.create({
   },
   signUpButton: {
     marginTop: 10,
+    backgroundColor: '#27272a',
+    color: '#F9FAFB',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  signUpButtonActive: {
+    backgroundColor: '#3f3f46',
+    shadowOpacity: 0.5,
   },
   divider: {
     flexDirection: 'row',

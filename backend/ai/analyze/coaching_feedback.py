@@ -141,12 +141,14 @@ Then return feedback:
 - Up to 4 specific observations + tips
 - A closing summary of what to improve or keep doing well
 
+For each observation, provide a descriptive 1-3 word header that captures the main topic (e.g., "Starting Position", "Bar Path", "Hip Hinge", "Knee Tracking", etc.).
+
 Return JSON only:
 {{
   "coaching_feedback": {{
     "form_rating": integer (1–10),
     "observations": [
-      {{ "observation": "...", "tip": "..." }}
+      {{ "header": "1-2 word topic", "observation": "...", "tip": "..." }}
     ],
     "summary": "..."
   }}

@@ -356,7 +356,7 @@ export default function ResetPasswordScreen({ navigation }) {
 
   const shadowColor = inputFocusAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['rgba(0, 0, 0, 0.1)', `rgba(${parseInt(colors.primary.slice(1, 3), 16)}, ${parseInt(colors.primary.slice(3, 5), 16)}, ${parseInt(colors.primary.slice(5, 7), 16)}, 0.25)`]
+    outputRange: ['rgba(0, 0, 0, 0.1)', 'rgba(0, 0, 0, 0.25)']
   });
 
   return (
@@ -450,12 +450,13 @@ export default function ResetPasswordScreen({ navigation }) {
                 >
                   <PremiumButton 
                     title="Send Reset Instructions"
-                    iconName="send-outline"
+                    iconName="arrow-forward-outline"
                     onPress={handleResetPassword}
                     disabled={loading || isExiting}
                     loading={loading}
                     loadingText="Sending..."
                     style={styles.resetButton}
+                    activeStyle={styles.resetButtonActive}
                   />
                 </Animated.View>
 
@@ -556,6 +557,17 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#27272a',
+    color: '#F9FAFB',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  resetButtonActive: {
+    backgroundColor: '#3f3f46',
+    shadowOpacity: 0.5,
   },
   backButton: {
     marginTop: 24,

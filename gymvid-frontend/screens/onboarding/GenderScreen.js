@@ -82,28 +82,16 @@ export default function GenderScreen({ navigation, route }) {
   // Update progress tracking when screen comes into focus
   useEffect(() => {
     if (isFocused) {
-      if (!isRevealed) {
-        // Pre-reveal: Hide progress bar but still track the screen
-        debugLog('GenderScreen PRE-REVEAL: Hiding progress bar.');
-        setProgress(prev => ({ 
-          ...prev, 
-          isOnboarding: false, 
-          currentScreen: 'Gender' 
-        }));
-        // Update progress even in pre-reveal state
-        updateProgress('Gender');
-      } else {
-        // Post-reveal: Show progress bar
-        debugLog('GenderScreen POST-REVEAL: Showing progress bar.');
-        setProgress(prev => ({ 
-          ...prev, 
-          isOnboarding: true, 
-          currentScreen: 'Gender' 
-        }));
-        updateProgress('Gender');
-      }
+      // Always show progress bar during onboarding - GenderScreen is at 15%
+      debugLog('GenderScreen: Showing progress bar at 15%');
+      setProgress(prev => ({ 
+        ...prev, 
+        isOnboarding: true, 
+        currentScreen: 'Gender' 
+      }));
+      updateProgress('Gender');
     }
-  }, [isFocused, isRevealed, updateProgress, setProgress]);
+  }, [isFocused, updateProgress, setProgress]);
 
   // Load user's name when component mounts
   useEffect(() => {
@@ -812,8 +800,10 @@ export default function GenderScreen({ navigation, route }) {
       ]}
     >
       <SafeAreaView style={styles.safeContainer}>
-        {/* Header spacer - to account for the global progress bar */}
         <View style={styles.header}>
+          <TouchableOpacity style={styles.backButtonHeader} onPress={handleBack} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={24} color={colors.gray} />
+          </TouchableOpacity>
         </View>
         
         {/* Welcome screen content - conditionally rendered or animated out */}
@@ -1138,7 +1128,7 @@ export default function GenderScreen({ navigation, route }) {
                 // disabled={isRevealed} // Temporarily disabled for testing
               >
                 <LinearGradient
-                  colors={['#0099FF', '#0066DD', '#0044BB']}
+                  colors={['#27272a', '#27272a', '#27272a']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.letsDoItGradient}
@@ -1206,20 +1196,20 @@ export default function GenderScreen({ navigation, route }) {
                   activeOpacity={0.9}
                 >
                         <LinearGradient
-                          colors={gender === 'Male' ? ['#f0f8ff', '#e6f3ff'] : ['#ffffff', '#f8faff']}
+                          colors={['#ffffff', '#f8faff']}
                           style={styles.genderButtonGradient}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 1 }}
                         >
                           <View style={styles.genderButtonContent}>
                             <View style={styles.genderIconContainer}>
-                  <Ionicons 
+                              <Ionicons 
                                 name="man" 
                                 size={64}
-                    color={gender === 'Male' ? colors.primary : colors.gray} 
-                  />
+                                color={colors.gray} 
+                              />
                             </View>
-                  <Text style={[styles.genderButtonText, gender === 'Male' && styles.selectedButtonText]}>Male</Text>
+                  <Text style={[styles.genderButtonText]}>Male</Text>
                           </View>
                         </LinearGradient>
                 </TouchableOpacity>
@@ -1240,7 +1230,7 @@ export default function GenderScreen({ navigation, route }) {
                   activeOpacity={0.9}
                 >
                         <LinearGradient
-                          colors={gender === 'Female' ? ['#f0f8ff', '#e6f3ff'] : ['#ffffff', '#f8faff']}
+                          colors={['#ffffff', '#f8faff']}
                           style={styles.genderButtonGradient}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 1 }}
@@ -1250,10 +1240,10 @@ export default function GenderScreen({ navigation, route }) {
                   <Ionicons 
                                 name="woman" 
                                 size={64}
-                    color={gender === 'Female' ? colors.primary : colors.gray} 
+                    color={colors.gray} 
                   />
                             </View>
-                  <Text style={[styles.genderButtonText, gender === 'Female' && styles.selectedButtonText]}>Female</Text>
+                  <Text style={[styles.genderButtonText]}>Female</Text>
                           </View>
                         </LinearGradient>
                 </TouchableOpacity>
@@ -1278,19 +1268,12 @@ export default function GenderScreen({ navigation, route }) {
           ]}
         >
           <TouchableOpacity 
-            style={styles.backButtonBottom} 
-            onPress={handleBack}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.gray} />
-          </TouchableOpacity>
-          <TouchableOpacity 
             style={[styles.nextButton, !gender && styles.nextButtonDisabled]}
             onPress={handleContinue}
             disabled={loading || !gender}
             activeOpacity={0.9}
           >
-            <Text style={styles.nextButtonText}>Next</Text>
+            <Text style={styles.nextButtonText}>Continue</Text>
             <Text style={styles.nextButtonIcon}>→</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -1409,9 +1392,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 30, // Increased from 20 to 30
     paddingTop: 10, // Added padding at the top
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: 'rgba(255, 255, 255, 0.92)', // Slightly more transparent for blur effect
     borderTopWidth: 1, // Add a subtle top border
     borderTopColor: 'rgba(0, 0, 0, 0.05)', // Very subtle border color
@@ -1423,16 +1404,19 @@ const styles = StyleSheet.create({
     // Premium glass effect
     backdropFilter: 'blur(10px)', // Will only work on iOS with newer versions
   },
-  backButtonBottom: {
-    height: 56,
-    width: 56,
-    borderRadius: 16,
+  backButtonHeader: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.lightGray,
-    marginRight: 10,
+    position: 'absolute',
+    left: 20,
+    top: 10,
+    zIndex: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -1440,31 +1424,31 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   nextButton: {
-    backgroundColor: '#007BFF',
+    backgroundColor: '#27272a',
     borderRadius: 16, // Increased from 12 to 16
     height: 56,
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15, // Increased for more premium feel
-    shadowRadius: 6, // Increased for softer shadow spread
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
     elevation: 3,
   },
   nextButtonDisabled: {
-    backgroundColor: '#AACEF5', // Lighter color when disabled
+    backgroundColor: '#d1d5db', // Light neutral grey when disabled
     shadowOpacity: 0,
   },
   nextButtonText: {
-    color: '#FFFFFF',
+    color: '#F9FAFB',
     fontSize: 18,
     fontWeight: '600', // Slightly heavier
     marginRight: 8,
   },
   nextButtonIcon: {
-    color: '#FFFFFF',
+    color: '#F9FAFB',
     fontSize: 20,
   },
   genderHelper: {
@@ -1547,11 +1531,11 @@ const styles = StyleSheet.create({
   },
   letsDoItButton: {
     borderRadius: 16,
-    shadowColor: '#0066FF',
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 4,
+    elevation: 3,
     overflow: 'hidden',
     width: '100%',
   },
@@ -1562,10 +1546,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 50,
+    height: 56,
   },
   letsDoItButtonText: {
-    color: '#FFFFFF',
+    color: '#F9FAFB',
     fontSize: 19,
     fontWeight: '700',
     letterSpacing: 0.5,

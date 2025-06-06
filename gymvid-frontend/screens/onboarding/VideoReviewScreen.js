@@ -390,13 +390,13 @@ const GuidedPopup = ({
                 <Text style={[styles.popupTextAdvanced, showIconButton && styles.popupTextIconButtonLayout]}>{text}</Text>
                 {showIconButton ? (
                   <TouchableOpacity onPress={onClose} style={[styles.popupIconDismissButton, {
-                    backgroundColor: 'rgba(0, 122, 255, 0.08)',
+                    backgroundColor: '#f3f4f6',
                     borderRadius: 20,
                   }]}>
                     {iconType === 'tick' ? (
-                      <Ionicons name="checkmark" size={28} color={colors.primary} />
+                      <Ionicons name="checkmark" size={28} color="#6b7280" />
                     ) : (
-                      <Ionicons name="arrow-forward" size={28} color={colors.primary} />
+                      <Ionicons name="arrow-forward" size={28} color="#6b7280" />
                     )}
                   </TouchableOpacity>
                 ) : (
@@ -974,15 +974,43 @@ export default function VideoReviewScreen({ navigation, route }) {
   }, [navigation, videoUri]);
 
   // Handle skip to paywall
-  const handleSkipToPaywall = () => {
-    debugLog('🎯 SKIP BUTTON PRESSED - navigating directly to PaywallScreen');
-    
-    navigation.navigate('Paywall', {
-      continueOnboarding: continueOnboarding, // Pass through the onboarding flag
-      fromVideoReview: true, // Flag to indicate we came from video review
-      userId: userId,
-      skipped: true // Flag to indicate they skipped exercise logging
-    });
+  const handleSkipToPaywall = async () => {
+    try {
+      debugLog('🎯 SKIP BUTTON PRESSED - navigating directly to PaywallScreen');
+      
+      // Ensure userId is a string, not an object
+      let currentUserId = userId;
+      if (!currentUserId) {
+        // Try to get userId if not available
+        currentUserId = await getCurrentUserId();
+      }
+      
+      // Convert to string if it's not already, and only include if it exists
+      const userIdString = currentUserId ? String(currentUserId) : undefined;
+      
+      const navigationParams = {
+        continueOnboarding: Boolean(continueOnboarding), // Ensure boolean
+        fromVideoReview: true,
+        skipped: true,
+      };
+      
+      // Only include userId if it exists and is valid
+      if (userIdString && userIdString !== 'undefined' && userIdString !== 'null') {
+        navigationParams.userId = userIdString;
+      }
+      
+      debugLog('Navigating to Paywall with safe params:', navigationParams);
+      
+      navigation.navigate('Paywall', navigationParams);
+    } catch (error) {
+      console.error('Error in handleSkipToPaywall:', error);
+      // Still try to navigate even if there's an error, but with minimal params
+      navigation.navigate('Paywall', {
+        continueOnboarding: Boolean(continueOnboarding),
+        fromVideoReview: true,
+        skipped: true
+      });
+    }
   };
 
   // Toggle video playback
@@ -1307,22 +1335,15 @@ export default function VideoReviewScreen({ navigation, route }) {
 
   // API function to predict exercise
   const predictExercise = async (videoUri, retryCount = 0) => {
-    const MAX_RETRIES = 3; // Increased from 2
-    // Progressive timeout - longer for first attempt (cold start), shorter for retries
-    const TIMEOUT_MS = retryCount === 0 ? 45000 : 30000; // 45s first try, 30s for retries
+    const MAX_RETRIES = 0; // Single attempt only
+    // Single 90-second timeout for the one attempt
+    const TIMEOUT_MS = 90000; // 90 seconds
     
     try {
-      debugLog('Predicting exercise for video:', videoUri, `(attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+      debugLog('Predicting exercise for video:', videoUri, `(single attempt)`);
       
-      // Show appropriate user feedback based on attempt
-      if (retryCount === 0) {
-        // First attempt - normal loading
-        debugLog('First attempt at exercise prediction');
-      } else if (retryCount === 1) {
-        toast.info('Server is starting up, please wait...');
-      } else if (retryCount === 2) {
-        toast.info('Almost there, trying one more time...');
-      }
+      // Show user feedback for the single attempt
+      debugLog('Starting exercise prediction with 90-second timeout');
       
       // Verify the video file exists
       const fileInfo = await FileSystem.getInfoAsync(videoUri);
@@ -1398,11 +1419,6 @@ export default function VideoReviewScreen({ navigation, route }) {
         // Store the full prediction details in state
         setPredictionDetails(data);
         
-        // Clear any retry messages on success
-        if (retryCount > 0) {
-          toast.success('Exercise detected successfully!');
-        }
-        
         // Handle different possible response formats with enhanced processing
         const fullExerciseName = buildFullExerciseName(data);
         debugLog('Built full exercise name:', fullExerciseName);
@@ -1426,34 +1442,12 @@ export default function VideoReviewScreen({ navigation, route }) {
         retryCount: retryCount
       });
       
-      // Determine if we should retry based on the error type
-      const shouldRetry = (
-        (error.message.includes('timeout') || 
-         error.message.includes('504') || 
-         error.message.includes('502') ||
-         error.message.includes('503') ||
-         error.message.includes('Gateway timeout') ||
-         error.message.includes('Service unavailable') ||
-         error.message.includes('overloaded')) && 
-        retryCount < MAX_RETRIES
-      );
-      
-      if (shouldRetry) {
-        debugLog(`Retrying exercise prediction (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
-        
-        // Exponential backoff: wait longer between retries
-        const backoffDelay = Math.min(2000 * Math.pow(2, retryCount), 8000); // 2s, 4s, 8s max
-        debugLog(`Waiting ${backoffDelay}ms before retry...`);
-        
-        await new Promise(resolve => setTimeout(resolve, backoffDelay));
-        
-        return predictExercise(videoUri, retryCount + 1);
-      }
+      // No retries - single attempt only
       
       // Show user-friendly error message based on error type
       if (error.message && (error.message.includes('timeout') || error.message.includes('504') || error.message.includes('Gateway timeout'))) {
-        console.error('⚠️ Backend server is overloaded or cold-starting');
-        toast.error('Server is busy. Exercise detection unavailable - please enter manually.');
+        console.error('⚠️ Backend server took too long (90+ seconds)');
+        toast.error('Server is taking too long. Exercise detection unavailable - please enter manually.');
       } else if (error.message && error.message.includes('Network request failed')) {
         console.error('⚠️ Network Error: Cannot connect to backend server');
         toast.error('Network error. Please check your connection.');
@@ -1814,8 +1808,6 @@ export default function VideoReviewScreen({ navigation, route }) {
   const handleShowCoachingFeedback = async () => {
     if (!videoUri) return;
 
-    // Set that the user has analyzed their video - this will show the Log Lift button
-    setHasAnalyzedVideo(true);
     // Set that the button has been pressed - this will change button color and hide arrow
     setAnalyzeButtonPressed(true);
     
@@ -2374,427 +2366,429 @@ export default function VideoReviewScreen({ navigation, route }) {
   }, [hasAnalyzedVideo, loading]);
 
   return (
-    <Animated.View 
-      style={[
-        styles.container, 
-        { opacity: fadeAnim }
-      ]}
+    <LinearGradient
+      colors={['#f4f4f4', '#fefefe']}
+      style={styles.container}
     >
-      <SafeAreaView style={styles.safeContainer}>
-        <KeyboardAvoidingView 
-          style={styles.keyboardAvoidingView}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
-        >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.touchableContent}>
-              {/* Header with back button and skip button */}
-              <View style={styles.header}>
-                <TouchableOpacity 
-                  style={styles.backButton} 
-                  onPress={() => navigation.goBack()}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="chevron-back" size={24} color={colors.gray} />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.skipButton} 
-                  onPress={handleSkipToPaywall}
-                  activeOpacity={0.6}
-                >
-                  <Text style={styles.skipButtonText}>Skip</Text>
-                </TouchableOpacity>
-              </View>
+      <Animated.View 
+        style={[
+          { flex: 1 },
+          { opacity: fadeAnim }
+        ]}
+      >
+        <SafeAreaView style={styles.safeContainer}>
+          <KeyboardAvoidingView 
+            style={styles.keyboardAvoidingView}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.touchableContent}>
+                {/* Header with back button and skip button */}
+                <View style={styles.header}>
+                  <TouchableOpacity 
+                    style={styles.backButton} 
+                    onPress={() => navigation.goBack()}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="chevron-back" size={24} color={colors.gray} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.skipButton} 
+                    onPress={handleSkipToPaywall}
+                    activeOpacity={0.6}
+                  >
+                    <Text style={styles.skipButtonText}>Skip</Text>
+                  </TouchableOpacity>
+                </View>
 
-              <View style={styles.contentContainer}>
-                <Animated.Text
-                  style={[
-                    styles.titleText,
-                    { 
-                      opacity: titleAnim,
-                      transform: [
-                        { 
-                          scale: titleAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0.98, 1],
-                            extrapolate: 'clamp'
-                          })
-                        }
-                      ] 
-                    }
-                  ]}
-                >
-                  How to Log Your Lifts:
-                </Animated.Text>
-                
-                {/* Remove Video Player section and only show Exercise Card */}
-                <Animated.View 
-                  style={[
-                    styles.formContainer, 
-                    { 
-                      opacity: formAnim,
-                      transform: [
-                        { 
-                          translateY: formAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [15, 0],
-                            extrapolate: 'clamp'
-                          })
-                        }
-                      ]
-                    }
-                  ]}
-                >
-                  <View style={styles.exerciseTableCard} ref={exerciseCardRef} onLayout={onExerciseCardLayout}>
-                    <View style={styles.exerciseTableHeader} ref={exerciseHeaderRef} onLayout={onExerciseHeaderLayout}>
-                      {isLoadingExercise ? (
-                        <View style={styles.exerciseLoadingContainer}>
-                          <View style={styles.loadingSpinnerContainer}>
-                            <ActivityIndicator size="small" color={colors.primary} />
-                          </View>
-                          <Animated.Text style={[
-                            styles.exerciseLoadingText,
-                            {
-                              opacity: shimmerAnim.interpolate({
-                                inputRange: [0, 0.5, 1],
-                                outputRange: [0.6, 1, 0.6]
-                              }),
-                              color: shimmerAnim.interpolate({
-                                inputRange: [0, 0.5, 1],
-                                outputRange: [colors.gray, colors.primary, colors.gray]
-                              })
-                            }
-                          ]}>
-                            AI Detecting Exercise{'.'.repeat(ellipsisCount)}
-                          </Animated.Text>
-                        </View>
-                      ) : isEditingExercise ? (
-                        <View style={styles.exerciseEditContainer}>
-                          <TouchableOpacity onPress={handleSaveExercise} style={styles.editButton}>
-                            <Ionicons name="checkmark" size={20} color={colors.primary} />
-                          </TouchableOpacity>
-                          <TextInput
-                            style={styles.exerciseEditInput}
-                            value={tempExerciseName}
-                            onChangeText={setTempExerciseName}
-                            autoFocus
-                            selectTextOnFocus
-                            onBlur={handleCancelEditExercise}
-                            onSubmitEditing={handleSaveExercise}
-                            returnKeyType="done"
-                          />
-                        </View>
-                      ) : (
-                        <View style={styles.exerciseNameContainer}>
-                          {exerciseName && !isLoadingExercise && (
-                            <Animated.View style={{ opacity: pencilOpacity }}>
-                              <TouchableOpacity onPress={handleStartEditExercise} style={styles.editButtonLeft}>
-                                <Ionicons name="pencil" size={16} color={colors.gray} />
-                              </TouchableOpacity>
-                            </Animated.View>
-                          )}
-                          {(!exerciseName || isLoadingExercise) && !isEditingExercise && (
-                            <View style={styles.editButtonPlaceholder} />
-                          )}
-                          <TouchableOpacity 
-                            onPress={handleExerciseNameTap}
-                            style={styles.exerciseNameTouchable}
-                            activeOpacity={showInfoIcon ? 0.7 : 1}
-                            disabled={!showInfoIcon}
-                          >
+                <View style={styles.contentContainer}>
+                  <Animated.Text
+                    style={[
+                      styles.titleText,
+                      { 
+                        opacity: titleAnim,
+                        transform: [
+                          { 
+                            scale: titleAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0.98, 1],
+                              extrapolate: 'clamp'
+                            })
+                          }
+                        ] 
+                      }
+                    ]}
+                  >
+                    How to Log Your Lifts:
+                  </Animated.Text>
+                  
+                  {/* Remove Video Player section and only show Exercise Card */}
+                  <Animated.View 
+                    style={[
+                      styles.formContainer, 
+                      { 
+                        opacity: formAnim,
+                        transform: [
+                          { 
+                            translateY: formAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [15, 0],
+                              extrapolate: 'clamp'
+                            })
+                          }
+                        ]
+                      }
+                    ]}
+                  >
+                    <View style={styles.exerciseTableCard} ref={exerciseCardRef} onLayout={onExerciseCardLayout}>
+                      <View style={styles.exerciseTableHeader} ref={exerciseHeaderRef} onLayout={onExerciseHeaderLayout}>
+                        {isLoadingExercise ? (
+                          <View style={styles.exerciseLoadingContainer}>
+                            <View style={styles.loadingSpinnerContainer}>
+                              <ActivityIndicator size="small" color={colors.primary} />
+                            </View>
                             <Animated.Text style={[
-                              styles.exerciseTableTitle,
+                              styles.exerciseLoadingText,
                               {
-                                opacity: Animated.multiply(exerciseOpacity, exerciseBlur),
-                                transform: [
-                                  { translateY: exerciseTranslateY },
-                                  { scale: exerciseScale }
-                                ]
+                                opacity: shimmerAnim.interpolate({
+                                  inputRange: [0, 0.5, 1],
+                                  outputRange: [0.6, 1, 0.6]
+                                }),
+                                color: shimmerAnim.interpolate({
+                                  inputRange: [0, 0.5, 1],
+                                  outputRange: [colors.gray, colors.primary, colors.gray]
+                                })
                               }
                             ]}>
-                              {exerciseName || ''}
+                              AI Detecting Exercise{'.'.repeat(ellipsisCount)}
                             </Animated.Text>
-                            {showInfoIcon && (
-                              <Animated.View style={{ opacity: pencilOpacity, marginLeft: 6 }}>
-                                <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
-                              </Animated.View>
-                            )}
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                    </View>
-                    
-                    <View style={styles.tableContainer}>
-                      {/* Table header row */}
-                      <View style={styles.tableHeaderRow}>
-                        <View style={styles.tableCellSetHeader}>
-                          <Text style={styles.headerText}>#</Text>
-                        </View>
-                        <View style={styles.tableCellIconHeader}>
-                          <Text style={styles.headerText}>GymVid</Text>
-                        </View>
-                        <View style={styles.tableCellHeaderInput}>
-                          <Text style={styles.headerText}>Weight (kg)</Text>
-                        </View>
-                        <View style={styles.tableCellHeaderInput}>
-                          <Text style={styles.headerText}>Reps</Text>
-                        </View>
-                        <View style={styles.tableCellCheckHeader}>
-                          <Text style={styles.headerText}></Text>
-                        </View>
-                      </View>
-                      
-                      {/* Table data row - TARGET FOR TOOLTIP 2 */}
-                      <View style={styles.tableRow} ref={inputsRowRef} onLayout={onInputsRowLayout}>
-                        <Text style={styles.tableCellSet}>1</Text>
-                        {thumbnailUri ? (
-                          // TARGET FOR TOOLTIP 1
-                          <TouchableOpacity 
-                            ref={thumbnailRef}
-                            style={styles.thumbnailContainer}
-                            onPress={handleVideoPreview}
-                          >
-                            <Image 
-                              source={{ uri: thumbnailUri }} 
-                              style={styles.thumbnail}
-                              resizeMode="cover"
-                            />
-                          </TouchableOpacity>
-                        ) : (
-                          <TouchableOpacity 
-                            ref={thumbnailRef} // Also measure this as a fallback if no thumbnail
-                            style={styles.cameraButtonContainer}
-                            onPress={selectVideo}
-                          >
-                            <View style={styles.cameraButtonInner}>
-                              <Ionicons name="camera-outline" size={24} color={colors.gray} />
-                            </View>
-                          </TouchableOpacity>
-                        )}
-                        <TextInput 
-                          style={styles.tableCellInput}
-                          placeholder="0"
-                          placeholderTextColor="#AAAAAA"
-                          keyboardType="numeric"
-                          value={weight}
-                          onChangeText={handleWeightChange}
-                          maxLength={5}
-                          inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
-                          returnKeyType="done"
-                          onSubmitEditing={Keyboard.dismiss}
-                          editable={!isSetCompleted}
-                        />
-                        <TextInput 
-                          style={styles.tableCellInput}
-                          placeholder="0"
-                          placeholderTextColor="#AAAAAA"
-                          keyboardType="number-pad"
-                          value={reps}
-                          onChangeText={setReps}
-                          maxLength={3}
-                          inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
-                          returnKeyType="done"
-                          onSubmitEditing={Keyboard.dismiss}
-                          editable={!isSetCompleted}
-                        />
-                        <TouchableOpacity
-                          style={styles.tableCellCheck}
-                          onPress={handleCompleteSet}
-                        >
-                          <View style={[
-                            styles.checkSquare,
-                            isSetCompleted && styles.checkSquareCompleted
-                          ]}>
-                            <Ionicons 
-                              name="checkmark-sharp" 
-                              size={24} 
-                              color={isSetCompleted ? colors.white : colors.lightGray} 
+                          </View>
+                        ) : isEditingExercise ? (
+                          <View style={styles.exerciseEditContainer}>
+                            <TouchableOpacity onPress={handleSaveExercise} style={styles.editButton}>
+                              <Ionicons name="checkmark" size={16} color={colors.primary} />
+                            </TouchableOpacity>
+                            <TextInput
+                              style={styles.exerciseEditInput}
+                              value={tempExerciseName}
+                              onChangeText={setTempExerciseName}
+                              autoFocus
+                              selectTextOnFocus
+                              onBlur={handleCancelEditExercise}
+                              onSubmitEditing={handleSaveExercise}
+                              returnKeyType="done"
                             />
                           </View>
-                        </TouchableOpacity>
+                        ) : (
+                          <View style={styles.exerciseNameContainer}>
+                            {exerciseName && !isLoadingExercise && (
+                              <Animated.View style={{ opacity: pencilOpacity }}>
+                                <TouchableOpacity onPress={handleStartEditExercise} style={styles.editButtonLeft}>
+                                  <Ionicons name="pencil" size={16} color={colors.gray} />
+                                </TouchableOpacity>
+                              </Animated.View>
+                            )}
+                            {(!exerciseName || isLoadingExercise) && !isEditingExercise && (
+                              <View style={styles.editButtonPlaceholder} />
+                            )}
+                            <TouchableOpacity 
+                              onPress={handleExerciseNameTap}
+                              style={styles.exerciseNameTouchable}
+                              activeOpacity={showInfoIcon ? 0.7 : 1}
+                              disabled={!showInfoIcon}
+                            >
+                              <Animated.Text style={[
+                                styles.exerciseTableTitle,
+                                {
+                                  opacity: Animated.multiply(exerciseOpacity, exerciseBlur),
+                                  transform: [
+                                    { translateY: exerciseTranslateY },
+                                    { scale: exerciseScale }
+                                  ]
+                                }
+                              ]}>
+                                {exerciseName || ''}
+                              </Animated.Text>
+                              {showInfoIcon && (
+                                <Animated.View style={{ opacity: pencilOpacity, marginLeft: 6 }}>
+                                  <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+                                </Animated.View>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
+                      
+                      <View style={styles.tableContainer}>
+                        {/* Table header row */}
+                        <View style={styles.tableHeaderRow}>
+                          <View style={styles.tableCellSetHeader}>
+                            <Text style={styles.headerText}>#</Text>
+                          </View>
+                          <View style={styles.tableCellIconHeader}>
+                            <Text style={styles.headerText}>GymVid</Text>
+                          </View>
+                          <View style={styles.tableCellHeaderInput}>
+                            <Text style={styles.headerText}>Weight (kg)</Text>
+                          </View>
+                          <View style={styles.tableCellHeaderInput}>
+                            <Text style={styles.headerText}>Reps</Text>
+                          </View>
+                          <View style={styles.tableCellCheckHeader}>
+                            <Text style={styles.headerText}></Text>
+                          </View>
+                        </View>
+                        
+                        {/* Table data row - TARGET FOR TOOLTIP 2 */}
+                        <View style={styles.tableRow} ref={inputsRowRef} onLayout={onInputsRowLayout}>
+                          <Text style={styles.tableCellSet}>1</Text>
+                          {thumbnailUri ? (
+                            // TARGET FOR TOOLTIP 1
+                            <TouchableOpacity 
+                              ref={thumbnailRef}
+                              style={styles.thumbnailContainer}
+                              onPress={handleVideoPreview}
+                            >
+                              <Image 
+                                source={{ uri: thumbnailUri }} 
+                                style={styles.thumbnail}
+                                resizeMode="cover"
+                              />
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity 
+                              ref={thumbnailRef} // Also measure this as a fallback if no thumbnail
+                              style={styles.cameraButtonContainer}
+                              onPress={selectVideo}
+                            >
+                              <View style={styles.cameraButtonInner}>
+                                <Ionicons name="camera-outline" size={24} color={colors.gray} />
+                              </View>
+                            </TouchableOpacity>
+                          )}
+                          <TextInput 
+                            style={styles.tableCellInput}
+                            placeholder="0"
+                            placeholderTextColor="#AAAAAA"
+                            keyboardType="numeric"
+                            value={weight}
+                            onChangeText={handleWeightChange}
+                            maxLength={5}
+                            inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
+                            returnKeyType="done"
+                            onSubmitEditing={Keyboard.dismiss}
+                            editable={!isSetCompleted}
+                          />
+                          <TextInput 
+                            style={styles.tableCellInput}
+                            placeholder="0"
+                            placeholderTextColor="#AAAAAA"
+                            keyboardType="number-pad"
+                            value={reps}
+                            onChangeText={setReps}
+                            maxLength={3}
+                            inputAccessoryViewID={Platform.OS === 'ios' ? inputAccessoryViewID : undefined}
+                            returnKeyType="done"
+                            onSubmitEditing={Keyboard.dismiss}
+                            editable={!isSetCompleted}
+                          />
+                          <TouchableOpacity
+                            style={styles.tableCellCheck}
+                            onPress={handleCompleteSet}
+                          >
+                            <View style={[
+                              styles.checkSquare,
+                              isSetCompleted && styles.checkSquareCompleted
+                            ]}>
+                              <Ionicons 
+                                name="checkmark-sharp" 
+                                size={24} 
+                                color={isSetCompleted ? colors.white : colors.lightGray} 
+                              />
+                            </View>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                  
-                  {/* Bouncing Arrow - positioned between exercise card and AI button */}
-                  {weight && isSetCompleted && !analyzeButtonPressed && (
-                    <Animated.View
-                      style={[
-                        styles.arrowContainerFixed,
-                        {
-                          opacity: arrowOpacity,
-                          transform: [
-                            { scale: arrowScale },
-                            { 
-                              translateY: arrowBounceAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [0, 6], // Bounce 6px up and down
-                              })
-                            }
-                          ]
-                        }
-                      ]}
-                    >
-                      <Ionicons name="arrow-down" size={24} color={colors.primary} />
-                    </Animated.View>
-                  )}
-                  
-                  {/* AI Coaching Feedback Button - positioned below exercise card */}
-                  {weight && isSetCompleted && (
-                    <Animated.View
-                      style={[
-                        styles.aiCoachingButtonContainer,
-                        {
-                          opacity: aiButtonOpacity,
-                          transform: [
-                            { scale: aiButtonScale },
-                            { translateY: aiButtonTranslateY }
-                          ]
-                        }
-                      ]}
-                    >
-                      <TouchableOpacity 
+                    
+                    {/* Bouncing Arrow - positioned between exercise card and AI button */}
+                    {weight && isSetCompleted && !analyzeButtonPressed && (
+                      <Animated.View
                         style={[
-                          styles.analyzeVidButton,
+                          styles.arrowContainerFixed,
                           {
-                            shadowColor: analyzeButtonPressed ? '#6B7280' : '#0066FF',
+                            opacity: arrowOpacity,
+                            transform: [
+                              { scale: arrowScale },
+                              { 
+                                translateY: arrowBounceAnim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [0, 6], // Bounce 6px up and down
+                                })
+                              }
+                            ]
                           }
-                        ]} 
-                        onPress={handleShowCoachingFeedback}
-                        onPressIn={handlePrimaryButtonPressIn}
-                        onPressOut={handlePrimaryButtonPressOut}
-                        disabled={loading}
-                        activeOpacity={0.9}
-                        ref={aiCoachingButtonRef}
-                        onLayout={onAiCoachingButtonLayout}
+                        ]}
                       >
-                        <LinearGradient
-                          colors={analyzeButtonPressed ? ['#9CA3AF', '#6B7280', '#4B5563'] : ['#0099FF', '#0066DD', '#0044BB']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={styles.analyzeVidGradient}
+                        <Ionicons name="arrow-down" size={24} color="#6b7280" />
+                      </Animated.View>
+                    )}
+                    
+                    {/* AI Coaching Feedback Button - positioned below exercise card */}
+                    {weight && isSetCompleted && (
+                      <Animated.View
+                        style={[
+                          styles.aiCoachingButtonContainer,
+                          {
+                            opacity: aiButtonOpacity,
+                            transform: [
+                              { scale: aiButtonScale },
+                              { translateY: aiButtonTranslateY }
+                            ]
+                          }
+                        ]}
+                      >
+                        <TouchableOpacity 
+                          style={[
+                            styles.analyzeVidButton,
+                            {
+                              shadowColor: analyzeButtonPressed ? '#6B7280' : '#0066FF',
+                            }
+                          ]} 
+                          onPress={handleShowCoachingFeedback}
+                          onPressIn={handlePrimaryButtonPressIn}
+                          onPressOut={handlePrimaryButtonPressOut}
+                          disabled={loading}
+                          activeOpacity={0.9}
+                          ref={aiCoachingButtonRef}
+                          onLayout={onAiCoachingButtonLayout}
                         >
-                          <Text style={styles.analyzeVidButtonText}>Analyze My Vid</Text>
-                          <Ionicons name="sparkles" size={18} color="#fff" style={styles.analyzeVidIcon} />
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    </Animated.View>
-                  )}
-                  
-                  {/* Remove buttons from inline content - they will be positioned at bottom */}
-                </Animated.View>
+                          <LinearGradient
+                            colors={analyzeButtonPressed ? ['#E5E7EB', '#E5E7EB', '#E5E7EB'] : ['#27272a', '#27272a', '#27272a']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.analyzeVidGradient}
+                          >
+                            <Text style={[styles.analyzeVidButtonText, { color: analyzeButtonPressed ? '#374151' : '#F9FAFB' }]}>Analyze My Vid</Text>
+                            <Ionicons name="sparkles" size={18} color={analyzeButtonPressed ? '#374151' : '#F9FAFB'} style={styles.analyzeVidIcon} />
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </Animated.View>
+                    )}
+                    
+                    {/* Remove buttons from inline content - they will be positioned at bottom */}
+                  </Animated.View>
+                </View>
               </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-      
-      {/* Log Lift Button - positioned at bottom */}
-      {weight && isSetCompleted && hasAnalyzedVideo && (
-        <View style={styles.bottomButtonContainer}>
-          <Animated.View
-            style={{
-              transform: [{ scale: Animated.multiply(secondaryButtonScale, logLiftButtonPulse) }],
-              width: '100%',
-            }}
-          >
-            <TouchableOpacity 
-              style={[
-                styles.logLiftButton,
-                loading && styles.logLiftButtonDisabled
-              ]}
-              onPress={handleLogLift}
-              onPressIn={handleSecondaryButtonPressIn}
-              onPressOut={handleSecondaryButtonPressOut}
-              disabled={loading}
-              activeOpacity={0.9}
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+        
+        {/* Log Lift Button - positioned at bottom */}
+        {weight && isSetCompleted && hasAnalyzedVideo && (
+          <View style={styles.bottomButtonContainer}>
+            <Animated.View
+              style={{
+                transform: [{ scale: Animated.multiply(secondaryButtonScale, logLiftButtonPulse) }],
+                width: '100%',
+              }}
             >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <LinearGradient
-                  colors={['#007BFF', '#0056CC', '#003D99']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.logLiftGradient}
-                >
-                  <Text style={styles.logLiftButtonText}>Unlock All GymVid Features!</Text>
-                  <Ionicons name="lock-open" size={20} color="#FFFFFF" style={styles.buttonIcon} />
-                </LinearGradient>
-              )}
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
-      )}
-      
-      <GuidedPopup
-        visible={tooltipStep === 1 && !isTransitioningTooltips && !hasSeenTooltips && !isDismissingTooltips}
-        text="Our AI will detect the exercise that's being performed in the vid for you!"
-        targetLayout={exerciseCardLayout}
-        highlightLayout={getFirstPopupSpotlightArea(exerciseHeaderLayout)}
-        screenBackgroundColor={colors.background}
-        onClose={handleDismissTooltip}
-        forcePositionBelow={true}
-        showIconButton={true}
-        verticalOffset={52}
-      />
-      <GuidedPopup
-        visible={tooltipStep === 2 && !isTransitioningTooltips && !hasSeenTooltips && !isDismissingTooltips}
-        text="Enter the weight & reps while you wait - then tap the ✓ to log the set."
-        targetLayout={inputsRowLayout}
-        highlightLayout={getCustomSpotlightArea(inputsRowLayout)} 
-        screenBackgroundColor={colors.background}
-        onClose={handleDismissTooltip}
-        showIconButton={true}
-        verticalOffset={30}
-      />
-      
-      {/* Video Preview Modal */}
-      <VideoPreviewModal
-        visible={isPreviewVisible}
-        videoUri={videoUri}
-        onClose={closePreview}
-      />
-      
-      {/* AI Coaching Feedback Modal */}
-      <CoachingFeedbackModal
-        visible={feedbackModalVisible}
-        onClose={() => {
-          // Only allow closing if not loading
-          if (!feedbackLoading) {
-            setFeedbackModalVisible(false);
-          }
-        }}
-        loading={feedbackLoading}
-        feedback={feedbackData}
-        videoThumbnail={feedbackThumbnail}
-        exerciseName={exerciseName || 'Unknown Exercise'}
-        setNumber={1}
-        metrics={{
-          form_rating: feedbackData?.form_rating ?? '',
-          weight: weight ?? '',
-          reps: reps ?? '',
-          rpe: '',
-          tut: '',
-        }}
-        set={{
-          weight: weight,
-          reps: reps,
-          video_url: feedbackVideoUrl,
-          thumbnail_url: feedbackThumbnail,
-        }}
-      />
-      
-      {/* Keyboard Toolbar */}
-      <KeyboardToolbar />
-    </Animated.View>
+              <TouchableOpacity 
+                style={[
+                  styles.logLiftButton,
+                  loading && styles.logLiftButtonDisabled
+                ]}
+                onPress={handleLogLift}
+                onPressIn={handleSecondaryButtonPressIn}
+                onPressOut={handleSecondaryButtonPressOut}
+                disabled={loading}
+                activeOpacity={0.9}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.logLiftButtonText}>Unlock All GymVid Features!</Text>
+                    <Ionicons name="lock-open" size={20} color="#F9FAFB" style={styles.buttonIcon} />
+                  </>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        )}
+        
+        <GuidedPopup
+          visible={tooltipStep === 1 && !isTransitioningTooltips && !hasSeenTooltips && !isDismissingTooltips}
+          text="Our AI will detect the exercise that's being performed in the vid for you!"
+          targetLayout={exerciseCardLayout}
+          highlightLayout={getFirstPopupSpotlightArea(exerciseHeaderLayout)}
+          screenBackgroundColor={colors.background}
+          onClose={handleDismissTooltip}
+          forcePositionBelow={true}
+          showIconButton={true}
+          verticalOffset={52}
+        />
+        <GuidedPopup
+          visible={tooltipStep === 2 && !isTransitioningTooltips && !hasSeenTooltips && !isDismissingTooltips}
+          text="Enter the weight & reps while you wait - then tap the ✓ to log the set."
+          targetLayout={inputsRowLayout}
+          highlightLayout={getCustomSpotlightArea(inputsRowLayout)} 
+          screenBackgroundColor={colors.background}
+          onClose={handleDismissTooltip}
+          showIconButton={true}
+          verticalOffset={30}
+        />
+        
+        {/* Video Preview Modal */}
+        <VideoPreviewModal
+          visible={isPreviewVisible}
+          videoUri={videoUri}
+          onClose={closePreview}
+        />
+        
+        {/* AI Coaching Feedback Modal */}
+        <CoachingFeedbackModal
+          visible={feedbackModalVisible}
+          onClose={() => {
+            // Only allow closing if not loading
+            if (!feedbackLoading) {
+              setFeedbackModalVisible(false);
+              // Set that the user has analyzed their video - this will show the Log Lift button
+              setHasAnalyzedVideo(true);
+            }
+          }}
+          loading={feedbackLoading}
+          feedback={feedbackData}
+          videoThumbnail={feedbackThumbnail}
+          exerciseName={exerciseName || 'Unknown Exercise'}
+          setNumber={1}
+          subtitle="AI Form Analysis"
+          metrics={{
+            form_rating: feedbackData?.form_rating ?? '',
+            weight: weight ?? '',
+            reps: reps ?? '',
+            rpe: '',
+            tut: '',
+          }}
+          set={{
+            weight: weight,
+            reps: reps,
+            video_url: feedbackVideoUrl,
+            thumbnail_url: feedbackThumbnail,
+          }}
+        />
+        
+        {/* Keyboard Toolbar */}
+        <KeyboardToolbar />
+      </Animated.View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   safeContainer: {
     flex: 1,
@@ -2945,7 +2939,7 @@ const styles = StyleSheet.create({
   tableCellInput: {
     flex: 1,
     height: 48,
-    backgroundColor: colors.lightGray,
+    backgroundColor: '#F5F5F5',
     borderRadius: 12,
     fontSize: 16,
     color: colors.darkGray,
@@ -3096,6 +3090,7 @@ const styles = StyleSheet.create({
     height: 24,
     lineHeight: 24,
     textAlignVertical: 'center',
+    letterSpacing: -0.3,
   },
   editButton: {
     width: 16,
@@ -3370,17 +3365,17 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   logLiftButton: {
-    backgroundColor: '#007BFF',
+    backgroundColor: '#27272a',
     borderRadius: 16,
     height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
     overflow: 'hidden',
   },
   logLiftButtonDisabled: {
@@ -3388,7 +3383,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
   },
   logLiftButtonText: {
-    color: '#FFFFFF',
+    color: '#F9FAFB',
     fontSize: 18,
     fontWeight: '600',
   },
@@ -3426,23 +3421,20 @@ const styles = StyleSheet.create({
   },
   analyzeVidButton: {
     borderRadius: 50,
-    shadowColor: '#0066FF',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
-    elevation: 8,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.4)',
     overflow: 'hidden',
   },
   analyzeVidButtonText: {
-    color: '#FFFFFF',
+    color: '#F9FAFB',
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: 0.5,
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   analyzeVidGradient: {
     borderRadius: 50,
@@ -3477,5 +3469,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
     letterSpacing: -0.2,
+  },
+  arrowCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#6b7280',
   },
 }); 

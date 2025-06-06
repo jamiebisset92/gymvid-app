@@ -7,7 +7,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
 import { supabase } from './config/supabase';
-import HomeScreen from './screens/HomeScreen';
 import LogWorkoutScreen from './screens/LogWorkoutScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AuthStack from './navigation/AuthStack';
@@ -89,7 +88,6 @@ export default function App() {
               headerShown: false,
               tabBarIcon: ({ color, size }) => {
                 let iconName;
-                if (route.name === 'Home') iconName = 'home-outline';
                 if (route.name === 'Log') iconName = 'add-circle-outline';
                 if (route.name === 'Account') iconName = 'person-outline';
                 return <Ionicons name={iconName} size={size} color={color} />;
@@ -106,7 +104,6 @@ export default function App() {
               },
             })}
           >
-            <Tab.Screen name="Home" component={HomeScreen} />
             <Tab.Screen name="Log" component={LogWorkoutScreen} />
             <Tab.Screen name="Account" component={ProfileScreen} />
           </Tab.Navigator>

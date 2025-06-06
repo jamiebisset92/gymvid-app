@@ -200,7 +200,7 @@ export default function LoginScreen({ navigation, setSession, route }) {
     outputRange: ['0deg', '360deg']
   });
 
-  // Function to check if user needs to complete onboarding
+  // Function to check if user needs to complete onboarding and return detailed info
   const checkNeedsOnboarding = async (userId) => {
     try {
       const { data: profile, error } = await supabase
@@ -211,11 +211,11 @@ export default function LoginScreen({ navigation, setSession, route }) {
       
       if (error) {
         console.error("Error checking onboarding status:", error);
-        return false;
+        return { needsOnboarding: false, nextScreen: null, profile: null };
       }
       
       // Check if any required fields are missing or onboarding is not explicitly marked complete
-      return !profile.onboarding_complete || 
+      const needsOnboarding = !profile.onboarding_complete || 
         !profile.name || 
         !profile.gender || 
         !profile.date_of_birth ||
@@ -223,9 +223,46 @@ export default function LoginScreen({ navigation, setSession, route }) {
         !profile.country ||
         !profile.bodyweight ||
         !profile.unit_pref;
+
+      // Determine which screen they should go to based on missing data
+      let nextScreen = null;
+      if (needsOnboarding) {
+        if (!profile.name) {
+          nextScreen = 'Name';
+        } else if (!profile.gender) {
+          nextScreen = 'Gender';
+        } else if (!profile.date_of_birth) {
+          nextScreen = 'DateOfBirth';
+        } else if (!profile.bodyweight || !profile.unit_pref) {
+          nextScreen = 'UserWeight';
+        } else if (!profile.country) {
+          nextScreen = 'Country';
+        } else if (!profile.username) {
+          nextScreen = 'Username';
+        } else {
+          // If all basic data is there but onboarding_complete is false,
+          // they might need to continue from OnboardingSummary
+          nextScreen = 'OnboardingSummary';
+        }
+      }
+      
+      return { 
+        needsOnboarding, 
+        nextScreen, 
+        profile,
+        missingFields: {
+          name: !profile.name,
+          gender: !profile.gender,
+          dateOfBirth: !profile.date_of_birth,
+          username: !profile.username,
+          country: !profile.country,
+          bodyweight: !profile.bodyweight,
+          unitPref: !profile.unit_pref
+        }
+      };
     } catch (err) {
       console.error("Error in checking onboarding status:", err);
-      return false;
+      return { needsOnboarding: false, nextScreen: null, profile: null };
     }
   };
 
@@ -258,23 +295,37 @@ export default function LoginScreen({ navigation, setSession, route }) {
         // Check if the user needs to complete onboarding
         const needsOnboarding = await checkNeedsOnboarding(result.session.user.id);
         
-        if (needsOnboarding) {
+        if (needsOnboarding.needsOnboarding) {
+          console.log('User needs onboarding, redirecting to:', needsOnboarding.nextScreen);
+          console.log('Missing fields:', needsOnboarding.missingFields);
+          
           setTimeout(() => {
-            toast.neutral("Please finish onboarding process", { 
+            toast.neutral("Completing your profile...", { 
               position: 'top'
             });
           }, 0);
+          
+          // Don't set the session yet - redirect to onboarding first
+          // Pass the session data and user info to the onboarding screen
+          setTimeout(() => {
+            navigation.navigate(needsOnboarding.nextScreen, {
+              userId: result.session.user.id,
+              email: result.session.user.email,
+              fromLogin: true,
+              session: result.session // Pass session to be set after onboarding completion
+            });
+          }, 300);
         } else {
           setTimeout(() => {
             toast.success('Login successful!');
           }, 0);
+          
+          // Use a timeout to ensure session update happens after animation completes
+          setTimeout(() => {
+            // Set the session only if onboarding is complete
+            setSession(result.session);
+          }, 300);
         }
-        
-        // Use a timeout to ensure session update happens after animation completes
-        setTimeout(() => {
-          // Set the session
-          setSession(result.session);
-        }, 300);
       } else {
         setTimeout(() => {
           toast.error('Unknown error occurred');
@@ -450,6 +501,7 @@ export default function LoginScreen({ navigation, setSession, route }) {
                     disabled={loading || isLoggingIn}
                     loadingText="Signing in..."
                     style={styles.signInButton}
+                    activeStyle={styles.signInButtonActive}
                   />
 
                   {biometricSupported && biometricEnabled && (
@@ -586,6 +638,17 @@ const styles = StyleSheet.create({
   },
   signInButton: {
     marginTop: 10,
+    backgroundColor: '#27272a',
+    color: '#F9FAFB',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  signInButtonActive: {
+    backgroundColor: '#3f3f46',
+    shadowOpacity: 0.5,
   },
   biometricButton: {
     marginTop: 12,

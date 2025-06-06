@@ -25,6 +25,9 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
   const tut = feedback?.total_tut ? `${feedback.total_tut}s` : '-';
   const formRating = feedback?.form_rating || 'N/A';
 
+  // Emoji numbers for observations
+  const emojiNumbers = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+
   // Function to get RIR text based on RPE
   const getRIRText = (rpe) => {
     if (!rpe || rpe === '-' || rpe === 'N/A') return null;
@@ -32,12 +35,12 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
     const rpeValue = parseFloat(rpe);
     const rirLookup = {
       10.0: "(No More Reps in the Tank - Failure Achieved)",
-      9.5: "(Possibly 1 Rep in the Tank Before Failure)",
-      9.0: "(Possibly 1-2 Reps in the Tank Before Failure)",
-      8.5: "(Possibly 2-3 Reps in the Tank Before Failure)",
-      8.0: "(Possibly 3-4 Reps in the Tank Before Failure)",
-      7.5: "(At Least 4+ Reps in the Tank Before Failure)",
-      7.0: "(At Least 5+ Reps in the Tank Before Failure)"
+      9.5: "(It looks like you might have had 1 more rep in the tank before hitting failure)",
+      9.0: "(It looks like you might have had 1-2 more reps in the tank before hitting failure)",
+      8.5: "(It looks like you might have had 2-3 more rep in the tank before hitting failure)",
+      8.0: "(It looks like you might have had 3-4 more rep in the tank before hitting failure)",
+      7.5: "(It looks like you could have have done at least 4 reps or more before hitting failure)",
+      7.0: "(This looks like a warm up weight!)"
     };
     
     return rirLookup[rpeValue] || null;
@@ -122,14 +125,20 @@ export default function CoachingFeedbackModal({ visible, onClose, loading, feedb
               {/* Add RIR Card */}
               {rirText && (
                 <View style={styles.rirCard}>
-                  <Text style={styles.rirText}>👉 {rirText.replace(/[()]/g, '')}</Text>
+                  <Text style={styles.feedbackHeaderCustom}>🔥 Reps In Reserve</Text>
+                  <Text style={styles.rirText}>{rirText.replace(/[()]/g, '')}</Text>
                 </View>
               )}
               
               {feedback.observations && feedback.observations.map((item, idx) => (
                 <View key={idx} style={styles.feedbackBlockCustom}>
-                  {item.observation ? <><Text style={styles.feedbackHeaderCustom}>👀 Observation</Text><Text style={styles.feedbackTextCustom}>{item.observation}</Text></> : null}
-                  {item.tip ? <><Text style={styles.feedbackHeaderCustom}>🧠 Tip</Text><Text style={styles.feedbackTextCustom}>{item.tip}</Text></> : null}
+                  {item.observation ? <><Text style={styles.feedbackHeaderCustom}>{emojiNumbers[idx] || `${idx + 1}️⃣`} {item.header || 'Observation'}</Text><Text style={styles.feedbackTextCustom}>{item.observation}</Text></> : null}
+                  {item.tip ? (
+                    <View style={styles.tipContainer}>
+                      <Text style={styles.tipEmoji}>👉</Text>
+                      <Text style={styles.tipText}>{item.tip}</Text>
+                    </View>
+                  ) : null}
                 </View>
               ))}
               {feedback.summary && (
@@ -338,8 +347,28 @@ const styles = StyleSheet.create({
   },
   rirText: {
     fontSize: 15,
-    fontFamily: 'DMSans-Bold',
-    color: colors.darkGray,
+    fontFamily: 'DMSans-Regular',
+    color: colors.gray,
     textAlign: 'left',
+  },
+  tipContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  tipEmoji: {
+    fontSize: 15,
+    fontFamily: 'DMSans-Regular',
+    color: colors.gray,
+    marginRight: 8,
+    lineHeight: 20,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'DMSans-Regular',
+    color: colors.gray,
+    lineHeight: 20,
+    marginRight: 8,
   },
 }); 

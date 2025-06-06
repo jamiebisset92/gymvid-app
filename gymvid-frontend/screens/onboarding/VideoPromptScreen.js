@@ -1047,13 +1047,13 @@ export default function VideoPromptScreen({ navigation, route }) {
               disabled={isRevealed}
             >
               <LinearGradient
-                colors={['#0099FF', '#0066DD', '#0044BB']}
+                colors={['#27272a', '#27272a', '#27272a']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.showMeGradient}
               >
                 <Text style={styles.showMeButtonText}>Show Me</Text>
-                <Ionicons name="sparkles" size={20} color="#fff" style={styles.showMeIcon} />
+                <Ionicons name="sparkles" size={20} color="#F9FAFB" style={styles.showMeIcon} />
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
@@ -1152,10 +1152,8 @@ export default function VideoPromptScreen({ navigation, route }) {
                     disabled={loading}
                     activeOpacity={0.9}
                   >
-                    <View style={styles.buttonContent}>
-                      <Ionicons name="videocam" size={24} color={colors.white} style={styles.buttonIcon} />
-                      <Text style={styles.primaryButtonText}>Yes, I have a GymVid Ready!</Text>
-                    </View>
+                    <Ionicons name="videocam" size={24} color="#F9FAFB" style={styles.buttonIcon} />
+                    <Text style={styles.primaryButtonText}>Yes, I have a GymVid Ready!</Text>
                   </TouchableOpacity>
                 </Animated.View>
                 
@@ -1334,38 +1332,47 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(0, 123, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#0066FF',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.25)',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   buttonsContainer: {
     width: '100%',
     marginTop: 0,
   },
   primaryButton: {
-    backgroundColor: '#0070E0', // Slightly deeper blue for better contrast
+    backgroundColor: '#27272a',
     borderRadius: 16,
     height: 62,
+    marginBottom: 16,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 24,
+  },
+  primaryButtonGradient: {
+    flex: 1,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 24,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: '#F9FAFB',
     fontSize: 17, // Slightly reduced for better fit
     fontWeight: '600',
     letterSpacing: 0.2,
@@ -1463,17 +1470,17 @@ const styles = StyleSheet.create({
   },
   showMeButton: {
     borderRadius: 50,
-    shadowColor: '#0066FF',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
-    elevation: 8,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.4)',
     overflow: 'hidden',
   },
   showMeButtonText: {
-    color: '#FFFFFF',
+    color: '#F9FAFB',
     fontSize: 19,
     fontWeight: '700',
     letterSpacing: 0.5,

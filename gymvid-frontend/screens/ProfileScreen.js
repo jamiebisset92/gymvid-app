@@ -9,259 +9,41 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
-  Animated
+  Animated,
+  ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../config/colors';
 import { supabase } from '../config/supabase';
-import CountryFlag from 'react-native-country-flag';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadProfileImage } from '../utils/storageUtils';
 import { useToast } from '../components/ToastProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../hooks/useAuth';
+import { Video } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 
-// Flag component with error handling and loading states
-const FlagComponent = ({ isoCode, size = 20 }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
+const formatTodaysDate = () => {
+  const date = new Date();
+  const days = ['Sun', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   
-  useEffect(() => {
-    // Reset states when isoCode changes
-    setIsLoading(true);
-    setHasError(false);
-    
-    // Set a timeout to hide loading state after a reasonable delay
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 200);
-    
-    return () => clearTimeout(timer);
-  }, [isoCode]);
+  const dayName = days[date.getDay()];
+  const day = date.getDate();
+  const month = months[date.getMonth()];
   
-  if (hasError) {
-    // Fallback to text-based country indicator
-    return (
-      <View style={styles.flagFallback}>
-        <Text style={styles.flagFallbackText}>
-          {isoCode}
-        </Text>
-      </View>
-    );
-  }
+  const getOrdinalSuffix = (day) => {
+    if (day > 3 && day < 21) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
   
-  return (
-    <View style={styles.flagContainer}>
-      {isLoading && (
-        <View style={styles.flagPlaceholder} />
-      )}
-      <CountryFlag 
-        isoCode={isoCode} 
-        size={size}
-        style={{ opacity: isLoading ? 0 : 1 }}
-        onError={() => setHasError(true)}
-      />
-    </View>
-  );
+  return `${dayName} ${day}${getOrdinalSuffix(day)} ${month}`;
 };
-
-// List of countries with ISO codes for flag display
-const COUNTRIES = [
-  { name: "Afghanistan", code: "AF" },
-  { name: "Albania", code: "AL" },
-  { name: "Algeria", code: "DZ" },
-  { name: "Andorra", code: "AD" },
-  { name: "Angola", code: "AO" },
-  { name: "Antigua and Barbuda", code: "AG" },
-  { name: "Argentina", code: "AR" },
-  { name: "Armenia", code: "AM" },
-  { name: "Australia", code: "AU" },
-  { name: "Austria", code: "AT" },
-  { name: "Azerbaijan", code: "AZ" },
-  { name: "Bahamas", code: "BS" },
-  { name: "Bahrain", code: "BH" },
-  { name: "Bangladesh", code: "BD" },
-  { name: "Barbados", code: "BB" },
-  { name: "Belarus", code: "BY" },
-  { name: "Belgium", code: "BE" },
-  { name: "Belize", code: "BZ" },
-  { name: "Benin", code: "BJ" },
-  { name: "Bhutan", code: "BT" },
-  { name: "Bolivia", code: "BO" },
-  { name: "Bosnia and Herzegovina", code: "BA" },
-  { name: "Botswana", code: "BW" },
-  { name: "Brazil", code: "BR" },
-  { name: "Brunei", code: "BN" },
-  { name: "Bulgaria", code: "BG" },
-  { name: "Burkina Faso", code: "BF" },
-  { name: "Burundi", code: "BI" },
-  { name: "Cabo Verde", code: "CV" },
-  { name: "Cambodia", code: "KH" },
-  { name: "Cameroon", code: "CM" },
-  { name: "Canada", code: "CA" },
-  { name: "Central African Republic", code: "CF" },
-  { name: "Chad", code: "TD" },
-  { name: "Chile", code: "CL" },
-  { name: "China", code: "CN" },
-  { name: "Colombia", code: "CO" },
-  { name: "Comoros", code: "KM" },
-  { name: "Congo", code: "CG" },
-  { name: "Costa Rica", code: "CR" },
-  { name: "Croatia", code: "HR" },
-  { name: "Cuba", code: "CU" },
-  { name: "Cyprus", code: "CY" },
-  { name: "Czech Republic", code: "CZ" },
-  { name: "Denmark", code: "DK" },
-  { name: "Djibouti", code: "DJ" },
-  { name: "Dominica", code: "DM" },
-  { name: "Dominican Republic", code: "DO" },
-  { name: "Ecuador", code: "EC" },
-  { name: "Egypt", code: "EG" },
-  { name: "El Salvador", code: "SV" },
-  { name: "Equatorial Guinea", code: "GQ" },
-  { name: "Eritrea", code: "ER" },
-  { name: "Estonia", code: "EE" },
-  { name: "Eswatini", code: "SZ" },
-  { name: "Ethiopia", code: "ET" },
-  { name: "Fiji", code: "FJ" },
-  { name: "Finland", code: "FI" },
-  { name: "France", code: "FR" },
-  { name: "Gabon", code: "GA" },
-  { name: "Gambia", code: "GM" },
-  { name: "Georgia", code: "GE" },
-  { name: "Germany", code: "DE" },
-  { name: "Ghana", code: "GH" },
-  { name: "Greece", code: "GR" },
-  { name: "Grenada", code: "GD" },
-  { name: "Guatemala", code: "GT" },
-  { name: "Guinea", code: "GN" },
-  { name: "Guinea-Bissau", code: "GW" },
-  { name: "Guyana", code: "GY" },
-  { name: "Haiti", code: "HT" },
-  { name: "Honduras", code: "HN" },
-  { name: "Hungary", code: "HU" },
-  { name: "Iceland", code: "IS" },
-  { name: "India", code: "IN" },
-  { name: "Indonesia", code: "ID" },
-  { name: "Iran", code: "IR" },
-  { name: "Iraq", code: "IQ" },
-  { name: "Ireland", code: "IE" },
-  { name: "Israel", code: "IL" },
-  { name: "Italy", code: "IT" },
-  { name: "Ivory Coast", code: "CI" },
-  { name: "Jamaica", code: "JM" },
-  { name: "Japan", code: "JP" },
-  { name: "Jordan", code: "JO" },
-  { name: "Kazakhstan", code: "KZ" },
-  { name: "Kenya", code: "KE" },
-  { name: "Kiribati", code: "KI" },
-  { name: "Kuwait", code: "KW" },
-  { name: "Kyrgyzstan", code: "KG" },
-  { name: "Laos", code: "LA" },
-  { name: "Latvia", code: "LV" },
-  { name: "Lebanon", code: "LB" },
-  { name: "Lesotho", code: "LS" },
-  { name: "Liberia", code: "LR" },
-  { name: "Libya", code: "LY" },
-  { name: "Liechtenstein", code: "LI" },
-  { name: "Lithuania", code: "LT" },
-  { name: "Luxembourg", code: "LU" },
-  { name: "Madagascar", code: "MG" },
-  { name: "Malawi", code: "MW" },
-  { name: "Malaysia", code: "MY" },
-  { name: "Maldives", code: "MV" },
-  { name: "Mali", code: "ML" },
-  { name: "Malta", code: "MT" },
-  { name: "Marshall Islands", code: "MH" },
-  { name: "Mauritania", code: "MR" },
-  { name: "Mauritius", code: "MU" },
-  { name: "Mexico", code: "MX" },
-  { name: "Micronesia", code: "FM" },
-  { name: "Moldova", code: "MD" },
-  { name: "Monaco", code: "MC" },
-  { name: "Mongolia", code: "MN" },
-  { name: "Montenegro", code: "ME" },
-  { name: "Morocco", code: "MA" },
-  { name: "Mozambique", code: "MZ" },
-  { name: "Myanmar", code: "MM" },
-  { name: "Namibia", code: "NA" },
-  { name: "Nauru", code: "NR" },
-  { name: "Nepal", code: "NP" },
-  { name: "Netherlands", code: "NL" },
-  { name: "New Zealand", code: "NZ" },
-  { name: "Nicaragua", code: "NI" },
-  { name: "Niger", code: "NE" },
-  { name: "Nigeria", code: "NG" },
-  { name: "North Korea", code: "KP" },
-  { name: "North Macedonia", code: "MK" },
-  { name: "Norway", code: "NO" },
-  { name: "Oman", code: "OM" },
-  { name: "Pakistan", code: "PK" },
-  { name: "Palau", code: "PW" },
-  { name: "Panama", code: "PA" },
-  { name: "Papua New Guinea", code: "PG" },
-  { name: "Paraguay", code: "PY" },
-  { name: "Peru", code: "PE" },
-  { name: "Philippines", code: "PH" },
-  { name: "Poland", code: "PL" },
-  { name: "Portugal", code: "PT" },
-  { name: "Qatar", code: "QA" },
-  { name: "Romania", code: "RO" },
-  { name: "Russia", code: "RU" },
-  { name: "Rwanda", code: "RW" },
-  { name: "Saint Kitts and Nevis", code: "KN" },
-  { name: "Saint Lucia", code: "LC" },
-  { name: "Saint Vincent and the Grenadines", code: "VC" },
-  { name: "Samoa", code: "WS" },
-  { name: "San Marino", code: "SM" },
-  { name: "Sao Tome and Principe", code: "ST" },
-  { name: "Saudi Arabia", code: "SA" },
-  { name: "Senegal", code: "SN" },
-  { name: "Serbia", code: "RS" },
-  { name: "Seychelles", code: "SC" },
-  { name: "Sierra Leone", code: "SL" },
-  { name: "Singapore", code: "SG" },
-  { name: "Slovakia", code: "SK" },
-  { name: "Slovenia", code: "SI" },
-  { name: "Solomon Islands", code: "SB" },
-  { name: "Somalia", code: "SO" },
-  { name: "South Africa", code: "ZA" },
-  { name: "South Korea", code: "KR" },
-  { name: "South Sudan", code: "SS" },
-  { name: "Spain", code: "ES" },
-  { name: "Sri Lanka", code: "LK" },
-  { name: "Sudan", code: "SD" },
-  { name: "Suriname", code: "SR" },
-  { name: "Sweden", code: "SE" },
-  { name: "Switzerland", code: "CH" },
-  { name: "Syria", code: "SY" },
-  { name: "Taiwan", code: "TW" },
-  { name: "Tajikistan", code: "TJ" },
-  { name: "Tanzania", code: "TZ" },
-  { name: "Thailand", code: "TH" },
-  { name: "Timor-Leste", code: "TL" },
-  { name: "Togo", code: "TG" },
-  { name: "Tonga", code: "TO" },
-  { name: "Trinidad and Tobago", code: "TT" },
-  { name: "Tunisia", code: "TN" },
-  { name: "Turkey", code: "TR" },
-  { name: "Turkmenistan", code: "TM" },
-  { name: "Tuvalu", code: "TV" },
-  { name: "Uganda", code: "UG" },
-  { name: "Ukraine", code: "UA" },
-  { name: "United Arab Emirates", code: "AE" },
-  { name: "United Kingdom", code: "GB" },
-  { name: "United States", code: "US" },
-  { name: "Uruguay", code: "UY" },
-  { name: "Uzbekistan", code: "UZ" },
-  { name: "Vanuatu", code: "VU" },
-  { name: "Vatican City", code: "VA" },
-  { name: "Venezuela", code: "VE" },
-  { name: "Vietnam", code: "VN" },
-  { name: "Yemen", code: "YE" },
-  { name: "Zambia", code: "ZM" },
-  { name: "Zimbabwe", code: "ZW" }
-];
 
 const ProfileScreen = ({ navigation }) => {
   const [session, setSession] = useState(null);
@@ -272,8 +54,11 @@ const ProfileScreen = ({ navigation }) => {
   const [editingField, setEditingField] = useState(null);
   const [tempValue, setTempValue] = useState('');
   const [showUnitPicker, setShowUnitPicker] = useState(false);
+  const [selectedTab, setSelectedTab] = useState('Feed');
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
   const toast = useToast();
+  const videoRef = useRef(null);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -324,15 +109,15 @@ const ProfileScreen = ({ navigation }) => {
     if (!session?.user) {
       console.log('fetchProfile: No session or user, skipping');
       setLoading(false);
-      toast.error("Not authenticated. Please log in.");
-      return;
-    }
+        toast.error("Not authenticated. Please log in.");
+        return;
+      }
 
     console.log('fetchProfile: Starting fetch for user ID:', session.user.id);
     
     try {
       setLoading(true);
-      
+
       const { data, error, status } = await supabase
         .from('users')
         .select(`*`)
@@ -497,6 +282,18 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  const handleVideoPress = async () => {
+    if (videoRef.current) {
+      if (isVideoPlaying) {
+        await videoRef.current.pauseAsync();
+        setIsVideoPlaying(false);
+      } else {
+        await videoRef.current.playAsync();
+        setIsVideoPlaying(true);
+      }
+    }
+  };
+
   // Show loading only when actually loading and not just waiting for auth
   if (loading && session) {
     return (
@@ -514,11 +311,15 @@ const ProfileScreen = ({ navigation }) => {
 
   console.log('ProfileScreen rendering with profile data:', profile);
   console.log('ProfileScreen rendering with avatarUrl:', avatarUrl);
-  console.log('ProfileScreen country for flag:', profile?.country || 'US');
 
   return (
     <SafeAreaView style={styles.container}>
-      <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+      <ScrollView 
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
         <View style={styles.headerRow}>
           <TouchableOpacity 
             activeOpacity={0.8}
@@ -526,7 +327,7 @@ const ProfileScreen = ({ navigation }) => {
             style={styles.profileImageContainer}
           >
             <Image 
-              source={avatarUrl ? { uri: avatarUrl } : require('../assets/images/Default Profile Icon.jpg')} 
+                source={avatarUrl ? { uri: avatarUrl } : require('../assets/images/Default Profile Icon.jpg')} 
               style={styles.profileImage} 
             />
             {uploading ? (
@@ -547,7 +348,7 @@ const ProfileScreen = ({ navigation }) => {
                 <Text style={styles.statLabel}>Workouts</Text>
               </View>
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>{profile?.videos || 0}</Text>
+                  <Text style={styles.statNumber}>{profile?.videos || 1}</Text>
                 <Text style={styles.statLabel}>Videos</Text>
               </View>
               <View style={styles.statBox}>
@@ -558,31 +359,69 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
         
-        <View style={styles.badgesRow}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>Team </Text>
-            <View style={styles.flagContainer}>
-              <FlagComponent isoCode={profile?.country || 'US'} />
+          {/* Navigation Tabs */}
+          <View style={styles.tabsContainer}>
+            {['Feed', 'Routines', 'Progress'].map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.tabButton,
+                  selectedTab === tab && styles.selectedTab
+                ]}
+                onPress={() => setSelectedTab(tab)}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.tabText,
+                  selectedTab === tab && styles.selectedTabText
+                ]}>
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Exercise Content - No Card Container */}
+          <View style={styles.exerciseContent}>
+            <View style={styles.exerciseHeaderRow}>
+              <Text style={styles.exerciseHeader}>{formatTodaysDate()}</Text>
+              <LinearGradient
+                colors={['#2563eb', '#0284c7']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.prBadgeGradient}
+              >
+                <Text style={styles.prBadgeText}>New PR</Text>
+              </LinearGradient>
+            </View>
+            <Text style={styles.exerciseSubHeader}>
+              Barbell Conventional Deadlift
+            </Text>
+            <Text style={styles.exerciseWeight}>240kg x 2</Text>
+            <View style={styles.videoContainer}>
+              <Video
+                ref={videoRef}
+                source={{ uri: 'https://gymvid-user-uploads.s3.amazonaws.com/workoutVideos/yUac9MAARLXxF57u5EYVU1IFY1u2/Jamie_Deadlift.mov' }}
+                style={styles.instagramVideo}
+                useNativeControls={false}
+                resizeMode="cover"
+                shouldPlay={isVideoPlaying}
+                isLooping={true}
+                isMuted={true}
+              />
+              {!isVideoPlaying && (
+                <TouchableOpacity style={styles.playOverlay} onPress={handleVideoPress}>
+                  <Ionicons name="play-circle" size={48} color="rgba(255, 255, 255, 0.9)" />
+                </TouchableOpacity>
+              )}
+              {isVideoPlaying && (
+                <TouchableOpacity style={styles.videoTouchArea} onPress={handleVideoPress} />
+              )}
             </View>
           </View>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{profile?.age_category || 'Open'}</Text>
-            <Text style={[styles.badgeIcon, styles.trophyIcon]}>🏆</Text>
-          </View>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{profile?.weight_class || '60kg'}</Text>
-            <Text style={[styles.badgeIcon, styles.flexIcon]}>💪</Text>
-          </View>
-        </View>
-      </Animated.View>
 
-      {/* Sign out button for testing */}
-      <TouchableOpacity 
-        style={[styles.adminButton, { backgroundColor: '#ffebee', marginTop: 10 }]}
-        onPress={handleSignOut}
-      >
-        <Text style={[styles.adminButtonText, { color: '#d32f2f' }]}>Sign Out</Text>
-      </TouchableOpacity>
+        </Animated.View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -590,7 +429,7 @@ const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
   },
   loadingContainer: {
     justifyContent: 'center',
@@ -603,9 +442,8 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans-Regular',
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 16,
+    paddingTop: 0,
+    paddingBottom: 20,
     alignItems: 'center',
   },
   headerRow: {
@@ -693,65 +531,6 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans-Regular',
     marginTop: 2,
   },
-  badgesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
-    width: '100%',
-    paddingHorizontal: 8,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 5,
-    width: '30%',
-    height: 37,
-    ...Platform.select({
-      ios: {
-        shadowColor: 'rgba(0,118,255,0.2)',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 3,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  badgeText: {
-    fontSize: 14,
-    color: colors.darkGray,
-    fontFamily: 'DMSans-Medium',
-    marginRight: 5,
-    textAlign: 'center',
-  },
-  badgeIcon: {
-    marginLeft: 2,
-  },
-  flagContainer: {
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginLeft: 2,
-    width: 20,
-    height: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emojiIcon: {
-    fontSize: 13,
-  },
-  trophyIcon: {
-    fontSize: 13,
-  },
-  flexIcon: {
-    fontSize: 12,
-  },
   adminButton: {
     marginTop: 30,
     paddingVertical: 10,
@@ -780,24 +559,112 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'DMSans-Medium',
   },
-  flagFallback: {
-    borderWidth: 1,
-    borderColor: colors.gray,
-    padding: 5,
-    borderRadius: 5,
+  tabsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 5,
+    marginBottom: 8,
+    width: '100%',
+    paddingHorizontal: 0,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
-  flagFallbackText: {
-    fontSize: 12,
-    color: colors.gray,
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  selectedTab: {
+    borderBottomColor: colors.primary,
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#8E8E93',
+  },
+  selectedTabText: {
+    color: '#000',
+    fontWeight: '600',
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+  },
+  exerciseContent: {
+    width: '100%',
+    alignItems: 'flex-start',
+    marginTop: 10,
+  },
+  exerciseHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    width: '100%',
+  },
+  exerciseHeader: {
+    fontSize: 18,
+    fontFamily: 'DMSans-Bold',
+    color: colors.darkGray,
+    textAlign: 'left',
+  },
+  prBadgeGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  prBadgeText: {
+    fontSize: 11,
+    fontFamily: 'DMSans-Bold',
+    color: '#fff',
+  },
+  exerciseSubHeader: {
+    fontSize: 16,
     fontFamily: 'DMSans-Regular',
+    color: colors.gray,
+    marginBottom: 5,
+    textAlign: 'left',
+    width: '100%',
   },
-  flagPlaceholder: {
+  exerciseWeight: {
+    fontSize: 14,
+    fontFamily: 'DMSans-Regular',
+    color: colors.darkGray,
+    textAlign: 'left',
+    marginBottom: 10,
+    width: '100%',
+  },
+  videoContainer: {
+    width: '100%',
+    aspectRatio: 4/5,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  instagramVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  playOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoTouchArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
 }); 
 

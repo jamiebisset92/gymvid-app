@@ -1191,7 +1191,11 @@ export default function UsernameScreen({ navigation, route }) {
     >
       <SafeAreaView style={styles.safeContainer}>
         {/* Header spacer - to account for the global progress bar */}
-        <View style={styles.header} />
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButtonHeader} onPress={handleBack} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={24} color={colors.gray} />
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.contentContainer}>
           <Animated.Text
@@ -1297,14 +1301,6 @@ export default function UsernameScreen({ navigation, route }) {
           ]}
         >
           <TouchableOpacity 
-            style={styles.backButtonBottom} 
-            onPress={handleBack}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.gray} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
             style={[
               styles.nextButton, 
               (!isValid || !username || loading) && styles.nextButtonDisabled
@@ -1316,10 +1312,7 @@ export default function UsernameScreen({ navigation, route }) {
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <>
-                <Text style={styles.nextButtonText}>Finish</Text>
-                <Ionicons name="checkmark" size={24} color={colors.white} />
-              </>
+              <Text style={styles.nextButtonText}>Complete Profile</Text>
             )}
           </TouchableOpacity>
         </Animated.View>
@@ -1460,9 +1453,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 30,
     paddingTop: 10,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 0, 0, 0.05)',
@@ -1473,16 +1464,19 @@ const styles = StyleSheet.create({
     elevation: 3,
     backdropFilter: 'blur(10px)',
   },
-  backButtonBottom: {
-    height: 56,
-    width: 56,
-    borderRadius: 16,
+  backButtonHeader: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.lightGray,
-    marginRight: 10,
+    position: 'absolute',
+    left: 20,
+    top: 10,
+    zIndex: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -1490,25 +1484,25 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   nextButton: {
-    backgroundColor: '#007BFF',
+    backgroundColor: '#27272a',
     borderRadius: 16,
     height: 56,
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
     elevation: 3,
   },
   nextButtonDisabled: {
-    backgroundColor: '#AACEF5',
+    backgroundColor: '#d1d5db',
     shadowOpacity: 0,
   },
   nextButtonText: {
-    color: '#FFFFFF',
+    color: '#F9FAFB',
     fontSize: 18,
     fontWeight: '600',
     marginRight: 8,
